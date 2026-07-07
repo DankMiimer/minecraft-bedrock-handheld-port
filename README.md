@@ -25,7 +25,7 @@ MOJANG OR MICROSOFT.**
 
 - Latest release: [v1.3](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.3)
 - Port zip: [minecraftbedrock-1.3.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.3/minecraftbedrock-1.3.zip)
-- SHA-256: `28d2a7e6cf9a436fe816df1168e7ec0133ce562698e7c225c94c9abc381ae2de`
+- SHA-256: `621c82a46a35e4b9d9aebf99fc50e7c13418a2f9eabb274979b4b10a9d601553`
 
 Do not download this repository as the install package. Use the release zip
 above; GitHub's "Source code" archives are only for the repository contents.
@@ -42,7 +42,8 @@ above; GitHub's "Source code" archives are only for the repository contents.
 - **Tip — UI size:** on 1.17 and newer the in-game GUI Scale is locked small
   at these resolutions (an engine limitation, no fix launcher-side).
   **1.16.221.01 has a working GUI Scale slider** (Settings → Video), so it
-  gives a properly sized UI at native resolution. If the small UI on modern
+  gives a properly sized UI at native resolution. On tested devices,
+  1.16.221.01 runs perfectly without stutters. If the small UI on modern
   versions bothers you, 1.16 is the recommended version.
 
 ## Install
@@ -66,6 +67,8 @@ For the working GUI Scale slider, install 1.16.221.01 and use the separate
 **Minecraft Bedrock 1.16** entry — it runs 1.16 with its own isolated world
 (older clients cannot open newer worlds). On first launch, dismiss the Xbox
 sign-in prompt (press **B**) to reach the menu; sign-in is not supported.
+On tested devices, 1.16.221.01 runs perfectly without stutters.
+
 Notes: 1.16 has no cross-version LAN with 1.20, and this port applies small
 built-in compatibility patches so 1.16.221.01 boots (Education Mode off,
 online services disabled — LAN still works).

@@ -28,7 +28,8 @@ so it can be added.
   - **1.20.x** (1.20.15 / 1.20.51 / 1.20.62) — modern gameplay.
   - **1.16.221.01** — has a **working GUI Scale slider**, so you get a
     properly sized UI at native resolution (newer versions lock it small on
-    these screens). Runs from its own entry with a separate world.
+    these screens). On tested devices it runs perfectly without stutters.
+    Runs from its own entry with a separate world.
 - **Auto controller mapping** — unknown gamepads get a sensible default at
   launch, no config needed.
 - **Dual-screen aware** — on the RG DS the touchscreen is mapped to the game
