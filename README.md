@@ -25,10 +25,19 @@ MOJANG OR MICROSOFT.**
 
 - Latest release: [v1.3](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.3)
 - Port zip: [minecraftbedrock-1.3.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.3/minecraftbedrock-1.3.zip)
-- SHA-256: `621c82a46a35e4b9d9aebf99fc50e7c13418a2f9eabb274979b4b10a9d601553`
+- SHA-256: `a3c221efefa52f4337c8431e5b8a685bb3af2662df810852dfd4612146481fca`
 
 Do not download this repository as the install package. Use the release zip
 above; GitHub's "Source code" archives are only for the repository contents.
+
+## Quick Start
+
+1. Download the release zip.
+2. Extract it into your handheld's ports folder.
+3. Copy your own legally obtained Minecraft Bedrock arm64 APK file(s) into
+   `minecraftbedrock/apk/`.
+4. Launch **Minecraft Bedrock** once to extract the game.
+5. Delete the APK file(s) from `minecraftbedrock/apk/`.
 
 ## Requirements
 
@@ -46,6 +55,16 @@ above; GitHub's "Source code" archives are only for the repository contents.
   1.16.221.01 runs perfectly without stutters. If the small UI on modern
   versions bothers you, 1.16 is the recommended version.
 
+## Version Notes
+
+| Version | Status | Notes |
+|---|---|---|
+| 1.16.221.01 arm64 | Recommended for small screens | Working GUI Scale slider; runs perfectly without stutters on tested devices; uses its own world/profile entry. |
+| 1.20.15 / 1.20.51 / 1.20.62 arm64 | Tested | Modern gameplay; UI scale is smaller on these handheld screens. |
+| 1.21+ arm64 | Untested / may work | Not a primary target yet. |
+| 1.26+ Play builds | Unsupported | Newer Android licensing/runtime dependencies are not supported by this port. |
+| 32-bit / armeabi-v7a builds | Unsupported | This port requires aarch64 and `arm64-v8a` game libraries. |
+
 ## Install
 
 1. Download `minecraftbedrock-1.3.zip` from the release page.
@@ -57,6 +76,31 @@ above; GitHub's "Source code" archives are only for the repository contents.
 4. Update your game list and launch **Minecraft Bedrock** from Ports. The
    first run extracts the game — give it a few minutes.
 5. Delete the APK from the `apk/` folder afterwards.
+
+Expected layout after extraction:
+
+```text
+ports/
+  Minecraft Bedrock.sh
+  Minecraft Bedrock 1.16.sh
+  minecraftbedrock/
+    apk/
+      PUT_APK_HERE.txt
+    bin/
+    controls/
+    libs.aarch64/
+    setup_apk.sh
+    run_bedrock.sh
+```
+
+For Google Play split APKs, copy the relevant files together into
+`minecraftbedrock/apk/`, for example:
+
+```text
+base.apk
+split_config.arm64_v8a.apk
+split_install_pack.apk
+```
 
 You can install several versions (drop each APK in `apk/` and launch once).
 The main **Minecraft Bedrock** entry runs the newest installed version.
@@ -118,12 +162,37 @@ for DraStic). If ES touch behaves oddly after quitting, restart ES or reboot.
 
 ## Troubleshooting
 
-- Logs: `minecraftbedrock/log.txt` and `minecraftbedrock/weston_launch.log`.
-- Black screen after a crash: restart EmulationStation over SSH
-  (`/etc/init.d/S31emulationstation start`) or reboot.
-- "Unable to locate asset: bootstrap.json": your APK's assets use the nested
-  `assets/assets/` layout and something flattened it — re-run setup with the
-  original APK (the bundled setup script preserves the layout).
+Logs live at `minecraftbedrock/log.txt` and
+`minecraftbedrock/weston_launch.log`.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| No Minecraft version installed | No APK was copied, or extraction failed before creating `versions/` | Copy your legally obtained arm64 APK(s) into `minecraftbedrock/apk/` and launch again. |
+| 32-bit APK error | The APK only contains `armeabi-v7a` libraries | Use an `arm64-v8a` APK. |
+| `Unable to locate asset: bootstrap.json` | APK assets were flattened or split files are incomplete | Re-run setup with the original APK/split files together; do not rearrange `assets/assets/`. |
+| Black screen after crash | Display/session cleanup did not finish | Restart EmulationStation over SSH with `/etc/init.d/S31emulationstation start`, or reboot. |
+| Buttons are wrong | Controller GUID is not mapped yet | Open an issue with device, firmware, and the generated mapping/log lines. |
+| Tiny UI in newer versions | 1.17+ locks GUI scale on these screens | Use 1.16.221.01 for the best UI. |
+
+## Verify the Download
+
+Windows PowerShell:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\minecraftbedrock-1.3.zip
+```
+
+Linux/macOS:
+
+```sh
+sha256sum minecraftbedrock-1.3.zip
+```
+
+Expected:
+
+```text
+a3c221efefa52f4337c8431e5b8a685bb3af2662df810852dfd4612146481fca
+```
 
 ## Reporting Issues
 
@@ -145,17 +214,12 @@ build). Licenses for all shipped components are included inside the release
 zip under `minecraftbedrock/licenses/`; repository-level notes live in
 [`LEGAL.md`](LEGAL.md) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-For device testing notes, see [`TESTING.md`](TESTING.md).
+For device testing notes, see [`TESTING.md`](TESTING.md). Support and
+contribution guidance lives in [`SUPPORT.md`](SUPPORT.md) and
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Credits
 
-- The [minecraft-linux](https://github.com/minecraft-linux) project —
-  mcpelauncher is the heart of this port.
-- ImpressiveStay — the original R36S/RK3326 MCPE launcher port that started
-  this.
-- binarycounter — Westonpack/crusty, the graphics stack that makes libmali
-  devices viable.
-- The handheld Linux porting community for runtime and device-testing work.
-- Mojang Studios — Minecraft. Buy the game.
+See [`CREDITS.md`](CREDITS.md) for detailed credits and third-party notices.
 
 Port by DankMiimer.

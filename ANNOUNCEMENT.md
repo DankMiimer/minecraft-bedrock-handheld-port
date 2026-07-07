@@ -53,6 +53,15 @@ Needs the `weston_pkg_0.2` runtime — it downloads automatically on first
 launch if you have WiFi, or you can provide a compatible runtime manually.
 ~2 GB free space for game assets.
 
+## Release hygiene
+
+- No Minecraft APKs, extracted libraries, worlds, profiles, or assets are
+  included.
+- GPL source patches, license texts, credits, support instructions, trademark
+  notes, and a changelog are included with the release materials.
+- SHA-256 for `minecraftbedrock-1.3.zip`:
+  `a3c221efefa52f4337c8431e5b8a685bb3af2662df810852dfd4612146481fca`
+
 ## Notes
 
 - No Xbox Live / Marketplace sign-in (dismiss the first-run prompt with **B**);

@@ -11,6 +11,9 @@ This repository is a distribution wrapper around several upstream projects.
 | linux-gamepad | https://github.com/MCMrARM/linux-gamepad | MIT |
 | OpenSSL, libpng, libudev, libatomic | bundled in the release zip | license texts are included in `minecraftbedrock/licenses/` inside the release package |
 
+Release packages also include `source_release/`, which contains the exact patch
+set and base/result commit list used for the distributed launcher binary.
+
 Minecraft itself is owned by Mojang Studios and Microsoft. No Minecraft APKs,
 extracted libraries, assets, worlds, or other game files are included.
 
