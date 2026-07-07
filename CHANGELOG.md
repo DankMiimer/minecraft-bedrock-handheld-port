@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.1
+
+- Fixed silent audio on ALSA-only systems with no PulseAudio/PipeWire server
+  (e.g. muOS): the launcher now detects the missing server and routes its
+  OpenAL output to ALSA automatically. Knulli and ROCKNIX are unchanged.
+  Override with `MCPE_ALSOFT_DRIVERS`.
+
 ## v1.3
 
 - Added muOS compatibility for H700 devices: split `/roms/Ports` + `/ports`

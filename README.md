@@ -23,8 +23,8 @@ MOJANG OR MICROSOFT.**
 
 ## Download
 
-- Latest release: [v1.3](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.3)
-- Port zip: [minecraftbedrock-1.3.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.3/minecraftbedrock-1.3.zip)
+- Latest release: [v1.3.1](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.3.1)
+- Port zip: [minecraftbedrock-1.3.1.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.3.1/minecraftbedrock-1.3.1.zip)
 - SHA-256: compare against the checksum shown on the GitHub release page or
   in `SHA256SUMS.txt`.
 
@@ -131,10 +131,13 @@ between an RG34XX-SP and an RG DS.
 - **No Xbox Live / Marketplace sign-in.** Local worlds work. **LAN
   multiplayer works** — verified between an RG34XX-SP (Knulli) and an RG DS
   (ROCKNIX) in the same world.
-- **Audio** uses the launcher's PulseAudio backend (works on Knulli and
-  ROCKNIX). Optional: drop a host (glibc aarch64) FMOD Engine
-  `libfmod.so.12.0` from fmod.com into `minecraftbedrock/fmod/` to use real
-  FMOD instead.
+- **Audio** uses the launcher's OpenAL backend, which outputs through
+  PulseAudio on Knulli and ROCKNIX (pipewire-pulse). On ALSA-only systems with
+  no Pulse/PipeWire server (e.g. **muOS**), the port detects the missing server
+  and automatically routes OpenAL to ALSA, so sound works out of the box.
+  Force a specific OpenAL output with `MCPE_ALSOFT_DRIVERS` (e.g. `alsa` or
+  `pulse`). Optional: drop a host (glibc aarch64) FMOD Engine `libfmod.so.12.0`
+  from fmod.com into `minecraftbedrock/fmod/` to use real FMOD instead.
 - **No virtual keyboard.** Set world names etc. from a PC; save data lives in
   `minecraftbedrock/profiles/default/mcpelauncher/games/com.mojang/`.
 - While the game runs, the CPU governor is set to `performance` and the GPU
@@ -182,13 +185,13 @@ Logs live at `minecraftbedrock/log.txt` and
 Windows PowerShell:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\minecraftbedrock-1.3.zip
+Get-FileHash -Algorithm SHA256 .\minecraftbedrock-1.3.1.zip
 ```
 
 Linux/macOS:
 
 ```sh
-sha256sum minecraftbedrock-1.3.zip
+sha256sum minecraftbedrock-1.3.1.zip
 ```
 
 Compare the result with the SHA-256 value published on the GitHub release

@@ -61,8 +61,8 @@ launch if you have WiFi, or you can provide a compatible runtime manually
   included.
 - GPL source patches, license texts, credits, support instructions, trademark
   notes, and a changelog are included with the release materials.
-- SHA-256 for `minecraftbedrock-1.3.zip`:
-  `fd587d09da801f8270c112342d6040328d6ebad4885eb697f301b01b09a89fe9`
+- SHA-256 for `minecraftbedrock-1.3.1.zip`:
+  `eea9c3c644242a0fa8729492786d98495d0ff41ab62d75a76101a8ced9b5db67`
 
 ## Notes
 
