@@ -1,0 +1,737 @@
+diff --git a/src/fake_assetmanager.cpp b/src/fake_assetmanager.cpp
+index 0b7fb6d..ab79055 100644
+--- a/src/fake_assetmanager.cpp
++++ b/src/fake_assetmanager.cpp
+@@ -20,10 +20,18 @@ struct AAssetDir {
+     std::string currentFileName;
+ };
+ 
++FakeAssetManager *FakeAssetManager::current = nullptr;
++
+ FakeAssetManager::FakeAssetManager(std::string rootDir) {
+     if(!rootDir.empty() && *rootDir.rbegin() != '/')
+         rootDir += '/';
+     this->rootDir = std::move(rootDir);
++    current = this;
++}
++
++FakeAssetManager::~FakeAssetManager() {
++    if(current == this)
++        current = nullptr;
+ }
+ 
+ namespace fake_assetmanager {
+@@ -185,6 +193,29 @@ const char *AAssetDir_getNextFileName(AAssetDir *assetDir) {
+ 
+ void FakeAssetManager::initHybrisHooks(std::unordered_map<std::string, void *> &syms) {
+     using namespace fake_assetmanager;
++    syms["AAssetManager_fromJava"] = (void *)+[](void *, void *) -> AAssetManager * {
++        return (AAssetManager *)(void *)FakeAssetManager::getCurrent();
++    };
++    syms["AConfiguration_new"] = (void *)+[]() -> void * {
++        return new int(0);
++    };
++    syms["AConfiguration_delete"] = (void *)+[](void *config) {
++        delete (int *)config;
++    };
++    syms["AConfiguration_fromAssetManager"] = (void *)+[](void *, AAssetManager *) {};
++    syms["AConfiguration_getLanguage"] = (void *)+[](void *, char *out) {
++        if(out) {
++            out[0] = 'e';
++            out[1] = 'n';
++        }
++    };
++    syms["AConfiguration_getCountry"] = (void *)+[](void *, char *out) {
++        if(out) {
++            out[0] = 'U';
++            out[1] = 'S';
++        }
++    };
++
+     syms["AAssetManager_open"] = (void *)AAssetManager_open;
+     syms["AAssetManager_openDir"] = (void *)AAssetManager_openDir;
+     syms["AAsset_close"] = (void *)AAsset_close;
+diff --git a/src/fake_assetmanager.h b/src/fake_assetmanager.h
+index 09e8146..f90073b 100644
+--- a/src/fake_assetmanager.h
++++ b/src/fake_assetmanager.h
+@@ -8,9 +8,15 @@
+ struct AAssetManager;
+ 
+ struct FakeAssetManager {
++    static FakeAssetManager *current;
+     std::string rootDir;
+ 
+     FakeAssetManager(std::string rootDir);
++    ~FakeAssetManager();
++
++    static FakeAssetManager *getCurrent() {
++        return current;
++    }
+ 
+     static void initHybrisHooks(std::unordered_map<std::string, void *> &syms);
+ 
+diff --git a/src/fake_egl.cpp b/src/fake_egl.cpp
+index f1a02b0..a3834d3 100644
+--- a/src/fake_egl.cpp
++++ b/src/fake_egl.cpp
+@@ -3,6 +3,9 @@
+ #include "settings.h"
+ #include "imgui_ui.h"
+ #include <map>
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
+ 
+ #define __ANDROID__
+ #include <EGL/egl.h>
+@@ -10,6 +13,15 @@
+ #include <log.h>
+ #include <cstring>
+ #include <game_window.h>
++#include <sys/syscall.h>
++#include <sched.h>
++#include <dirent.h>
++#include <thread>
++#include <set>
++#include <string>
++#include <cstdlib>
++#include <sys/resource.h>
++#include <unistd.h>
+ #include <mcpelauncher/linker.h>
+ #ifdef USE_ARMHF_SUPPORT
+ #include "armhf_support.h"
+@@ -20,6 +32,68 @@ static thread_local EGLSurface currentDrawSurface;
+ static void *(*hostProcAddrFn)(const char *);
+ static std::unordered_map<std::string, void *> hostProcOverrides;
+ 
++struct FrameMetricsState {
++    using Clock = std::chrono::steady_clock;
++
++    bool initialized = false;
++    FILE *file = nullptr;
++    Clock::time_point firstFrame;
++    Clock::time_point previousFrame;
++    unsigned long long frame = 0;
++
++    void record(Clock::time_point frameStart, Clock::time_point swapEnd) {
++        if(!initialized) {
++            initialized = true;
++            const char *path = std::getenv("MCPE_FRAME_METRICS");
++            if(path && *path) {
++                file = std::fopen(path, "w");
++                if(file) {
++                    std::setvbuf(file, nullptr, _IOFBF, 64 * 1024);
++                    std::fputs("frame,epoch_us,elapsed_us,frame_us,swap_us,user_us,system_us,minflt,majflt,nvcsw,nivcsw,maxrss_kb\n", file);
++                    Log::info("FrameMetrics", "Recording frame times to %s", path);
++                } else {
++                    Log::error("FrameMetrics", "Unable to open %s", path);
++                }
++            }
++            firstFrame = frameStart;
++            previousFrame = frameStart;
++        }
++
++        if(!file)
++            return;
++
++        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
++            frameStart - firstFrame).count();
++        auto frameTime = std::chrono::duration_cast<std::chrono::microseconds>(
++            frameStart - previousFrame).count();
++        auto swapTime = std::chrono::duration_cast<std::chrono::microseconds>(
++            swapEnd - frameStart).count();
++        auto epoch = std::chrono::duration_cast<std::chrono::microseconds>(
++            std::chrono::system_clock::now().time_since_epoch()).count();
++        rusage usage{};
++        getrusage(RUSAGE_SELF, &usage);
++        auto userTime = static_cast<long long>(usage.ru_utime.tv_sec) * 1000000LL +
++                        static_cast<long long>(usage.ru_utime.tv_usec);
++        auto systemTime = static_cast<long long>(usage.ru_stime.tv_sec) * 1000000LL +
++                          static_cast<long long>(usage.ru_stime.tv_usec);
++        std::fprintf(file, "%llu,%lld,%lld,%lld,%lld,%lld,%lld,%ld,%ld,%ld,%ld,%ld\n",
++                     frame,
++                     static_cast<long long>(epoch),
++                     static_cast<long long>(elapsed),
++                     static_cast<long long>(frame ? frameTime : 0),
++                     static_cast<long long>(swapTime),
++                     userTime, systemTime,
++                     usage.ru_minflt, usage.ru_majflt,
++                     usage.ru_nvcsw, usage.ru_nivcsw,
++                     usage.ru_maxrss);
++        previousFrame = frameStart;
++        frame++;
++
++    }
++};
++
++static FrameMetricsState frameMetrics;
++
+ EGLBoolean eglInitialize(EGLDisplay display, EGLint *major, EGLint *minor) {
+     if(major)
+         *major = 1;
+@@ -102,21 +176,167 @@ EGLBoolean eglMakeCurrent(EGLDisplay display, EGLSurface draw, EGLSurface read,
+     } else {
+         ((GameWindow *)currentDrawSurface)->makeCurrent(false);
+     }
++    auto hostGlGetString = reinterpret_cast<const unsigned char *(*)(unsigned int)>(
++        hostProcAddrFn("glGetString"));
++    auto hostVersion = hostGlGetString ? hostGlGetString(0x1F02 /* GL_VERSION */) : nullptr;
++    auto hostContext = ::eglGetCurrentContext();
++    auto hostError = ::eglGetError();
++    Log::trace("FakeEGL",
++               "eglMakeCurrent tid=%ld draw=%p context=%p hostContext=%p hostError=0x%x hostGL=%s",
++               (long) syscall(SYS_gettid), draw, context, hostContext, hostError,
++               hostVersion ? reinterpret_cast<const char *>(hostVersion) : "(null)");
+     currentDrawSurface = draw;
+     return EGL_TRUE;
+ }
+ 
++static void parseCpuList(const char *value, cpu_set_t *set) {
++    CPU_ZERO(set);
++    const char *p = value;
++    while(*p) {
++        char *end = nullptr;
++        long a = std::strtol(p, &end, 10);
++        if(end == p)
++            break;
++        long b = a;
++        p = end;
++        if(*p == '-') {
++            b = std::strtol(p + 1, &end, 10);
++            if(end == p + 1)
++                break;
++            p = end;
++        }
++        for(long c = a; c <= b; c++)
++            if(c >= 0 && c < CPU_SETSIZE)
++                CPU_SET((int)c, set);
++        if(*p == ',')
++            p++;
++    }
++}
++
++// See MCPE_PIN_RENDER_CORE / MCPE_PIN_OTHER_CORES / MCPE_AFFINITY_LOG.
++// Called once from the render (swap) thread.
++static void applyRenderAffinity() {
++    long renderTid = (long)syscall(SYS_gettid);
++    const char *renderCore = std::getenv("MCPE_PIN_RENDER_CORE");
++    if(renderCore && *renderCore) {
++        cpu_set_t set;
++        parseCpuList(renderCore, &set);
++        if(CPU_COUNT(&set) > 0 &&
++           sched_setaffinity(renderTid, sizeof(set), &set) == 0)
++            Log::info("Affinity", "Render thread %ld pinned to core(s) %s",
++                      renderTid, renderCore);
++        else
++            Log::warn("Affinity", "Could not pin render thread %ld to %s",
++                      renderTid, renderCore);
++    }
++    const char *otherCoresEnv = std::getenv("MCPE_PIN_OTHER_CORES");
++    if(otherCoresEnv && *otherCoresEnv) {
++        std::string otherCores = otherCoresEnv;
++        const char *logEnv = std::getenv("MCPE_AFFINITY_LOG");
++        bool logNames = logEnv && *logEnv == '1';
++        const char *mainCoreEnv = std::getenv("MCPE_PIN_MAIN_CORE");
++        std::string mainCore = mainCoreEnv ? mainCoreEnv : "";
++        std::thread([renderTid, otherCores, mainCore, logNames] {
++            cpu_set_t set, mainSet;
++            parseCpuList(otherCores.c_str(), &set);
++            if(CPU_COUNT(&set) == 0)
++                return;
++            bool haveMain = !mainCore.empty();
++            if(haveMain) {
++                parseCpuList(mainCore.c_str(), &mainSet);
++                if(CPU_COUNT(&mainSet) == 0)
++                    haveMain = false;
++            }
++            long self = (long)syscall(SYS_gettid);
++            // Keep the scanner off the render core (it inherits the render
++            // thread's affinity at spawn).
++            sched_setaffinity(self, sizeof(set), &set);
++            std::set<long> seen;
++            while(true) {
++                DIR *dir = opendir("/proc/self/task");
++                if(dir) {
++                    dirent *ent;
++                    while((ent = readdir(dir))) {
++                        if(ent->d_name[0] < '0' || ent->d_name[0] > '9')
++                            continue;
++                        long tid = std::strtol(ent->d_name, nullptr, 10);
++                        if(tid == renderTid || tid == self)
++                            continue;
++                        char commPath[64], comm[32] = {0};
++                        std::snprintf(commPath, sizeof(commPath),
++                                      "/proc/self/task/%ld/comm", tid);
++                        if(FILE *f = std::fopen(commPath, "r")) {
++                            if(std::fgets(comm, sizeof(comm), f))
++                                comm[strcspn(comm, "\n")] = 0;
++                            std::fclose(f);
++                        }
++                        // Mali driver threads submit GPU work on behalf of
++                        // the render thread; leave them unconfined so they
++                        // never queue behind saturated worker cores.
++                        if(strncmp(comm, "mali-", 5) == 0)
++                            continue;
++                        // The Bedrock main/simulation thread integrates chunk
++                        // results and blocks on worker locks; a dedicated core
++                        // stops workers from preempting it (kills the lock-wait
++                        // freeze). Its comm is "MINECRAFT MAIN".
++                        bool isMain = strncmp(comm, "MINECRAFT MAIN", 14) == 0;
++                        const cpu_set_t *use = (haveMain && isMain) ? &mainSet : &set;
++                        sched_setaffinity(tid, sizeof(*use), use);
++                        if(logNames && seen.insert(tid).second)
++                            Log::info("Affinity", "Confined tid %ld (%s) to %s",
++                                      tid, comm,
++                                      (haveMain && isMain) ? mainCore.c_str()
++                                                           : otherCores.c_str());
++                    }
++                    closedir(dir);
++                }
++                std::this_thread::sleep_for(std::chrono::seconds(3));
++            }
++        }).detach();
++        Log::info("Affinity", "Confining non-render threads to core(s) %s",
++                  otherCoresEnv);
++    }
++}
++
+ EGLBoolean eglSwapBuffers(EGLDisplay display, EGLSurface surface) {
+     //    Log::trace("FakeEGL", "eglSwapBuffers");
+ #ifdef USE_IMGUI
+     ImGuiUIDrawFrame((GameWindow*)surface);
+ #endif
++    static bool affinityApplied = false;
++    if(!affinityApplied) {
++        affinityApplied = true;
++        applyRenderAffinity();
++    }
++    auto frameStart = FrameMetricsState::Clock::now();
+     ((GameWindow *)surface)->swapBuffers();
++    frameMetrics.record(frameStart, FrameMetricsState::Clock::now());
+     return EGL_TRUE;
+ }
+ 
+ EGLBoolean eglSwapInterval(EGLDisplay display, EGLint interval) {
+-    ((GameWindow *)currentDrawSurface)->setSwapInterval(interval);
++    static int intervalOverride = -2;
++    static bool logged = false;
++    if(intervalOverride == -2) {
++        intervalOverride = -1;
++        const char *value = std::getenv("MCPE_SWAP_INTERVAL_OVERRIDE");
++        if(value && *value) {
++            char *end = nullptr;
++            long parsed = std::strtol(value, &end, 10);
++            if(end != value && *end == '\0' && (parsed == 0 || parsed == 1))
++                intervalOverride = static_cast<int>(parsed);
++            else
++                Log::warn("FakeEGL", "Ignoring invalid MCPE_SWAP_INTERVAL_OVERRIDE=%s", value);
++        }
++    }
++
++    int effectiveInterval = intervalOverride >= 0 ? intervalOverride : interval;
++    if(!logged) {
++        Log::info("FakeEGL", "Swap interval requested=%d effective=%d", interval,
++                  effectiveInterval);
++        logged = true;
++    }
++    ((GameWindow *)currentDrawSurface)->setSwapInterval(effectiveInterval);
+     return EGL_TRUE;
+ }
+ 
+diff --git a/src/fake_looper.cpp b/src/fake_looper.cpp
+index 985e9ed..c9e1581 100644
+--- a/src/fake_looper.cpp
++++ b/src/fake_looper.cpp
+@@ -24,6 +24,13 @@ void FakeLooper::initWindow() {
+     currentLooper->initializeWindow();
+ }
+ 
++void FakeLooper::releaseWindowContext() {
++    if(currentLooper && currentLooper->associatedWindow) {
++        Log::trace("Launcher", "Releasing bootstrap GL context before starting Minecraft");
++        currentLooper->associatedWindow->makeCurrent(false);
++    }
++}
++
+ void FakeLooper::initHybrisHooks(std::unordered_map<std::string, void *> &syms) {
+     syms["ALooper_prepare"] = (void *)+[]() {
+         if(currentLooper && currentLooper->prepared)
+@@ -39,9 +46,21 @@ void FakeLooper::initHybrisHooks(std::unordered_map<std::string, void *> &syms)
+     syms["ALooper_addFd"] = (void *)+[](ALooper *looper, int fd, int ident, int events, ALooper_callbackFunc callback, void *data) {
+         return ((FakeLooper *)(void *)looper)->addFd(fd, ident, events, callback, data);
+     };
++    syms["ALooper_forThread"] = (void *)+[]() {
++        return (ALooper *)(void *)currentLooper.get();
++    };
++    syms["ALooper_acquire"] = (void *)+[](ALooper *) {};
++    syms["ALooper_release"] = (void *)+[](ALooper *) {};
++    syms["ALooper_removeFd"] = (void *)+[](ALooper *, int) {
++        return 1;
++    };
++    syms["ALooper_wake"] = (void *)+[](ALooper *) {};
+     syms["ALooper_pollAll"] = (void *)+[](int timeoutMillis, int *outFd, int *outEvents, void **outData) {
+         return currentLooper->pollAll(timeoutMillis, outFd, outEvents, outData);
+     };
++    syms["ALooper_pollOnce"] = (void *)+[](int timeoutMillis, int *outFd, int *outEvents, void **outData) {
++        return currentLooper->pollAll(timeoutMillis, outFd, outEvents, outData);
++    };
+     syms["AInputQueue_attachLooper"] = (void *)+[](AInputQueue *queue, ALooper *looper, int ident, ALooper_callbackFunc callback, void *data) {
+         ((FakeLooper *)(void *)looper)->attachInputQueue(ident, callback, data);
+     };
+diff --git a/src/fake_looper.h b/src/fake_looper.h
+index 2a70102..b01b530 100644
+--- a/src/fake_looper.h
++++ b/src/fake_looper.h
+@@ -59,5 +59,7 @@ public:
+ 
+     static void initWindow();
+ 
++    static void releaseWindowContext();
++
+     static void initHybrisHooks(std::unordered_map<std::string, void *> &syms);
+ };
+diff --git a/src/fake_window.cpp b/src/fake_window.cpp
+index ae5b3b8..85f7dc4 100644
+--- a/src/fake_window.cpp
++++ b/src/fake_window.cpp
+@@ -3,6 +3,14 @@
+ #include <game_window.h>
+ 
+ void FakeWindow::initHybrisHooks(std::unordered_map<std::string, void*>& syms) {
++    syms["ANativeWindow_acquire"] = (void*)+[](void*) {};
++    syms["ANativeWindow_release"] = (void*)+[](void*) {};
++    syms["ANativeWindow_fromSurface"] = (void*)+[](void*, void*) -> void* {
++        return nullptr;
++    };
++    syms["ANativeWindow_setBuffersGeometry"] = (void*)+[](void*, int32_t, int32_t, int32_t) -> int32_t {
++        return 0;
++    };
+     syms["ANativeWindow_getWidth"] = (void*)+[](void* window) -> int32_t {
+         int width, height;
+         ((GameWindow*)window)->getWindowSize(width, height);
+diff --git a/src/jni/jni_descriptors.cpp b/src/jni/jni_descriptors.cpp
+index fb41d61..ebb7aa9 100644
+--- a/src/jni/jni_descriptors.cpp
++++ b/src/jni/jni_descriptors.cpp
+@@ -84,6 +84,7 @@ BEGIN_NATIVE_DESCRIPTOR(MainActivity){Constructor<MainActivity>{}},
+     {Function<&MainActivity::getDisplayWidth>{}, "getDisplayWidth"},
+     {Function<&MainActivity::isNetworkEnabled>{}, "isNetworkEnabled"},
+     {Function<&MainActivity::isChromebook>{}, "isChromebook"},
++    {Function<&MainActivity::isEduMode>{}, "isEduMode"},
+     {Function<&MainActivity::getLocale>{}, "getLocale"},
+     {Function<&MainActivity::getDeviceModel>{}, "getDeviceModel"},
+     {Function<&MainActivity::getExternalStoragePath>{}, "getExternalStoragePath"},
+diff --git a/src/jni/main_activity.cpp b/src/jni/main_activity.cpp
+index 01e728c..401d2b7 100644
+--- a/src/jni/main_activity.cpp
++++ b/src/jni/main_activity.cpp
+@@ -28,14 +28,30 @@ std::shared_ptr<FakeJni::JString> MainActivity::createUUID() {
+     return UUID::randomUUID()->toString();
+ }
+ 
++FakeJni::JBoolean MainActivity::isEduMode() {
++    // 1.16.x queries this via JNI; the game-side Java_ export crashes
++    // without a real Android activity, so answer launcher-side.
++    return false;
++}
++
+ FakeJni::JFloat MainActivity::getPixelsPerMillimeter() {
+     // assume 96 DPI for now with GUI scale of 2
+-    return (96 / 25.4f) * 2 * Settings::scale;
++    float v = (96 / 25.4f) * 2 * Settings::scale;
++    static int logged = 0;
++    if(logged++ < 8)
++        Log::info("UIDiag", "getPixelsPerMillimeter -> %.3f (scale=%.3f)",
++                  v, (float)Settings::scale);
++    return v;
+ }
+ 
+ FakeJni::JInt MainActivity::getPlatformDpi() {
+     // assume 96 DPI for now with GUI scale of 2
+-    return 96 * 2 * Settings::scale;
++    int v = 96 * 2 * Settings::scale;
++    static int logged = 0;
++    if(logged++ < 8)
++        Log::info("UIDiag", "getPlatformDpi -> %d (scale=%.3f)",
++                  v, (float)Settings::scale);
++    return v;
+ }
+ 
+ FakeJni::JLong MainActivity::getUsedMemory() {
+diff --git a/src/jni/main_activity.h b/src/jni/main_activity.h
+index 20080b4..56d6aa7 100644
+--- a/src/jni/main_activity.h
++++ b/src/jni/main_activity.h
+@@ -3,6 +3,8 @@
+ #include <fake-jni/fake-jni.h>
+ #include "java_types.h"
+ #include "../text_input_handler.h"
++#include <cstdlib>
++#include <log.h>
+ 
+ class BuildVersion : public FakeJni::JObject {
+ public:
+@@ -98,6 +100,22 @@ private:
+     bool ignoreNextHideKeyboard = false;
+     FakeJni::JInt lastChar = 0;
+ 
++    static float getReportedDisplayScale() {
++        // Float, 0.25-4.0. Values below 1 report a smaller screen than the
++        // real EGL surface, magnifying the whole UI (0.5 => 2x UI).
++        static float scale = []() {
++            const char *value = std::getenv("MCPE_REPORTED_DISPLAY_SCALE");
++            if(value == nullptr || *value == '\0')
++                return 1.0f;
++            char *end = nullptr;
++            float parsed = std::strtof(value, &end);
++            if(end == value || *end != '\0' || !(parsed >= 0.25f && parsed <= 4.0f))
++                return 1.0f;
++            return parsed;
++        }();
++        return scale;
++    }
++
+ public:
+     unsigned char *(*stbi_load_from_memory)(unsigned char const *buffer, int len, int *x, int *y, int *channels_in_file, int desired_channels);
+     void (*stbi_image_free)(void *retval_from_stbi_load);
+@@ -116,30 +134,52 @@ public:
+     int getScreenWidth() {
+         int width, height;
+         window->getWindowSize(width, height);
+-        return width;
++        int v = static_cast<int>(width * getReportedDisplayScale());
++        static int logged = 0;
++        if(logged++ < 4)
++            Log::info("UIDiag", "getScreenWidth -> %d", v);
++        return v;
+     }
+ 
+     int getScreenHeight() {
+         int width, height;
+         window->getWindowSize(width, height);
+-        return height;
++        int v = static_cast<int>(height * getReportedDisplayScale());
++        static int logged = 0;
++        if(logged++ < 4)
++            Log::info("UIDiag", "getScreenHeight -> %d", v);
++        return v;
+     }
+ 
+     int getDisplayWidth() {
+         int width, height;
+         window->getWindowSize(width, height);
+-        return width;
++        int v = static_cast<int>(width * getReportedDisplayScale());
++        static int logged = 0;
++        if(logged++ < 4)
++            Log::info("UIDiag", "getDisplayWidth -> %d", v);
++        return v;
+     }
+ 
+     int getDisplayHeight() {
+         int width, height;
+         window->getWindowSize(width, height);
+-        return height;
++        int v = static_cast<int>(height * getReportedDisplayScale());
++        static int logged = 0;
++        if(logged++ < 4)
++            Log::info("UIDiag", "getDisplayHeight -> %d", v);
++        return v;
+     }
+ 
+     void tick() {}
+ 
+     FakeJni::JBoolean isNetworkEnabled(FakeJni::JBoolean wifi) {
++        // Some old versions (1.16) init a broken cpprest/boost-asio stack at
++        // startup and crash if the game thinks network is up. Allow reporting
++        // "no network" to skip that path.
++        const char *off = std::getenv("MCPE_FAKE_NO_NETWORK");
++        if(off != nullptr && *off == '1')
++            return false;
+         return true;
+     }
+ 
+@@ -188,6 +228,7 @@ public:
+     }
+ 
+     FakeJni::JFloat getPixelsPerMillimeter();
++    FakeJni::JBoolean isEduMode();
+ 
+     FakeJni::JInt getPlatformDpi();
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index d0e1907..b64d463 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -43,6 +43,10 @@
+ #include <daemon_utils/auto_shutdown_service.h>
+ #include "settings.h"
+ #include "imgui_ui.h"
++#include <cerrno>
++#include <cstdlib>
++#include <cstring>
++#include <sys/mman.h>
+ 
+ struct RpcCallbackServer : daemon_utils::auto_shutdown_service {
+ 
+@@ -68,6 +72,139 @@ void printVersionInfo();
+ 
+ void loadGameOptions();
+ 
++
++static void patchEduModeNullDeref(void *handle) {
++    const char *disabled = std::getenv("MCPE_PATCH_EDUMODE");
++    if(disabled != nullptr && std::strcmp(disabled, "0") == 0)
++        return;
++
++    // 1.16.x: Java_com_mojang_minecraftpe_MainActivity_isEduMode is also
++    // called internally before its backing global exists and null-derefs on
++    // the empty path (crash at +0xd4 on official arm64 1.16.221.01). Force
++    // it to report Education Mode off. Newer versions do not match the
++    // prologue signature and are left untouched.
++    auto address = reinterpret_cast<uint32_t *>(
++        linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isEduMode"));
++    if(address == nullptr)
++        return;
++
++    constexpr uint32_t expected[4] = {0xd10143ff, 0xa9034ff4, 0xa9047bfd, 0x910103fd};
++    constexpr uint32_t patched[2] = {0x52800000 /* mov w0, #0 */, 0xd65f03c0 /* ret */};
++    if(address[0] == patched[0] && address[1] == patched[1])
++        return;
++    for(int i = 0; i < 4; i++) {
++        if(address[i] != expected[i]) {
++            Log::info("Compat", "isEduMode patch not applicable (0x%08x at +%d)", address[i], i);
++            return;
++        }
++    }
++
++    long pageSize = sysconf(_SC_PAGESIZE);
++    auto page = reinterpret_cast<void *>(
++        reinterpret_cast<uintptr_t>(address) & ~(static_cast<uintptr_t>(pageSize) - 1));
++    if(mprotect(page, static_cast<size_t>(pageSize) * 2, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
++        Log::warn("Compat", "Unable to make isEduMode writable: %s", std::strerror(errno));
++        return;
++    }
++    __atomic_store_n(&address[1], patched[1], __ATOMIC_RELEASE);
++    __atomic_store_n(&address[0], patched[0], __ATOMIC_RELEASE);
++    __builtin___clear_cache(reinterpret_cast<char *>(address),
++                            reinterpret_cast<char *>(address + 2));
++    Log::info("Compat", "Patched isEduMode null-deref (1.16.x): Education Mode forced off");
++}
++
++
++static void patchOldHttpResolveCrash(void *handle) {
++    const char *disabled = std::getenv("MCPE_PATCH_HTTP_RESOLVE");
++    if(disabled != nullptr && std::strcmp(disabled, "0") == 0)
++        return;
++
++    // Only the official arm64 1.16.221.01 binary; other versions differ.
++    auto gameDir = PathHelper::getGameDir();
++    if(gameDir.find("1.16.221.01") == std::string::npos)
++        return;
++
++    constexpr uintptr_t instructionOffset = 0x060a01e4;
++    constexpr uint32_t expectedInstruction = 0x340002e8; // cbz w8, success->crash
++    constexpr uint32_t patchedInstruction = 0xd503201f;  // nop -> take error path
++    auto address = reinterpret_cast<uint32_t *>(
++        MinecraftUtils::getLibraryBase(handle) + instructionOffset);
++
++    if(*address == patchedInstruction) {
++        Log::info("Compat", "1.16 HTTP-resolve crash already patched");
++        return;
++    }
++    if(*address != expectedInstruction) {
++        Log::warn("Compat",
++                  "Refusing 1.16 HTTP-resolve patch: unexpected instruction 0x%08x at +0x%" PRIxPTR,
++                  *address, instructionOffset);
++        return;
++    }
++
++    long pageSize = sysconf(_SC_PAGESIZE);
++    auto page = reinterpret_cast<void *>(
++        reinterpret_cast<uintptr_t>(address) & ~(static_cast<uintptr_t>(pageSize) - 1));
++    if(mprotect(page, static_cast<size_t>(pageSize), PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
++        Log::warn("Compat", "Unable to make HTTP-resolve code writable: %s", std::strerror(errno));
++        return;
++    }
++    __atomic_store_n(address, patchedInstruction, __ATOMIC_RELEASE);
++    __builtin___clear_cache(reinterpret_cast<char *>(address),
++                            reinterpret_cast<char *>(address + 1));
++    Log::info("Compat", "Patched 1.16 startup HTTP-resolve crash (forced offline resolve path)");
++}
++
++static void disablePeriodicAutoCompaction(void *handle) {
++    const char *enabled = std::getenv("MCPE_DISABLE_AUTO_COMPACTION");
++    if(enabled == nullptr || std::strcmp(enabled, "1") != 0)
++        return;
++
++    // Version-specific patch for the official arm64 1.20.62.02 binary.
++    // This changes the scheduled "Running AutoCompaction" task into its
++    // existing no-op return path. Load/save and threshold-triggered
++    // compactions remain intact.
++    auto gameDir = PathHelper::getGameDir();
++    if(gameDir.find("1.20.62.02-official-arm64") == std::string::npos) {
++        Log::warn("Smoothness", "Periodic auto-compaction patch is unavailable for %s", gameDir.c_str());
++        return;
++    }
++
++    constexpr uintptr_t instructionOffset = 0x0af3f6d8;
++    constexpr uint32_t expectedInstruction = 0x370003a8; // tbnz w8, #0, no_op_return
++    constexpr uint32_t patchedInstruction = 0x1400001d;  // b no_op_return
++    auto address = reinterpret_cast<uint32_t *>(
++        MinecraftUtils::getLibraryBase(handle) + instructionOffset);
++
++    if(*address == patchedInstruction) {
++        Log::info("Smoothness", "Periodic in-session LevelDB auto-compaction is already disabled");
++        return;
++    }
++    if(*address != expectedInstruction) {
++        Log::warn("Smoothness",
++                  "Refusing auto-compaction patch: unexpected instruction 0x%08x at +0x%" PRIxPTR,
++                  *address, instructionOffset);
++        return;
++    }
++
++    long pageSize = sysconf(_SC_PAGESIZE);
++    auto page = reinterpret_cast<void *>(
++        reinterpret_cast<uintptr_t>(address) & ~(static_cast<uintptr_t>(pageSize) - 1));
++    if(mprotect(page, static_cast<size_t>(pageSize), PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
++        Log::warn("Smoothness", "Unable to make auto-compaction code writable: %s", std::strerror(errno));
++        return;
++    }
++
++    __atomic_store_n(address, patchedInstruction, __ATOMIC_RELEASE);
++    __builtin___clear_cache(reinterpret_cast<char *>(address),
++                            reinterpret_cast<char *>(address + 1));
++    if(mprotect(page, static_cast<size_t>(pageSize), PROT_READ | PROT_EXEC) != 0)
++        Log::warn("Smoothness", "Unable to restore auto-compaction code protection: %s",
++                  std::strerror(errno));
++
++    Log::info("Smoothness",
++              "Disabled periodic in-session LevelDB auto-compaction; load/save compaction remains enabled");
++}
++
+ int main(int argc, char* argv[]) {
+     if(argc == 2 && argv[1][0] != '-') {
+         Log::info("Sendfile", "sending file");
+@@ -425,6 +562,9 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
+     Log::info("Launcher", "Loaded Minecraft library");
+     Log::debug("Launcher", "Minecraft is at offset 0x%" PRIXPTR, (uintptr_t)MinecraftUtils::getLibraryBase(handle));
+     base = MinecraftUtils::getLibraryBase(handle);
++    disablePeriodicAutoCompaction(handle);
++    patchEduModeNullDeref(handle);
++    patchOldHttpResolveCrash(handle);
+ 
+     if(!freeOnly.get()) {
+         modLoader.loadModsFromDirectory(PathHelper::getPrimaryDataDirectory() + "mods/");
+@@ -502,6 +642,9 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
+     support.registerMinecraftNatives(+[](const char* sym) {
+         return linker::dlsym(handle, sym);
+     });
++    if(options.graphicsApi == GraphicsApi::OPENGL_ES2) {
++        FakeLooper::releaseWindowContext();
++    }
+     std::thread startThread([&support]() {
+         support.startGame((ANativeActivity_createFunc*)linker::dlsym(handle, "ANativeActivity_onCreate"),
+                           linker::dlsym(handle, "stbi_load_from_memory"),

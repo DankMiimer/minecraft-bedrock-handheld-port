@@ -1,0 +1,15 @@
+# Never commit user-supplied or extracted Minecraft game files here.
+*.apk
+*.apks
+*.xapk
+**/libminecraftpe.so
+**/com.mojang/
+**/versions/
+**/profiles/
+**/level.dat
+**/level.dat_old
+**/*.mcworld
+
+# Local testing noise.
+*.log
+*.csv

@@ -1,0 +1,41 @@
+diff --git a/.gitmodules b/.gitmodules
+index aa30e72..4d0265a 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -24,7 +24,7 @@
+ 	url = ../eglut.git
+ [submodule "linux-gamepad"]
+ 	path = linux-gamepad
+-	url = ../../MCMrARM/linux-gamepad.git
++	url = ../../DankMiimer/linux-gamepad.git
+ [submodule "game-window"]
+ 	path = game-window
+ 	url = ../game-window.git
+diff --git a/game-window b/game-window
+index 1777cab..decf84d 160000
+--- a/game-window
++++ b/game-window
+@@ -1 +1 @@
+-Subproject commit 1777cab60232b20e47a36698d129faeb263ba357
++Subproject commit decf84d85a09ab8020f837de04b201acfef871b0
+diff --git a/libc-shim b/libc-shim
+index e40f8fe..de33d30 160000
+--- a/libc-shim
++++ b/libc-shim
+@@ -1 +1 @@
+-Subproject commit e40f8feee463d852852ed442ea3db9a6320000b2
++Subproject commit de33d305c0bcbad39b5380b9b8a7f44b81e3d5a0
+diff --git a/linux-gamepad b/linux-gamepad
+index 68d75a7..2dab2d8 160000
+--- a/linux-gamepad
++++ b/linux-gamepad
+@@ -1 +1 @@
+-Subproject commit 68d75a74f80a93ec4ff7a96eea0909df28d45330
++Subproject commit 2dab2d899da1d864de4bff4dd71423e12af132d4
+diff --git a/mcpelauncher-client b/mcpelauncher-client
+index 4c5f4fd..711e5c8 160000
+--- a/mcpelauncher-client
++++ b/mcpelauncher-client
+@@ -1 +1 @@
+-Subproject commit 4c5f4fdaad9888bb5b17722242ba4d6e8d8cb16d
++Subproject commit 711e5c8fd933d2baaab34e05a92f6311fa5f0880

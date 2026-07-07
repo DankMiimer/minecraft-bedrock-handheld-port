@@ -1,0 +1,144 @@
+diff --git a/src/common.cpp b/src/common.cpp
+index 47060cc..170b781 100644
+--- a/src/common.cpp
++++ b/src/common.cpp
+@@ -35,6 +35,8 @@
+ #include <fnmatch.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
++#include <sys/wait.h>
++#include <pwd.h>
+ #ifdef __APPLE__
+ #include <pthread.h>
+ #include <malloc/malloc.h>
+@@ -458,6 +460,9 @@ void shim::add_stdlib_shimmed_symbols(std::vector<shim::shimmed_symbol> &list) {
+         {"setenv", WithErrnoUpdate(setenv)},
+         {"unsetenv", WithErrnoUpdate(unsetenv)},
+ 
++        /* POSIX environment data symbol used by patched arm64 libraries. */
++        {"environ", (void*)&environ},
++
+ 
+         {"random", random},
+         {"srandom", srandom},
+@@ -964,6 +969,30 @@ void shim::add_misc_shimmed_symbols(std::vector<shim::shimmed_symbol> &list) {
+         {"syslog", syslog},
+ 
+         {"arc4random", arc4random},
++
++        /* POSIX surface used by the arm64 1.20.40 material-bin loader. */
++        {"creat", ::creat},
++        {"execve", ::execve},
++#ifdef __linux__
++        {"fallocate", ::fallocate},
++        {"pipe2", ::pipe2},
++#endif
++        {"frexp", (double (*)(double, int *))::frexp},
++        {"frexpl", (long double (*)(long double, int *))::frexpl},
++        {"getpwnam_r", ::getpwnam_r},
++        {"getpwuid", ::getpwuid},
++        {"mbsinit", ::mbsinit},
++        {"mkstemp", ::mkstemp},
++        {"pthread_sigmask", ::pthread_sigmask},
++        {"setrlimit", ::setrlimit},
++        {"socketpair", ::socketpair},
++        {"stpcpy", ::stpcpy},
++        {"ldiv", (ldiv_t (*)(long, long))::ldiv},
++#if !defined(__APPLE__)
++        {"timegm", ::timegm},
++#endif
++        {"waitid", ::waitid},
++        {"waitpid", ::waitpid},
+     });
+ }
+ 
+diff --git a/src/network.cpp b/src/network.cpp
+index b39f298..9438700 100644
+--- a/src/network.cpp
++++ b/src/network.cpp
+@@ -259,7 +259,7 @@ int bionic::to_host_sockopt_so(int opt) {
+         case 10: return SO_OOBINLINE;
+         case 13: return SO_LINGER;
+         case 15: return SO_REUSEPORT;
+-        default: throw std::runtime_error("Unknown SO sockopt");
++        default: return opt;
+     }
+ }
+ 
+@@ -277,7 +277,7 @@ int bionic::to_host_sockopt_ip(int opt) {
+         case 34: return IP_MULTICAST_LOOP;
+         case 35: return IP_ADD_MEMBERSHIP;
+         case 36: return IP_DROP_MEMBERSHIP;
+-        default: throw std::runtime_error("Unknown IP sockopt");
++        default: return opt;
+     }
+ }
+ 
+@@ -298,7 +298,7 @@ int bionic::to_host_sockopt_ipv6(int opt) {
+         case 21: return IPV6_LEAVE_GROUP;
+         case 26: return IPV6_V6ONLY;
+         case 34: return IPV6_IPSEC_POLICY;
+-        default: throw std::runtime_error("Unknown IPv6 sockopt");
++        default: return opt;
+     }
+ }
+ 
+@@ -313,7 +313,7 @@ int bionic::to_host_sockopt(int level, int opt) {
+         case SOL_SOCKET: return to_host_sockopt_so(opt);
+         case IPPROTO_IP: return to_host_sockopt_ip(opt);
+         case IPPROTO_IPV6: return to_host_sockopt_ipv6(opt);
+-        default: throw std::runtime_error("Unknown sockopt level");
++        default: return opt;
+     }
+ }
+ 
+@@ -709,5 +709,9 @@ void shim::add_network_shimmed_symbols(std::vector<shim::shimmed_symbol> &list)
+         {"if_freenameindex", if_freenameindex},
+         {"getifaddrs", getifaddrs},
+         {"freeifaddrs", freeifaddrs},
++
++        /* netinet/in.h data symbols referenced by libminecraftpe */
++        {"in6addr_any", (void*)&in6addr_any},
++        {"in6addr_loopback", (void*)&in6addr_loopback},
+     });
+ }
+diff --git a/src/pthreads.cpp b/src/pthreads.cpp
+index c51b2ee..edf1ac9 100644
+--- a/src/pthreads.cpp
++++ b/src/pthreads.cpp
+@@ -435,6 +435,7 @@ void shim::add_pthread_shimmed_symbols(std::vector<shimmed_symbol> &list) {
+         {"pthread_equal", ::pthread_equal},
+         {"pthread_join", ::pthread_join},
+         {"pthread_detach", ::pthread_detach},
++        {"pthread_exit", ::pthread_exit},
+         {"pthread_kill", ::pthread_kill},
+         {"pthread_self", ::pthread_self},
+         {"pthread_atfork", ::pthread_atfork},
+diff --git a/src/sysconf.cpp b/src/sysconf.cpp
+index a6b7d28..eb80ebe 100644
+--- a/src/sysconf.cpp
++++ b/src/sysconf.cpp
+@@ -2,8 +2,23 @@
+ 
+ #include <unistd.h>
+ #include <stdexcept>
++#include <cstdlib>
+ 
+ long shim::sysconf(int name) {
++    // 0x60/0x61 = bionic _SC_NPROCESSORS_CONF/ONLN. MCPE_FAKE_NPROC lets the
++    // game see fewer cores so it sizes its worker pools smaller, leaving CPU
++    // headroom for the render/main threads (4x Cortex-A53 chunk-burst fix).
++    if(name == 0x0060 || name == 0x0061) {
++        static long fake = []() -> long {
++            const char *value = std::getenv("MCPE_FAKE_NPROC");
++            if(value == nullptr || *value == '\0')
++                return 0;
++            long parsed = std::strtol(value, nullptr, 10);
++            return (parsed >= 1 && parsed <= 16) ? parsed : 0;
++        }();
++        if(fake > 0)
++            return fake;
++    }
+     return ::sysconf(bionic::to_host_sysconf_id(name));
+ }
+ 

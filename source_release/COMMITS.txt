@@ -1,0 +1,5 @@
+game-window 1777cab60232b20e47a36698d129faeb263ba357 decf84d85a09ab8020f837de04b201acfef871b0 https://github.com/minecraft-linux/game-window.git
+libc-shim e40f8feee463d852852ed442ea3db9a6320000b2 de33d305c0bcbad39b5380b9b8a7f44b81e3d5a0 https://github.com/minecraft-linux/libc-shim.git
+linux-gamepad 68d75a74f80a93ec4ff7a96eea0909df28d45330 2dab2d899da1d864de4bff4dd71423e12af132d4 https://github.com/MCMrARM/linux-gamepad.git
+mcpelauncher-client 4c5f4fdaad9888bb5b17722242ba4d6e8d8cb16d 711e5c8fd933d2baaab34e05a92f6311fa5f0880 https://github.com/minecraft-linux/mcpelauncher-client.git
+mcpelauncher 368e38b2be8e0396693e9e56c9ec6402b933b426 98eb1d7104e119106754f757044161b9ce5f8558 https://github.com/minecraft-linux/mcpelauncher-manifest.git

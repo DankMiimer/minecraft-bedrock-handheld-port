@@ -1,0 +1,32 @@
+diff --git a/src/linux_joystick.cpp b/src/linux_joystick.cpp
+index 8d0b558..eaae406 100644
+--- a/src/linux_joystick.cpp
++++ b/src/linux_joystick.cpp
+@@ -1,6 +1,7 @@
+ #include "linux_joystick.h"
+ #include "linux_joystick_manager.h"
+ #include <cerrno>
++#include <cstdlib>
+ #include <cstdio>
+ #include <cstring>
+ #include <sstream>
+@@ -87,6 +88,10 @@ void LinuxJoystick::poll() {
+             printf("LinuxJoystick::pool error\n");
+             break;
+         }
++        const char* trace = std::getenv("GAMEWINDOW_GAMEPAD_TRACE");
++        if (trace && strcmp(trace, "0") != 0 &&
++            (e.type == EV_KEY || e.type == EV_ABS))
++            fprintf(stderr, "GAMEPAD_RAW type=%u code=%u value=%d\n", e.type, e.code, e.value);
+         if (e.type == EV_KEY) {
+             if (e.code >= KEY_CNT)
+                 continue;
+@@ -94,7 +99,7 @@ void LinuxJoystick::poll() {
+             if (btn == -1)
+                 continue;
+             bool v = e.value != 0;
+-            buttons[btn] = v;
++            buttonValues[btn] = v;
+             if (mgr)
+                 mgr->onJoystickButton(this, btn, v);
+         } else if (e.type == EV_ABS && isHat(e.code)) {

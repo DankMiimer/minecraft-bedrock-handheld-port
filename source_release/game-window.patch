@@ -1,0 +1,121 @@
+diff --git a/src/joystick_manager_linux_gamepad.cpp b/src/joystick_manager_linux_gamepad.cpp
+index 0c59a90..993dfa8 100644
+--- a/src/joystick_manager_linux_gamepad.cpp
++++ b/src/joystick_manager_linux_gamepad.cpp
+@@ -1,5 +1,7 @@
+ #include "joystick_manager_linux_gamepad.h"
+ 
++#include <cstdlib>
++#include <cstring>
+ #include <fstream>
+ #include <gamepad/joystick_manager_factory.h>
+ #include <gamepad/joystick.h>
+@@ -132,11 +134,19 @@ void LinuxGamepadJoystickManager::warnOnMissingGamePadMapping(gamepad::Gamepad*
+ }
+ 
+ void LinuxGamepadJoystickManager::onGamepadButton(gamepad::Gamepad* gp, gamepad::GamepadButton btn, bool state) {
++    const char* trace = std::getenv("GAMEWINDOW_GAMEPAD_TRACE");
++    if (trace && strcmp(trace, "0") != 0)
++        fprintf(stderr, "GAMEPAD_MAPPED button=%d state=%d focused=%d\n",
++                (int)btn, state, focusedWindow != nullptr);
+     if (focusedWindow != nullptr)
+         focusedWindow->onGamepadButton(gp->getIndex(), mapButtonId(btn), state);
+ }
+ 
+ void LinuxGamepadJoystickManager::onGamepadAxis(gamepad::Gamepad* gp, gamepad::GamepadAxis axis, float value) {
++    const char* trace = std::getenv("GAMEWINDOW_GAMEPAD_TRACE");
++    if (trace && strcmp(trace, "0") != 0 && (value > 0.2f || value < -0.2f))
++        fprintf(stderr, "GAMEPAD_MAPPED axis=%d value=%f focused=%d\n",
++                (int)axis, value, focusedWindow != nullptr);
+     if (focusedWindow != nullptr)
+         focusedWindow->onGamepadAxis(gp->getIndex(), mapAxisId(axis), value);
+ }
+diff --git a/src/window_eglut.cpp b/src/window_eglut.cpp
+index 138dff1..88b7b71 100644
+--- a/src/window_eglut.cpp
++++ b/src/window_eglut.cpp
+@@ -3,6 +3,10 @@
+ #include <game_window_manager.h>
+ 
+ #include <cstring>
++#include <cstdio>
++#include <cstdlib>
++#include <cstdint>
++#include <dlfcn.h>
+ #include <sstream>
+ #include <eglut.h>
+ #define XK_MISCELLANY
+@@ -62,6 +66,55 @@ void EGLUTWindow::setIcon(std::string const &iconPath) {
+ }
+ 
+ void EGLUTWindow::makeCurrent(bool active) {
++    const char* crustyBridgeEnv = std::getenv("GAMEWINDOW_EGLUT_CRUSTY_CONTEXT");
++    if (crustyBridgeEnv && *crustyBridgeEnv && strcmp(crustyBridgeEnv, "0") != 0) {
++        // Crusty's public eglMakeCurrent is intentionally a success-returning
++        // stub for application callers. Transfer its real SDL context using
++        // the private handle slots from Westonpack 0.2.7.1's aarch64 crusty
++        // X11-EGL build.
++        using MakeCurrent = int (*)(void *, void *);
++        using GetError = const char *(*)();
++        static auto makeBackendCurrent = reinterpret_cast<MakeCurrent>(
++            dlsym(RTLD_DEFAULT, "_SDL_GL_MakeCurrent"));
++        static auto getBackendError = reinterpret_cast<GetError>(
++            dlsym(RTLD_DEFAULT, "_SDL_GetError"));
++
++        Dl_info info{};
++        bool crustyPresent = makeBackendCurrent &&
++            dladdr(reinterpret_cast<void *>(makeBackendCurrent), &info) &&
++            info.dli_fbase;
++        if (!crustyPresent) {
++            // No crusty in this process (e.g. Mesa/Panfrost device where
++            // westonwrap bypasses the shim) -> use the native EGL path.
++            static bool warned = false;
++            if (!warned) {
++                fprintf(stderr, "EGLUT crusty context bridge unavailable; "
++                                "using native EGL context path\n");
++                warned = true;
++            }
++        } else {
++
++        constexpr uintptr_t SDL_WINDOW_SLOT = 0x1e978;
++        constexpr uintptr_t SDL_CONTEXT_SLOT = 0x1e980;
++        auto base = reinterpret_cast<uintptr_t>(info.dli_fbase);
++        auto windowSlot = reinterpret_cast<void **>(base + SDL_WINDOW_SLOT);
++        auto contextSlot = reinterpret_cast<void **>(base + SDL_CONTEXT_SLOT);
++        void *window = *windowSlot;
++        void *context = active ? *contextSlot : nullptr;
++
++        if (!window || (active && !context)) {
++            fprintf(stderr, "EGLUT crusty context handles are unavailable\n");
++            return;
++        }
++
++        int result = makeBackendCurrent(window, context);
++        if (result != 0)
++            fprintf(stderr, "EGLUT crusty context bridge failed: %d (%s)\n",
++                    result, getBackendError ? getBackendError() : "unknown SDL error");
++        return;
++        }
++    }
++
+ #ifdef GAMEWINDOW_X11_LOCK
+     std::lock_guard<std::recursive_mutex> lock(x11_sync);
+ #endif
+@@ -75,6 +128,8 @@ void EGLUTWindow::show() {
+     eglutShowWindow();
+     currentWindow = this;
+     addWindowToGamepadManager();
++    if (std::getenv("GAMEWINDOW_EGLUT_FORCE_FOCUS"))
++        LinuxGamepadJoystickManager::instance.onWindowFocused(this, true);
+ }
+ 
+ void EGLUTWindow::close() {
+@@ -141,6 +196,8 @@ void EGLUTWindow::setSwapInterval(int interval) {
+ void EGLUTWindow::_eglutIdleFunc() {
+     if (currentWindow == nullptr)
+         return;
++    if (std::getenv("GAMEWINDOW_EGLUT_FORCE_FOCUS"))
++        LinuxGamepadJoystickManager::instance.onWindowFocused(currentWindow, true);
+     currentWindow->updateGamepad();
+     eglutPostRedisplay();
+ }
