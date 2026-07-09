@@ -12,12 +12,13 @@ MOJANG OR MICROSOFT.**
 
 ## Tested and working
 
-- **Anbernic RG34XX-SP** (Allwinner H700) on **Knulli**
+- **Anbernic RG34XX-SP** (Allwinner H700) on **muOS** and **Knulli** —
+  including sound on muOS 2601
 - **Anbernic RG DS** (Rockchip RK3566, dual screen) on **ROCKNIX**
 - **LAN multiplayer works across devices** — I've had the RG34XX-SP and the
   RG DS in the same world at the same time.
 
-Should also run on other H700-family Knulli or muOS devices (RG35XX-H / Plus
+Should also run on other H700-family muOS or Knulli devices (RG35XX-H / Plus
 / SP 2024, RG40XX, etc.) and other aarch64 ROCKNIX devices. Reports welcome —
 if your controller isn't mapped, the port auto-generates a mapping and logs it
 so it can be added.
@@ -40,11 +41,11 @@ so it can be added.
 
 ## Install
 
-1. Unzip into your ports folder. Knulli uses `/userdata/roms/ports/`; on
-   muOS, put the `.sh` files in `/roms/Ports/` and `minecraftbedrock/` in
-   `/ports/`.
+1. Unzip **onto your SD card** — at the root of the card (or network share)
+   that holds your `roms`/`ROMS` folders. One zip, every supported firmware
+   (muOS, Knulli, ROCKNIX), no scripts, no manual file placement.
 2. Put your own **arm64** Bedrock APK (single APK, or Google Play splits
-   together) into `minecraftbedrock/apk/`.
+   together) into `ports/minecraftbedrock/apk/`.
 3. Refresh your game list and launch **Minecraft Bedrock** from Ports. First
    run extracts the game (a few minutes), then delete the APK.
 4. For the big-UI version, install a 1.16.221.01 arm64 APK the same way and
@@ -61,8 +62,8 @@ launch if you have WiFi, or you can provide a compatible runtime manually
   included.
 - GPL source patches, license texts, credits, support instructions, trademark
   notes, and a changelog are included with the release materials.
-- SHA-256 for `minecraftbedrock-1.3.1.zip`:
-  `eea9c3c644242a0fa8729492786d98495d0ff41ab62d75a76101a8ced9b5db67`
+- The zip's SHA-256 is published in `SHA256SUMS.txt` and on each GitHub
+  release page.
 
 ## Notes
 

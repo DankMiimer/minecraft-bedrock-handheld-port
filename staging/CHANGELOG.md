@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.5 (2026-07-09)
+
+- **One release zip for everything.** The universal and `-muos-sdroot`
+  variants are replaced by a single `minecraftbedrock-<version>.zip` that
+  installs by extracting it at the SD card / share root — no install
+  scripts, no manual file placement. The launch entries ship at both
+  `roms/ports/` (muOS `ROMS/Ports` via FAT case-insensitivity, Knulli
+  `roms/ports`) and `ports/` (ROCKNIX-style layouts); the port payload
+  ships once at `ports/minecraftbedrock/`. The classic
+  "everything together in your ports folder" layout still works — the
+  launch entries look next to themselves first.
+- The **Minecraft Bedrock Update** entry understands the new zip layout
+  (and the old one) and now also finds split installs where the scripts
+  live in `roms/ports/` and the payload in `ports/` at the same root.
+  Updating from v1.4/v1.4.1 with the old updater still works: the new
+  zip is rejected safely — extract the v1.5 zip once by hand, after
+  which in-place updates resume.
+- Removed the PC-side `tools/prepare_sd` scripts — the single zip made
+  them unnecessary.
+- Confirmed working on muOS 2601 (RG34XX-SP), including audio; docs now
+  describe the unified install on muOS, Knulli, and ROCKNIX.
+
 ## v1.4.1 (2026-07-09)
 
 - Actually fixed silent audio on muOS (PipeWire without a Pulse socket).

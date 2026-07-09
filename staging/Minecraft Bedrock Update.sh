@@ -27,6 +27,18 @@ main() {
            "/userdata/roms/ports/minecraftbedrock"; do
     GAMEDIR="$(try_game_dir "$c")" && break
   done
+  # Same roms/ports-parent fallback as the launch entries: a script in
+  # <root>/roms/ports finds the payload at <root>/ports/minecraftbedrock.
+  if [ -z "$GAMEDIR" ]; then
+    base="$(basename "$SCRIPT_DIR" | tr '[:upper:]' '[:lower:]')"
+    pbase="$(basename "$(dirname "$SCRIPT_DIR")" | tr '[:upper:]' '[:lower:]')"
+    if [ "$base" = "ports" ] && [ "$pbase" = "roms" ]; then
+      root="$(dirname "$(dirname "$SCRIPT_DIR")")"
+      for c in "$root/ports/minecraftbedrock" "$root/Ports/minecraftbedrock"; do
+        GAMEDIR="$(try_game_dir "$c")" && break
+      done
+    fi
+  fi
   [ -n "$GAMEDIR" ] || { show_msg "Update failed:" "minecraftbedrock folder not found."; exit 1; }
 
   LOG="$GAMEDIR/update.log"
@@ -55,8 +67,8 @@ main() {
   LATEST_TAG="$(printf '%s' "$API_JSON" | grep -o '"tag_name"[^,]*' | head -1 |
                 sed 's/.*"tag_name"[^"]*"\([^"]*\)".*/\1/')"
   LATEST="${LATEST_TAG#v}"
-  # The universal zip (not the -muos-sdroot variant, whose inner layout is
-  # different; the overlay below re-places files itself).
+  # The release zip. Old releases also published a -muos-sdroot variant;
+  # skip it (the overlay below re-places files itself).
   ZIP_URL="$(printf '%s' "$API_JSON" |
              grep -o '"browser_download_url"[^,]*minecraftbedrock-[0-9][^"]*\.zip"' |
              grep -v 'muos-sdroot' | head -1 | sed 's/.*"\(https[^"]*\)".*/\1/')"
@@ -86,29 +98,37 @@ main() {
     show_msg "Could not extract the update."
     rm -rf "$TMPD"; exit 1
   }
-  [ -d "$TMPD/new/minecraftbedrock" ] || {
+  # v1.5+ zips extract at the SD root (payload under ports/, scripts under
+  # ports/ and roms/ports/); older zips had both at the zip root.
+  if [ -d "$TMPD/new/ports/minecraftbedrock" ]; then
+    NEW_PAYLOAD="$TMPD/new/ports/minecraftbedrock"
+    NEW_SCRIPTS="$TMPD/new/ports"
+  elif [ -d "$TMPD/new/minecraftbedrock" ]; then
+    NEW_PAYLOAD="$TMPD/new/minecraftbedrock"
+    NEW_SCRIPTS="$TMPD/new"
+  else
     show_msg "Unexpected update layout - aborting."
     rm -rf "$TMPD"; exit 1
-  }
+  fi
 
   # --- Overlay ---------------------------------------------------------------
   # Payload: copy the new minecraftbedrock/ contents over the install. The
   # release zip never contains versions/, profiles/, or user APKs, so a merge
   # copy cannot touch user data.
-  cp -rf "$TMPD/new/minecraftbedrock/." "$GAMEDIR/" || {
+  cp -rf "$NEW_PAYLOAD/." "$GAMEDIR/" || {
     show_msg "Update copy FAILED - install may be partial." \
              "Re-extract the release zip manually."
     rm -rf "$TMPD"; exit 1
   }
   # Launch entries: new/renamed .sh files land beside this script. This file
   # itself is replaced LAST (script is fully parsed, so this is safe).
-  for sh in "$TMPD/new/"*.sh; do
+  for sh in "$NEW_SCRIPTS/"*.sh; do
     [ -f "$sh" ] || continue
     case "$(basename "$sh")" in "$(basename "$0")") continue ;; esac
     cp -f "$sh" "$SCRIPT_DIR/" && chmod +x "$SCRIPT_DIR/$(basename "$sh")"
   done
-  [ -f "$TMPD/new/$(basename "$0")" ] &&
-    cp -f "$TMPD/new/$(basename "$0")" "$SCRIPT_DIR/$(basename "$0")" &&
+  [ -f "$NEW_SCRIPTS/$(basename "$0")" ] &&
+    cp -f "$NEW_SCRIPTS/$(basename "$0")" "$SCRIPT_DIR/$(basename "$0")" &&
     chmod +x "$SCRIPT_DIR/$(basename "$0")"
   chmod +x "$GAMEDIR"/*.sh 2>/dev/null
 

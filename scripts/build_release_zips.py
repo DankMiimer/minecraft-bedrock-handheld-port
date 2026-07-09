@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
-"""Build the release zips from the staging tree.
+"""Build the release zip from the staging tree.
 
 Produces, in --out-dir:
-  minecraftbedrock-<version>.zip              universal (extract into ports/)
-  minecraftbedrock-<version>-muos-sdroot.zip  muOS (extract at the SD root:
-                                              ROMS/Ports/*.sh + ports/minecraftbedrock/)
-  SHA256SUMS.txt                              checksums for both
+  minecraftbedrock-<version>.zip   one zip for every supported firmware
+  SHA256SUMS.txt                   checksum
 
-Then runs check_release_safety.py against each zip. Building both variants
-from one staging tree removes the manual layout/sync step that previously
-had to be done by hand for every release.
+The zip is laid out so that extracting it at the SD card / share root
+installs the port on any supported firmware, with no scripts or manual
+file placement:
+
+  README.md                     install instructions at the card root
+  ports/minecraftbedrock/       the port payload (game dir), shipped once
+  ports/<entry>.sh              launch entries for ROCKNIX-style layouts,
+                                where scripts live inside ports/
+  roms/ports/<entry>.sh         launch entries for muOS (ROMS/Ports —
+                                FAT is case-insensitive) and Knulli
+                                (roms/ports)
+
+The launch entries locate the payload themselves: next to the script
+first, then the ports/minecraftbedrock locations above. Docs and the GPL
+source patches ride along under ports/minecraftbedrock/.
+
+Then runs check_release_safety.py against the zip.
 
 Usage:
-  python scripts/build_release_zips.py --staging ../staging --version 1.4
+  python scripts/build_release_zips.py --staging ../staging --version 1.5
 """
 
 from __future__ import annotations
@@ -28,6 +40,10 @@ EXCLUDE_NAMES = {".DS_Store", "Thumbs.db", "log.txt", "setup_error.txt", "__pyca
 EXCLUDE_SUFFIXES = (".pyc", ".part")
 EXCLUDE_PREFIXES = ("fps-trace",)
 
+# The launch entries are duplicated at these zip prefixes so that every
+# firmware's Ports menu sees them after a root extract.
+SCRIPT_PREFIXES = ("ports/", "roms/ports/")
+
 
 def iter_staging_files(staging: pathlib.Path):
     for path in sorted(staging.rglob("*")):
@@ -42,45 +58,39 @@ def iter_staging_files(staging: pathlib.Path):
         yield path, rel
 
 
-def add_file(archive: zipfile.ZipFile, src: pathlib.Path, arcname: str) -> None:
+def add_entry(archive: zipfile.ZipFile, arcname: str, data: bytes) -> None:
     info = zipfile.ZipInfo(arcname)
     # Stable timestamps make rebuilt zips byte-comparable.
     info.date_time = (2026, 1, 1, 0, 0, 0)
     info.external_attr = (0o755 if arcname.endswith(".sh") or "/bin" in arcname else 0o644) << 16
-    archive.writestr(info, src.read_bytes(), zipfile.ZIP_DEFLATED)
+    archive.writestr(info, data, zipfile.ZIP_DEFLATED)
 
 
-def build_zip(staging: pathlib.Path, out: pathlib.Path, layout: str, version: str) -> None:
+def arcnames_for(rel: pathlib.Path) -> list[str]:
+    rel_posix = rel.as_posix()
+    if rel_posix.endswith(".sh") and len(rel.parts) == 1:
+        return [prefix + rel_posix for prefix in SCRIPT_PREFIXES]
+    if rel.parts[0] == "minecraftbedrock":
+        return [f"ports/{rel_posix}"]
+    if rel_posix == "README.md":
+        # The install instructions stay visible at the card root (and the
+        # safety checker requires a root README with the disclaimer).
+        return [rel_posix]
+    # Other docs and source_release ride along inside the payload.
+    return [f"ports/minecraftbedrock/{rel_posix}"]
+
+
+def build_zip(staging: pathlib.Path, out: pathlib.Path, version: str) -> None:
     with zipfile.ZipFile(out, "w") as archive:
         for src, rel in iter_staging_files(staging):
-            rel_posix = rel.as_posix()
-            # Stamp the shipped version so the on-device updater can compare
-            # against the latest release tag.
-            if rel_posix == "minecraftbedrock/PORT_VERSION":
-                info = zipfile.ZipInfo(rel_posix if layout == "universal"
-                                       else f"ports/{rel_posix}")
-                info.date_time = (2026, 1, 1, 0, 0, 0)
-                info.external_attr = 0o644 << 16
-                archive.writestr(info, version + "\n", zipfile.ZIP_DEFLATED)
-                continue
-            if layout == "universal":
-                arcname = rel_posix
-            elif layout == "muos-sdroot":
-                if rel_posix.endswith(".sh") and len(rel.parts) == 1:
-                    arcname = f"ROMS/Ports/{rel_posix}"
-                elif rel.parts[0] == "minecraftbedrock":
-                    arcname = f"ports/{rel_posix}"
-                elif rel_posix == "README.md":
-                    # Keep the README visible at the SD root (and the safety
-                    # checker requires a root README with the disclaimer).
-                    arcname = rel_posix
-                else:
-                    # Other docs and source_release ride along under
-                    # ports/minecraftbedrock/.
-                    arcname = f"ports/minecraftbedrock/{rel_posix}"
+            if rel.as_posix() == "minecraftbedrock/PORT_VERSION":
+                # Stamp the shipped version so the on-device updater can
+                # compare against the latest release tag.
+                data = (version + "\n").encode()
             else:
-                raise ValueError(layout)
-            add_file(archive, src, arcname)
+                data = src.read_bytes()
+            for arcname in arcnames_for(rel):
+                add_entry(archive, arcname, data)
     print(f"built {out} ({out.stat().st_size / 1024 / 1024:.1f} MB)")
 
 
@@ -96,7 +106,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--staging", type=pathlib.Path, required=True,
                         help="path to the staging tree (dist/staging)")
-    parser.add_argument("--version", required=True, help="release version, e.g. 1.4")
+    parser.add_argument("--version", required=True, help="release version, e.g. 1.5")
     parser.add_argument("--out-dir", type=pathlib.Path, default=pathlib.Path("."),
                         help="output directory (default: cwd)")
     parser.add_argument("--skip-safety-check", action="store_true")
@@ -108,25 +118,19 @@ def main() -> int:
         return 1
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    zips = []
-    for layout, suffix in (("universal", ""), ("muos-sdroot", "-muos-sdroot")):
-        out = args.out_dir / f"minecraftbedrock-{args.version}{suffix}.zip"
-        build_zip(staging, out, layout, args.version)
-        zips.append(out)
+    out = args.out_dir / f"minecraftbedrock-{args.version}.zip"
+    build_zip(staging, out, args.version)
 
     sums_path = args.out_dir / "SHA256SUMS.txt"
-    sums_path.write_text(
-        "".join(f"{sha256(z)}  {z.name}\n" for z in zips), encoding="utf-8"
-    )
+    sums_path.write_text(f"{sha256(out)}  {out.name}\n", encoding="utf-8")
     print(f"wrote {sums_path}")
 
     if not args.skip_safety_check:
         checker = pathlib.Path(__file__).with_name("check_release_safety.py")
-        for z in zips:
-            result = subprocess.run([sys.executable, str(checker), "--zip", str(z)])
-            if result.returncode != 0:
-                print(f"SAFETY CHECK FAILED: {z}", file=sys.stderr)
-                return result.returncode
+        result = subprocess.run([sys.executable, str(checker), "--zip", str(out)])
+        if result.returncode != 0:
+            print(f"SAFETY CHECK FAILED: {out}", file=sys.stderr)
+            return result.returncode
     return 0
 
 

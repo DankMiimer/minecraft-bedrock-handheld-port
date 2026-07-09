@@ -7,12 +7,13 @@ with a custom EGLUT game-window backend on a Weston/crusty
 graphics stack.
 
 **Tested on:**
-- Anbernic RG34XX-SP (Allwinner H700, 720x480) running Knulli
+- Anbernic RG34XX-SP (Allwinner H700, 720x480) running muOS 2601 and Knulli —
+  including sound on muOS
 - Anbernic RG DS (Rockchip RK3566, dual 640x480) running ROCKNIX — the game
   runs on the primary screen; both touchscreens are mapped to it during play
 
 It should also work on other H700-family devices (RG35XX-H/Plus/SP 2024,
-RG40XX, etc.) running Knulli or muOS, and other Mali-blob ROCKNIX devices —
+RG40XX, etc.) running muOS or Knulli, and other Mali-blob ROCKNIX devices —
 reports welcome. It will NOT work on 32-bit-only devices.
 
 **No game files are included.** You must provide your own legally obtained
@@ -23,22 +24,26 @@ MOJANG OR MICROSOFT.**
 
 ## Download
 
-- Latest release: [v1.4.1](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.4.1)
-- Port zip: [minecraftbedrock-1.4.1.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.4.1/minecraftbedrock-1.4.1.zip)
+- Latest release: [v1.5](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.5)
+- Port zip: [minecraftbedrock-1.5.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.5/minecraftbedrock-1.5.zip)
 - SHA-256: compare against the checksum shown on the GitHub release page or
   in `SHA256SUMS.txt`.
 
-Do not download this repository as the install package. Use the release zip
-above; GitHub's "Source code" archives are only for the repository contents.
+One zip for every supported firmware — no install scripts, no manual file
+placement. Do not download this repository as the install package. Use the
+release zip above; GitHub's "Source code" archives are only for the
+repository contents.
 
 ## Quick Start
 
-1. Extract this zip into your handheld's ports folder. On muOS, put the `.sh`
-   files in `/roms/Ports/` and the `minecraftbedrock/` folder in `/ports/`.
+1. Extract the zip **onto your SD card** — at the root of the card (or
+   network share) that holds your `roms`/`ROMS` folders. Everything lands in
+   the right place on muOS, Knulli, and ROCKNIX automatically.
 2. Copy your own legally obtained Minecraft Bedrock arm64 APK file(s) into
-   `minecraftbedrock/apk/`.
-3. Launch **Minecraft Bedrock** once to extract the game.
-4. Delete the APK file(s) from `minecraftbedrock/apk/`.
+   `ports/minecraftbedrock/apk/`.
+3. Refresh your game list and launch **Minecraft Bedrock** once to extract
+   the game.
+4. Delete the APK file(s) from the `apk/` folder.
 
 ## Requirements
 
@@ -66,21 +71,6 @@ above; GitHub's "Source code" archives are only for the repository contents.
 | 1.26+ Play builds | Unsupported | Newer Android licensing/runtime dependencies are not supported by this port. |
 | 32-bit / armeabi-v7a builds | Unsupported | This port requires aarch64 and `arm64-v8a` game libraries. |
 
-## Easy install (PC tool)
-
-`tools/prepare_sd.ps1` (Windows) / `tools/prepare_sd.sh` (Linux/macOS) do the
-layout for you: they verify the release zip, place the files correctly for
-Knulli, muOS, or ROCKNIX, and check your APK on the computer (ABI,
-split-set completeness, unsupported 1.26+ Play builds) before you ever boot
-the handheld.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\prepare_sd.ps1
-```
-
-muOS users can alternatively grab the `-muos-sdroot` zip variant and extract
-it directly at the SD card root.
-
 ## Updating from a previous version
 
 Your worlds, settings, and installed game versions are never inside the
@@ -88,30 +78,52 @@ release zip, so updating cannot touch them.
 
 - **From 1.4 or newer:** launch **Minecraft Bedrock Update** from Ports (needs
   WiFi). It downloads the latest release and updates the port in place.
-- **From 1.3.x (or without WiFi):** extract the new release zip over your
-  existing install, overwriting when asked — same locations as a fresh
-  install. Do NOT delete the `minecraftbedrock/` folder first (it contains
-  your extracted game and worlds).
+- **Without WiFi:** extract the new release zip over your existing install,
+  overwriting when asked. Do NOT delete the `minecraftbedrock/` folder first
+  (it contains your extracted game and worlds). If your old install keeps the
+  `minecraftbedrock/` folder next to the `.sh` files (pre-1.5 Knulli/ROCKNIX
+  layout), copy the zip's `ports/minecraftbedrock/` contents over that folder
+  instead — the launch scripts prefer the folder beside them.
 
-## Install (manual)
+## Install (details)
 
-1. Extract this zip into your ports directory.
-   - Knulli: put `Minecraft Bedrock.sh`, `Minecraft Bedrock 1.16.sh`, and the
-     `minecraftbedrock/` folder directly in `/userdata/roms/ports/`.
-   - muOS: put the `.sh` files in `/roms/Ports/` and put the
-     `minecraftbedrock/` folder in `/ports/`.
-2. Copy your APK into `minecraftbedrock/apk/`. A single full APK or Google
-   Play split APKs (base + arm64 + install-pack, together) both work.
-3. Update your game list and launch **Minecraft Bedrock** from Ports. The
+Extract the whole zip at the root of the storage that holds your roms:
+
+- **muOS:** the SD card root (`/mnt/mmc`). The launch entries land in
+  `ROMS/Ports/` (FAT storage is case-insensitive, so the zip's `roms/ports/`
+  merges into it) and the port itself in `ports/minecraftbedrock/`.
+- **Knulli:** the share root — the second SD card's root, or the network
+  share (`\\KNULLI\share`). The entries land in `roms/ports/`, the port in
+  `ports/minecraftbedrock/`.
+- **ROCKNIX:** the games partition root (what you see from a PC; on-device
+  `/storage/roms`). The zip's `ports/` folder carries both the entries and
+  the port; the stray `roms/` folder it also creates is harmless and can be
+  deleted.
+
+The launch scripts find the `minecraftbedrock/` folder on their own: next to
+themselves first, then in the `ports/` locations above — so the classic
+"everything together in your ports folder" layout also still works.
+
+Then:
+
+1. Copy your APK into `ports/minecraftbedrock/apk/`. A single full APK or
+   Google Play split APKs (base + arm64 + install-pack, together) both work.
+2. Update your game list and launch **Minecraft Bedrock** from Ports. The
    first run extracts the game — give it a few minutes.
-4. Delete the APK from the `apk/` folder afterwards.
+3. Delete the APK from the `apk/` folder afterwards.
 
-Expected layout after extraction:
+Layout inside the zip:
 
 ```text
-ports/
+README.md
+roms/ports/
   Minecraft Bedrock.sh
   Minecraft Bedrock 1.16.sh
+  Minecraft Bedrock Update.sh
+ports/
+  Minecraft Bedrock.sh            (same entries, for ROCKNIX-style layouts)
+  Minecraft Bedrock 1.16.sh
+  Minecraft Bedrock Update.sh
   minecraftbedrock/
     apk/
       PUT_APK_HERE.txt
@@ -212,13 +224,13 @@ Logs live at `minecraftbedrock/log.txt` and
 Windows PowerShell:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\minecraftbedrock-1.4.1.zip
+Get-FileHash -Algorithm SHA256 .\minecraftbedrock-1.5.zip
 ```
 
 Linux/macOS:
 
 ```sh
-sha256sum minecraftbedrock-1.4.1.zip
+sha256sum minecraftbedrock-1.5.zip
 ```
 
 Compare the result with the SHA-256 value published on the GitHub release

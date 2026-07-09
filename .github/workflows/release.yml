@@ -1,5 +1,5 @@
-# Builds the release zips from the staging tree and runs the content-safety
-# check on every push/PR; attaches the zips to the release when a v* tag is
+# Builds the release zip from the staging tree and runs the content-safety
+# check on every push/PR; attaches the zip to the release when a v* tag is
 # pushed. Requires the repo to contain the staging tree at staging/ (copy of
 # dist/staging — scripts, payload, docs; never APKs/game files).
 name: build-release
