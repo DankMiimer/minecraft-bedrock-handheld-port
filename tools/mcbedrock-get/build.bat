@@ -3,6 +3,10 @@ REM Build mcbedrock-get.exe. Needs Python 3.10+ on PATH; everything else is
 REM fetched as a wheel, so no compiler is required.
 setlocal
 
+REM PyInstaller requires stable hash and PE timestamp inputs for reproducible builds.
+set "PYTHONHASHSEED=1"
+set "SOURCE_DATE_EPOCH=1767225600"
+
 if not exist .venv (
     python -m venv .venv || goto :fail
 )

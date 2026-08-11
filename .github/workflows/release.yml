@@ -87,10 +87,22 @@ jobs:
       - name: Helper unit tests
         working-directory: tools/mcbedrock-get
         run: python -m unittest discover -s tests -p "test_*.py" -v
-      - name: Build deterministic Windows bundle
+      - name: Build Windows bundle twice and compare
         working-directory: tools/mcbedrock-get
-        shell: cmd
-        run: build.bat
+        shell: pwsh
+        run: |
+          cmd /d /c build.bat
+          if ($LASTEXITCODE -ne 0) { throw "First Windows helper build failed" }
+          $firstExe = (Get-FileHash .\dist\mcbedrock-get.exe -Algorithm SHA256).Hash
+          $firstBundle = (Get-FileHash .\dist\mcbedrock-get-windows-v*.zip -Algorithm SHA256).Hash
+
+          cmd /d /c build.bat
+          if ($LASTEXITCODE -ne 0) { throw "Second Windows helper build failed" }
+          $secondExe = (Get-FileHash .\dist\mcbedrock-get.exe -Algorithm SHA256).Hash
+          $secondBundle = (Get-FileHash .\dist\mcbedrock-get-windows-v*.zip -Algorithm SHA256).Hash
+
+          if ($firstExe -ne $secondExe) { throw "Windows helper executable is not reproducible" }
+          if ($firstBundle -ne $secondBundle) { throw "Windows helper bundle is not reproducible" }
       - name: Smoke-test executable
         working-directory: tools/mcbedrock-get
         run: |
