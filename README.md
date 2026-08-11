@@ -1,322 +1,175 @@
-# Minecraft Bedrock Edition — manual install port
+# Minecraft Bedrock handheld port
 
-Minecraft Bedrock Edition running **natively** (no emulation, no streaming)
-on ARM Linux handhelds, via the
-[minecraft-linux mcpelauncher](https://github.com/minecraft-linux/mcpelauncher-manifest).
-The package includes a 64-bit aarch64 EGLUT/Weston path and a 32-bit armhf
-SDL path based on the working R36S port.
-
-**Tested on:**
-- Anbernic RG34XX-SP (Allwinner H700, 720x480) running muOS 2601 and Knulli —
-  including sound on muOS
-- Anbernic RG DS (Rockchip RK3566, dual 640x480) running ROCKNIX — the game
-  runs on the primary screen; both touchscreens are mapped to it during play
-
-It should also work on other H700-family devices (RG35XX-H/Plus/SP 2024,
-RG40XX, etc.) running muOS or Knulli, and other Mali-blob ROCKNIX devices —
-reports welcome. The 32-bit path targets RK3326/R36S-class devices on
-dArkOS/DarkOS RE, Aurknix, and ArkOS-for-clone style PortMaster setups.
-
-**No game files are included.** You must provide your own legally obtained
-Minecraft Bedrock Edition APK (`arm64-v8a` for the 64-bit path, or
-`armeabi-v7a` for the R36S/armhf path).
-
-**Recommended game version: 1.16.221.01** — the only tested version that
-does not stutter and plays perfectly on these devices (see Version Notes).
+An unofficial PortMaster launcher for legally acquired Android Bedrock builds.
+It runs the native ARM game library through the open-source minecraft-linux
+launcher. No Mojang APK, game asset, account credential, or license bypass is
+included. No game files are included.
 
 **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 MOJANG OR MICROSOFT.**
 
-## Download
+## Choose the correct edition
 
-- Latest release: [v1.6](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/tag/v1.6)
-- Port zip: [minecraftbedrock-1.6.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v1.6/minecraftbedrock-1.6.zip)
-  — one zip for every supported firmware
-- SHA-256: compare against the checksum shown on the GitHub release page or
-  in `SHA256SUMS.txt`.
+- `minecraftbedrock-standard-vX.Y.Z.zip` is the lightweight single-screen
+  edition for aarch64 and armhf PortMaster systems. It contains no telemetry,
+  minimap, dual-touch runtime, OSK supervisor, or RGDS experimental tooling.
+- `minecraftbedrock-rgds-vX.Y.Z.zip` is the arm64 dual-screen edition. Its
+  supported host is RGDS on ROCKNIX/Sway. It adds live map/status, FMOD
+  telemetry, SELECT screen swapping, dual-touch routing, and OSK supervision.
 
-Do not use GitHub's "Source code" archives as the install package; they are
-only repository contents and do not preserve the packaged layout.
+The standard edition does not launch on RGDS. It offers a confirmed installer
+for the RGDS edition when the release index and network are available, and
+otherwise displays manual download instructions.
 
-## Quick Start
+## Install
 
-1. Extract the zip **onto your SD card** — at the root of the card (or
-   network share) that holds your `roms`/`ROMS` folders. Everything lands in
-   the right place on muOS, Knulli, and ROCKNIX automatically.
-2. Copy your own legally obtained Minecraft Bedrock APK file(s) into
-   `ports/minecraftbedrock/apk/` for your device ABI.
-3. Refresh your game list and launch **Minecraft Bedrock** once to extract
-   the game.
-4. Delete the APK file(s) from the `apk/` folder — this can also be done
-   later from the launcher menu.
+1. Extract exactly one edition archive into the device's PortMaster/ports
+   layout.
+2. Launch it once. Existing 1.x data is migrated transactionally.
+3. Copy an official full APK or one complete official split set to
+   `$PORTS/minecraftbedrock-data/apk/`.
+4. Open **Install APK**, select the complete set, and install it.
 
-## Launcher menu
+For step 3 on Windows, see
+[GETTING-BEDROCK-APKS.md](GETTING-BEDROCK-APKS.md). Google now refuses Play
+downloads to third-party desktop clients, so the working route is the
+minecraft-linux launcher under WSL. The guide covers installing it, selecting
+`arm64-v8a` rather than the default `x86`, and copying a complete split set
+across. No game content is distributed by this project.
 
-Launching **Minecraft Bedrock** opens a controller-driven launcher menu on
-any device with PortMaster's LÖVE runtime installed (Knulli, muOS, and
-ROCKNIX alike):
+The installer reads Android binary manifest metadata and signing data. It
+groups files by package, version code/name, signer, dependencies, and ABI;
+files from different groups are never mixed. Extraction happens in staging and
+is atomically published only after validation. Original APKs and prior installs
+remain intact on failure.
 
-- **Play** — starts the selected version.
-- **Versions** — switch between installed versions (the choice is
-  remembered), or delete one with **X**. Worlds and player settings live in
-  `profiles/` and survive version deletes.
-- **Install APK** — extracts APKs found in `ports/minecraftbedrock/apk/`
-  into a new version: pick a single file, or *Install ALL files together*
-  for Google Play split sets. Installed APK files can be deleted from here
-  too (**X**).
-- **Settings** — saved to `ports/minecraftbedrock/config/settings.cfg` and
-  applied on every launch:
-  - **FPS cap** (10–120, in 5 fps steps) — writes the game's
-    `gfx_max_framerate`.
-  - **Render distance** in chunks — pinned into the game options at each
-    launch, so it can go **below the in-game slider's minimum**
-    (2 chunks = 32 blocks). 3–4 chunks is the H700 sweet spot.
-  - **Client** — force the 64-bit or 32-bit client on dual-ABI installs.
-  - **UI scale**, **VSync**, **performance governor**, **auto-tune
-    options**, and **FPS logging** toggles.
-- **Backup** — archive your worlds, game options, and launcher
-  settings into `ports/minecraftbedrock/backups/` and restore or delete
-  archives later, all from the device.
-- **Help** — short on-device troubleshooting guide.
+## Data and updates
 
-Controls: D-pad navigates, **A** selects, **B** goes back, **X** deletes,
-Left/Right changes a setting value. If the menu cannot run (no LÖVE
-runtime installed), the port behaves as before: APKs are extracted
-automatically at launch and the newest installed version starts. The menu
-can be disabled with `MCPE_MENU=0`; then the launcher starts the remembered
-version, or the newest installed version if no choice has been saved.
-Version selection and port updates live inside this main launcher menu.
-
-## Requirements
-
-- aarch64 device on Knulli, muOS, or ROCKNIX-style PortMaster setup, or an
-  armhf-capable RK3326/R36S setup with `/dev/dri`
-- ~2 GB free space on the ports partition (game assets are large)
-- For the 64-bit path: WiFi on first launch so the launcher can fetch its
-  Weston runtime if it is missing (53 MB), or a preinstalled compatible
-  `weston_pkg_0.2` runtime
-- A Minecraft Bedrock APK matching the selected path: **arm64-v8a** for
-  aarch64, **armeabi-v7a** for R36S/armhf. Tested on 64-bit: **1.16.221.01**
-  and **1.20.x** (1.20.15 / 1.20.51 / 1.20.62). The 32-bit path should accept
-  the same broad version range as the working R36S port; 1.26+ Play builds do
-  **not** work on the 64-bit path (PairIP licensing).
-- **Recommended version — 1.16.221.01.** It is the only tested version that
-  does not stutter and plays perfectly on these devices; the 1.20.x versions
-  run, but with occasional stutter. 1.16.221.01 also has a **working GUI
-  Scale slider** (Settings → Video), giving a properly sized UI at native
-  resolution — on 1.17 and newer the GUI Scale is locked small at these
-  resolutions (an engine limitation, no fix launcher-side).
-
-## Version Notes
-
-| Version | Status | Notes |
-|---|---|---|
-| 1.16.221.01 arm64/arm32 | **Recommended** | The only tested version that does not stutter and plays perfectly (on tested 64-bit devices). Working GUI Scale slider; uses its own isolated profile when selected from **Versions**. |
-| 1.20.15 / 1.20.51 / 1.20.62 arm64 | Tested, playable | Modern gameplay, but with occasional stutter; UI scale is locked small on these handheld screens. |
-| 1.2+ armeabi-v7a | R36S path | Supported by the 32-bit launcher path inherited from the working R36S port; modern versions keep the small locked UI. |
-| 1.21+ arm64 | Untested / may work | Not a primary target yet. |
-| 1.26+ Play builds | Unsupported | Newer Android licensing/runtime dependencies are not supported by this port. |
-
-## Updating from a previous version
-
-Your worlds, settings, and installed game versions are never inside the
-release zip, so updating cannot touch them.
-
-- **From 1.4 or newer:** launch **Minecraft Bedrock**, choose **Update port**
-  in the launcher menu (needs WiFi), and it updates the port in place.
-- **Without WiFi:** extract the new release zip over your existing install,
-  overwriting when asked. Do NOT delete the `minecraftbedrock/` folder first
-  (it contains your extracted game and worlds). If your old install keeps the
-  `minecraftbedrock/` folder next to the `.sh` files (pre-1.5 Knulli/ROCKNIX
-  layout), copy the zip's `ports/minecraftbedrock/` contents over that folder
-  instead — the launch scripts prefer the folder beside them.
-
-## Install (details)
-
-Extract the whole zip at the root of the storage that holds your roms:
-
-- **muOS:** the SD card root (`/mnt/mmc`). The launch entries land in
-  `ROMS/Ports/` (FAT storage is case-insensitive, so the zip's `roms/ports/`
-  merges into it) and the port itself in `ports/minecraftbedrock/`.
-- **Knulli:** the share root — the second SD card's root, or the network
-  share (`\\KNULLI\share`). The entries land in `roms/ports/`, the port in
-  `ports/minecraftbedrock/`.
-- **ROCKNIX:** the games partition root (what you see from a PC; on-device
-  `/storage/roms`). The zip's `ports/` folder carries both the entries and
-  the port; the stray `roms/` folder it also creates is harmless and can be
-  deleted.
-
-The launch scripts find the `minecraftbedrock/` folder on their own: next to
-themselves first, then in the `ports/` locations above — so the classic
-"everything together in your ports folder" layout also still works.
-
-Then:
-
-1. Copy your APK into `ports/minecraftbedrock/apk/`. A single full APK or
-   Google Play split APKs (base + matching ABI split + install-pack, together)
-   both work.
-2. Update your game list and launch **Minecraft Bedrock** from Ports. The
-   first run extracts the game — give it a few minutes.
-3. Delete the APK from the `apk/` folder afterwards.
-
-Layout inside the zip:
+The editions share only user-owned game data:
 
 ```text
-README.md
-roms/ports/
-  Minecraft Bedrock.sh
-ports/
-  Minecraft Bedrock.sh            (same entries, for ROCKNIX-style layouts)
-  minecraftbedrock/
-    apk/
-      PUT_APK_HERE.txt
-    bin/
-    bin32/
-    controls/
-    lib32/
-    libs.aarch64/
-    setup_apk.sh
-    run_bedrock.sh
+$PORTS/minecraftbedrock-data/
+  apk/       user-supplied installers
+  versions/  validated extracted game versions
+  profiles/  worlds, options, and 1.16-isolated profiles
+  backups/   local backups
 ```
 
-For Google Play split APKs, copy the relevant files together into
-`minecraftbedrock/apk/`, for example:
+Each edition separately owns `config/`, `logs/`, `runtime/`, caches, temporary
+state, and its `stable` or opt-in `testing` channel. Code updates download an
+exact edition asset, validate its declared size/SHA-256 and archive paths, then
+swap the whole payload atomically. They never overlay another edition or
+modify shared data.
 
-```text
-base.apk
-split_config.arm64_v8a.apk
-split_install_pack.apk
-```
+The first 2.x launch inventories the old layout, rejects ambiguous collisions,
+writes a recovery manifest, prefers same-filesystem atomic moves, and leaves
+compatibility links. Rollback state is retained until the first clean game
+exit.
 
-For the R36S/armhf path, use the corresponding `armeabi-v7a` split instead.
+## Host compatibility
 
-You can install several versions (drop each APK in `apk/` and install it from
-the menu). The main **Minecraft Bedrock** entry opens the launcher; **Play**
-starts the remembered version, or the newest installed version as a fallback.
+Hardware admission is capability-based, not a promise that every ARM device
+was physically tested. The resolver records ABI, SoC/device tree, RAM,
+compositor, connected DRM modes, graphics stack, audio services, input axes,
+touch/output associations, permissions, and active resolution. It selects a
+Wayland/Sway, Mesa KMSDRM, H700 proprietary-Mali/Weston, or X11 adapter.
 
-### 1.16.221.01
+Priority is: explicit user override, validated device profile, then automatic
+capability selection. A connected DRM mode must exist before KMSDRM starts;
+otherwise the launcher selects a safe compositor fallback or exits with an
+actionable diagnostic. This is the R36S mode-selection fix—no fixed 640×480
+mode is assumed.
 
-1.16.221.01 is the recommended version: it is the only tested version that
-does not stutter and plays perfectly, and it has the working GUI Scale
-slider. Install it, open **Minecraft Bedrock**, and choose it from
-**Versions**. The launcher gives 1.16 builds their own isolated profile
-(older clients cannot open newer worlds). On first launch, dismiss the Xbox
-sign-in prompt (press **B**) to reach the menu; sign-in is not supported.
+Compatibility labels and the exact Bedrock registry are in
+[`portmaster/minecraftbedrock/COMPATIBILITY.md`](portmaster/minecraftbedrock/COMPATIBILITY.md):
 
-Notes: 1.16 has no cross-version LAN with 1.20, and this port applies small
-built-in compatibility patches so 1.16.221.01 boots (Education Mode off,
-online services disabled — LAN still works).
+- **Validated** — passed the physical reference matrix.
+- **Best effort** — admitted through a tested capability/backend path but not
+  validated on that exact combination.
+- **Unsupported** — a known ABI, PairIP, graphics, or runtime incompatibility.
 
-**LAN multiplayer flow** (same as any Bedrock version): one player opens a
-world and stays in it (the host); the other player, from the **main menu**,
-goes to **Play → Friends tab** and the host's world appears under "LAN
-Games". You can't see each other if you're both sitting in your own separate
-worlds — one hosts, the other joins from the menu. Verified working on 1.16
-between an RG34XX-SP and an RG DS.
+## Bedrock versions
 
-## Notes and limitations
+The compatibility registry, not a directory name, controls patches and
+defaults. **1.16.221.01 is the recommended/default Bedrock version** because
+its legacy UI scaling remains usable on handheld screens. The fingerprinted
+original 1.21.51.01 is the newest tested no-RenderDragon arm64 build, but it is
+not selected by default because of its poorer UI scaling. Later 1.21.51.01
+reuploads are not assumed equivalent: only a registered `libminecraftpe.so`
+SHA-256 receives the no-RenderDragon label; unknown variants show a warning.
 
-- **No Xbox Live / Marketplace sign-in.** Local worlds work. **LAN
-  multiplayer works** — verified between an RG34XX-SP (Knulli) and an RG DS
-  (ROCKNIX) in the same world.
-- **Audio** uses the launcher's OpenAL backend, which outputs through
-  PulseAudio on Knulli and ROCKNIX (pipewire-pulse). On ALSA-only systems with
-  no Pulse/PipeWire server (e.g. **muOS**), the port detects the missing server
-  and automatically routes OpenAL to ALSA, so sound works out of the box.
-  Force a specific OpenAL output with `MCPE_ALSOFT_DRIVERS` (e.g. `alsa` or
-  `pulse`). Optional: drop a host (glibc aarch64) FMOD Engine `libfmod.so.12.0`
-  from fmod.com into `minecraftbedrock/fmod/` to use real FMOD instead.
-  The R36S/armhf path uses the SDL audio backend and defaults to ALSA.
-- **No virtual keyboard.** Set world names etc. from a PC; save data lives in
-  `minecraftbedrock/profiles/default/mcpelauncher/games/com.mojang/`.
-- While the game runs, the CPU governor is set to `performance` and the GPU
-  minimum clock is raised; both are restored on exit
-  (disable with `MCPE_PERFORMANCE_MODE=0`).
-- On 4-core devices a measured thread-affinity layout is applied (render and
-  simulation threads get dedicated cores) — this roughly quartered stutter on
-  the H700. Recommended in-game settings for H700: render distance 3-4
-  chunks, 30-40 FPS cap.
-- EmulationStation is fully stopped during play and restarted afterwards
-  on Knulli. On muOS, the frontend/mux launcher is stopped while Weston owns
-  the framebuffer and restarted on exit.
+The 1.16 EduMode and 1.16/1.17 HTTP resolver guards remain. The
+1.20.62 compaction change is opt-in. Every patch first verifies its expected
+symbol/signature; a mismatch logs and disables that patch instead of modifying
+unknown code.
 
-## Controls
+PairIP/new-ABI 1.26 packages are rejected before extraction because they need
+legal upstream launcher support. This project does not attempt DRM or license
+bypasses.
 
-Default Bedrock gamepad layout (left stick move, right stick camera,
-R1/RT break, L1/LT place, A jump, Start pause). Controller mappings are
-matched by controller GUID from `minecraftbedrock/controls/` — hand-tuned:
-RG34XX-SP (whose line also covers other Anbernic H700-family pads, they
-share the same GUID), RG DS. **Unknown controllers get an auto-generated
-standard-layout mapping** at launch (logged in `log.txt`) — if buttons feel
-wrong on your device, see `controls/README.md` to tune the line, and please
-share it!
+## RGDS controls and cleanup
 
-On the R36S/armhf path, the SDL client also honours PortMaster's
-`get_controls` mapping line, matching the original working R36S port behavior.
+The RGDS edition discovers outputs and touch devices from Sway/libinput
+metadata rather than fixed `DSI-*`, Goodix, or `/dev/input/event*` names. The
+game starts on the physical top panel and the companion UI on the bottom;
+SELECT atomically swaps the two surfaces. Touch mappings follow the surfaces.
 
-On dual-screen devices the touchscreen(s) are remapped to the game's display
-while the port runs (sway `map_to_output`, the same approach ROCKNIX uses
-for DraStic). If ES touch behaves oddly after quitting, restart ES or reboot.
+The lower-screen companion uses a Minecraft-style five-tab shell inspired by
+the AYN Thor second-screen projects: **HUD**, **Chat**, **Items**, **Input**,
+and **Settings**. A persistent status stack shows live position/FPS/dimension
+and LevelDB snapshot health/hunger. HUD contains the centered terrain map;
+Chat and Items are independent lower-screen views, so gameplay stays visible
+on the other panel. Items provides a 36-slot grid and craftable-recipe pane;
+Chat provides history and a touch keyboard. Their state/command ABI is bounded
+and versioned, and unsupported actions stay visibly read-only rather than
+modifying inventory memory. The exact `1.21.51.01` bridge is gated by the
+installed game-library hash plus runtime RTTI/vtable/prologue checks.
 
-## Troubleshooting
+The companion indexes and loads UI/item PNGs directly from the selected,
+user-supplied Minecraft installation. No Mojang texture is included in a port
+or source archive. Input supplies a 3×3 shortcut grid; Settings controls
+status, automatic Items selection, night tint, and map following.
 
-Logs live at `minecraftbedrock/log.txt` and
-`minecraftbedrock/weston_launch.log`.
+Terrain tiles come from the active local world's LevelDB. When RGDS joins a
+world hosted by another device over LAN, Bedrock does not store that remote
+database on the client. The companion therefore clears any previous local map,
+pauses local terrain rendering, and shows `REMOTE WORLD / MAP UNAVAILABLE`
+while retaining live position and status telemetry. It never presents cached
+terrain from another world as the current LAN map.
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| No Minecraft version installed | No APK was copied, or extraction failed before creating `versions/` | Copy your legally obtained APK(s) into `minecraftbedrock/apk/` and launch again. |
-| 32-bit path unavailable | Device lacks `/dev/dri` or an armhf loader | Use an arm64 APK on aarch64 devices, or install/test on an R36S/RK3326 firmware with armhf multilib. |
-| 64-bit path unavailable | Device lacks aarch64 userspace/loader | Use an `armeabi-v7a` APK on the R36S/armhf path. |
-| `Unable to locate asset: bootstrap.json` | APK assets were flattened or split files are incomplete | Re-run setup with the original APK/split files together; do not rearrange `assets/assets/`. |
-| Black screen after crash | Display/session cleanup did not finish | On Knulli, restart EmulationStation with `/etc/init.d/S31emulationstation start`; on muOS, relaunch the frontend or reboot. |
-| Buttons are wrong | Controller GUID is not mapped yet | Open an issue with device, firmware, and the generated mapping/log lines. |
-| Tiny UI in newer versions | 1.17+ locks GUI scale on these screens | Use 1.16.221.01 for the best UI and the smoothest, stutter-free gameplay. |
+For local worlds, the terrain worker follows the LevelDB directory actually
+opened by the running game, so switching worlds does not wait for player
+movement to change a log timestamp. Its default 12-chunk scan covers the
+visible map at the normal zoom with one quarter of the old lookup count; the
+central area is published before any optional wider cache ring.
 
-## Verify the Download
+Every child process and saved state is supervised. Cleanup is idempotent and
+restores output placement, touch mapping, frontend state, OSK state, mounts,
+temporary shared memory, and tuning after normal exit, signals, or a forced
+game termination. Missing dual-output prerequisites produce diagnostics and a
+clean exit. Non-ROCKNIX RGDS hosts are experimental.
 
-Windows PowerShell:
+## Diagnostics
 
-```powershell
-Get-FileHash -Algorithm SHA256 .\minecraftbedrock-1.6.zip
-```
+Use **Support bundle** in the launcher. It creates a local, redacted archive
+containing the resolved profile, runtime hashes, display modes, audio/input
+detection, APK metadata, and relevant logs. Nothing is uploaded automatically.
+Do not publish APKs, extracted game libraries, worlds, or account data.
 
-Linux/macOS:
+Controller mappings prefer PortMaster's mapping. Unknown pads get a
+conservative fallback based on evdev axis capabilities. Use the local
+controller diagnostic when an unusual pad layout is not recognized.
 
-```sh
-sha256sum minecraftbedrock-1.6.zip
-```
+## Reproducible releases
 
-Compare the result with the SHA-256 value published on the GitHub release
-page (`SHA256SUMS.txt`). The README inside the zip does not hardcode the
-final zip hash because that would change the archive being verified.
+`VERSION` is the version authority. Pinned container builds create the standard
+aarch64/armhf clients and the RGDS telemetry/independent-companion client from
+the same commits.
+`scripts/build_releases.py` replaces all payload clients with those artifacts,
+adds the versioned Crusty context API module, creates deterministic archives,
+SPDX SBOMs, source/license bundles, SHA-256 sums, release notes, and the
+edition-aware release index. Packaging fails on private/Mojang inputs or any
+dual-screen marker in the standard archive.
 
-## Reporting Issues
-
-Please use the issue templates. Include your device, firmware, Minecraft APK
-version, and the relevant log text.
-
-Do **not** upload APKs, extracted `versions/`, `profiles/`, worlds, or any
-Mojang/Microsoft game files. Reports that require those files cannot be
-handled publicly.
-
-## Source
-
-The launcher is GPL-3.0. The complete modified source is provided as patch
-files in `source_release/` (see its README for base commits and build
-instructions) and as branch `rg34xxsp-port` on the forks under
-https://github.com/DankMiimer (mcpelauncher-manifest, mcpelauncher-client,
-game-window, libc-shim, linux-gamepad — recursive-clone the manifest fork to
-build). Licenses for all shipped components are included inside the release
-zip under `minecraftbedrock/licenses/`; repository-level notes live in
-[`LEGAL.md`](LEGAL.md) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-
-For device testing notes, see [`TESTING.md`](TESTING.md). Support and
-contribution guidance lives in [`SUPPORT.md`](SUPPORT.md) and
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Credits
-
-See [`CREDITS.md`](CREDITS.md) for detailed credits and third-party notices.
-
-Port by DankMiimer.
+See [TESTING.md](TESTING.md) for current evidence and
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for blocking promotion gates.

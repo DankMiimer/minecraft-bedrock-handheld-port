@@ -1,58 +1,114 @@
-# Builds the release zip from the staging tree and runs the content-safety
-# check on every push/PR; attaches the zip to the release when a v* tag is
-# pushed. Requires the repo to contain the staging tree at staging/ (copy of
-# dist/staging — scripts, payload, docs; never APKs/game files).
-name: build-release
+name: compatibility-and-release
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        required: true
+        default: testing
+        type: choice
+        options: [testing, stable]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  host-tests:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck gcc make libpng-dev
+      - run: find portmaster/minecraftbedrock bottomscreen/release scripts tests -name '*.sh' -type f -print0 | xargs -0 shellcheck -S error
+      - run: bash tests/run_all.sh
+      - run: python3 scripts/generate_compat_docs.py --check
 
-      - name: Determine version
-        id: version
+  clients:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            edition: standard
+          - arch: armhf
+            edition: standard
+          - arch: aarch64
+            edition: rgds
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned client build
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=ci-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Shell-syntax check all scripts
-        run: |
-          shopt -s globstar nullglob
-          for f in staging/**/*.sh; do
-            bash -n "$f"
-          done
-
-      - name: Build zips + safety check
-        run: |
-          python3 scripts/build_release_zips.py \
-            --staging staging \
-            --version "${{ steps.version.outputs.version }}" \
-            --out-dir out
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+          mkdir -p build/container-output
+          docker build --file build/clients/Dockerfile \
+            --build-arg TARGET_ARCH=${{ matrix.arch }} \
+            --build-arg EDITION=${{ matrix.edition }} \
+            --output type=local,dest=build/container-output .
+      - uses: actions/upload-artifact@v4
         with:
-          name: minecraftbedrock-${{ steps.version.outputs.version }}
-          path: out/
+          name: client-${{ matrix.arch }}-${{ matrix.edition }}
+          path: build/container-output/mcpelauncher-client.${{ matrix.arch }}.${{ matrix.edition }}
+          if-no-files-found: error
 
-      - name: Attach to GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  companions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p build/container-output
+          docker build --file build/companions/Dockerfile \
+            --output type=local,dest=build/container-output .
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
-            out/*.zip
-            out/SHA256SUMS.txt
+          name: rgds-companions
+          path: |
+            build/container-output/bottomd
+            build/container-output/bedrockmap
+            build/container-output/crusty-context-v1.so
+          if-no-files-found: error
+
+  # No Windows companion is published. tools/mcbedrock-get cannot download from
+  # Google Play — Play refuses its client protocol — so shipping it would
+  # advertise a capability it does not have. See GETTING-BEDROCK-APKS.md.
+
+  assemble:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [host-tests, clients, companions]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: client-*
+          path: build/release-inputs
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: rgds-companions
+          path: build/release-inputs
+      - name: Assemble twice and compare
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          VERSION=$(cat VERSION)
+          COMMON_ARGS="--version $VERSION --channel $CHANNEL \
+            --standard-arm64-client build/release-inputs/mcpelauncher-client.aarch64.standard \
+            --standard-armhf-client build/release-inputs/mcpelauncher-client.armhf.standard \
+            --rgds-client build/release-inputs/mcpelauncher-client.aarch64.rgds \
+            --bottomd build/release-inputs/bottomd \
+            --bedrockmap build/release-inputs/bedrockmap \
+            --context-bridge build/release-inputs/crusty-context-v1.so"
+          python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release
+          python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release-repeat
+          diff -qr dist/release dist/release-repeat
+          python3 scripts/check_release_safety.py \
+            --zip dist/release/minecraftbedrock-standard-v$VERSION.zip \
+            --zip dist/release/minecraftbedrock-rgds-v$VERSION.zip \
+            --zip dist/release/minecraftbedrock-source-v$VERSION.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minecraftbedrock-release
+          path: dist/release/*
+          if-no-files-found: error
