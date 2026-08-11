@@ -10,7 +10,9 @@ Before tagging:
    `python3 scripts/generate_compat_docs.py`.
 2. Build pinned arm64/armhf clients, RGDS companions, and the context bridge
    with the checked-in container recipes.
-3. Run `bash tests/run_all.sh` and every blocking physical matrix session.
+3. Run `bash tests/run_all.sh` and record the physical acceptance matrix. A
+   testing prerelease may retain explicitly disclosed pending R36S/RGDS rows;
+   stable publication requires every blocking physical matrix session.
    Confirm 1.16.221.01 remains the recommended default, the original
    1.21.51.01 matches its registered no-RenderDragon library SHA-256, and an
    unknown/reuploaded 1.21.51.01 is visibly marked not recommended.
@@ -35,12 +37,16 @@ Before tagging:
    marker. Confirm neither RGDS binary contains the legacy mirror writer/blit.
 7. Verify the exact release-index edition, channel, size, SHA-256, and minimum
    updater version for every asset.
-8. Confirm no Windows companion binary is published. `tools/mcbedrock-get/`
-   cannot download from Google Play and is source-only; shipping it would
-   advertise a capability it does not have. Its build output must not appear
-   in `SHA256SUMS.txt`, in any port archive, or in `release-index.json`.
-   Confirm the release notes point Windows users to
-   `GETTING-BEDROCK-APKS.md` for obtaining their own APKs.
+8. Build the pinned Windows helper, run its unit tests and `--help` smoke test,
+   and package the EXE, WSL setup script, shortcut script, README, and generated
+   notices as `mcbedrock-get-windows-v$VERSION.zip`. Scan that bundle for
+   forbidden Minecraft content and publish its SHA-256. It must appear in
+   `SHA256SUMS.txt` but never in a port archive or `release-index.json`, because
+   the index is consumed only by the on-device edition updater.
+9. Confirm `README.md`, the packaged README, and
+   `GETTING-BEDROCK-APKS.md` agree on edition names, shared APK path, ABI,
+   recommended version, Windows bundle name, and legal disclaimer. Validate
+   every local link and every release-asset URL.
 
 Publish stable/testing assets only after their required gates pass. Keep code
 rollback directories and migration recovery manifests until the first clean

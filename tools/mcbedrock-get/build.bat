@@ -7,29 +7,32 @@ if not exist .venv (
     python -m venv .venv || goto :fail
 )
 
-call .venv\Scripts\activate.bat
-python -m pip install --upgrade pip || goto :fail
-python -m pip install -r requirements.txt pyinstaller || goto :fail
+set "VENV_PY=.venv\Scripts\python.exe"
+"%VENV_PY%" -m pip install --upgrade pip || goto :fail
+"%VENV_PY%" -m pip install -r requirements.txt || goto :fail
 
-pyinstaller --noconfirm --clean ^
+"%VENV_PY%" -m PyInstaller --noconfirm --clean ^
     --name mcbedrock-get ^
     --onefile ^
-    --windowed ^
+    --console ^
     --copy-metadata gpsoauth ^
     --hidden-import webview.platforms.edgechromium ^
     mcbedrock_get.py || goto :fail
 
 REM Licence notices, generated from what is actually installed in this venv.
-python gen_notices.py dist\mcbedrock-get-NOTICES.txt || goto :fail
+"%VENV_PY%" gen_notices.py dist\mcbedrock-get-NOTICES.txt || goto :fail
 
 REM Ship the companion files next to the executable.
 copy /Y "Create desktop shortcut.cmd" "dist\Create desktop shortcut.cmd" >nul
 copy /Y "wsl-setup.sh" "dist\wsl-setup.sh" >nul
 
+"%VENV_PY%" package_release.py || goto :fail
+
 echo.
 echo Built dist\mcbedrock-get.exe
-echo Publish its SHA-256 alongside the download:
-certutil -hashfile dist\mcbedrock-get.exe SHA256
+echo Built the versioned Windows release bundle.
+echo Publish the bundle SHA-256 alongside the download:
+for %%F in (dist\mcbedrock-get-windows-v*.zip) do certutil -hashfile "%%F" SHA256
 goto :eof
 
 :fail

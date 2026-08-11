@@ -9,6 +9,7 @@ No Minecraft content is bundled with or distributed by this tool.
     mcbedrock_get.py                       open the window
     mcbedrock_get.py --check               report setup state
     mcbedrock_get.py --login you@gmail.com sign in only
+    mcbedrock_get.py --logout              remove saved sessions
     mcbedrock_get.py --download 1.16.221.01 --out D:\\apk
 """
 from __future__ import annotations
@@ -235,8 +236,24 @@ class Window:
         threading.Thread(target=work, daemon=True).start()
 
     def on_sign_out(self) -> None:
-        signin.forget()
-        self.status.configure(text="Signed out.")
+        self.post("busy")
+        self.post("status", "Removing the saved account session…")
+
+        def work() -> None:
+            try:
+                wsl_cleared = wsl_backend.sign_out()
+                signin.forget()
+                message = (
+                    "Signed out on Windows and in WSL."
+                    if wsl_cleared
+                    else "Signed out on Windows. WSL was unavailable; run Sign out "
+                         "again after Ubuntu starts to clear its cache."
+                )
+                self.post("state", (False, message))
+            except Exception as error:
+                self.post("error", str(error))
+
+        threading.Thread(target=work, daemon=True).start()
 
     def on_download(self, code: int, name: str) -> None:
         ready_wsl, ready_tool, signed_in, _ = setup_state()
@@ -295,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=APP_NAME)
     parser.add_argument("--check", action="store_true", help="report setup state")
     parser.add_argument("--login", metavar="EMAIL", help="sign in and exit")
+    parser.add_argument("--logout", action="store_true", help="remove saved account sessions")
     parser.add_argument("--download", metavar="VERSION", help="e.g. 1.16.221.01")
     parser.add_argument("--out", metavar="DIR", help="where to save")
     args = parser.parse_args(argv)
@@ -309,6 +327,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.login:
         print(f"Signed in as {signin.run_login(args.login).email}.")
+        return 0
+
+    if args.logout:
+        wsl_cleared = wsl_backend.sign_out()
+        signin.forget()
+        if wsl_cleared:
+            print("Signed out on Windows and in WSL.")
+        else:
+            print(
+                "Signed out on Windows. WSL was unavailable; run --logout again "
+                "after Ubuntu starts to clear its cache."
+            )
         return 0
 
     if args.download:

@@ -48,17 +48,23 @@ def load() -> Credentials | None:
 
 def save(creds: Credentials) -> None:
     path = credentials_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"email": creds.email, "master_token": creds.master_token}, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"email": creds.email, "master_token": creds.master_token}, indent=2),
+            encoding="utf-8",
+        )
+    except OSError as error:
+        raise SignInError(f"Could not save the account session: {error}") from error
 
 
 def forget() -> None:
     path = credentials_path()
-    if path.is_file():
-        path.unlink()
+    try:
+        if path.is_file():
+            path.unlink()
+    except OSError as error:
+        raise SignInError(f"Could not remove the Windows account session: {error}") from error
 
 
 def harvest_oauth_token(timeout_seconds: int = 600) -> str:

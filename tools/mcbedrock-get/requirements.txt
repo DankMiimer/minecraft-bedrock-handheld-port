@@ -3,3 +3,4 @@
 # only Google sign-in, which is all this app needs to do itself.
 gpsoauth==2.0.0
 pywebview==6.2.1
+pyinstaller==6.22.0

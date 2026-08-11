@@ -1,5 +1,7 @@
-Minecraft Bedrock for PortMaster
-================================
+Minecraft Bedrock for PortMaster - maintainer summary
+=====================================================
+
+Current end-user instructions are in README.md.
 
 This repository builds two products from one shared, versioned core:
 
@@ -69,9 +71,10 @@ arm64 build. Unknown 1.21.51.01 reuploads are warned and not recommended; the
 version string alone is not used to infer renderer behavior.
 
 The RGDS terrain minimap reads local-world LevelDB data. During LAN client
-play, Bedrock does not retain the host's terrain database locally, so rc.2
-clears any prior map and displays REMOTE WORLD / MAP UNAVAILABLE while keeping
-live position and status telemetry. It never reuses another world's terrain.
+play, Bedrock does not retain the host's terrain database locally, so the
+current companion clears any prior map and displays REMOTE WORLD / MAP
+UNAVAILABLE while keeping live position and status telemetry. It never reuses
+another world's terrain.
 
 The testing RC artifacts produced locally are not a claim of completed physical
 validation or stable promotion. See portmaster/minecraftbedrock/README.md and

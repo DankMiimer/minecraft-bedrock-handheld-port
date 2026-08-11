@@ -1,3 +1,9 @@
+# Archived Windows downloader research handoff
+
+> Historical implementation notes. Several filenames and conclusions below
+> predate the working WSL/gplaydl helper. Current behavior is documented in
+> [`tools/mcbedrock-get/README.md`](tools/mcbedrock-get/README.md).
+
 # Handoff — Bedrock APK downloader for Windows
 
 Working notes so this can be resumed cold. Last updated during the `gplaydl`

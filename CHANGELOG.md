@@ -2,17 +2,28 @@
 
 ## v2.0.0-rc.3 (testing)
 
-- Added a Windows companion, `tools/mcbedrock-get`, that signs in with the
+- Rewrote the GitHub and packaged READMEs around a beginner-first install
+  path: exact edition downloads, per-firmware extraction locations, Windows
+  WSL setup, ABI selection, complete split-set transfer, launcher steps,
+  updates, RGDS limitations, and symptom-based troubleshooting.
+- Hardened and published the Windows helper as a versioned bundle with pinned
+  build tooling, deterministic packaging, generated notices, WSL distro
+  discovery, isolated downloads, complete arm64-set validation, enforced
+  timeouts, safe redownloads, and Windows-plus-WSL sign-out.
+- Fixed clean-checkout release CI by tracking the pinned client/companion
+  container recipes, adding Windows helper tests/builds, scanning every ZIP,
+  and guarding public documentation against stale paths and claims.
+- Added a Windows helper, `tools/mcbedrock-get`, that signs in with the
   user's own Google account and downloads the arm64 split APKs for the
   recommended 1.16.221.01 and the newest tested 1.21.51.01. Google no longer
   serves Play downloads to third-party desktop clients, so the download itself
   is delegated to `gplaydl` from minecraft-linux/google-play-api running under
   WSL, which is also the only client that accepts a specific older version
   code. A result without an `arm64_v8a` split is refused rather than written,
-  so an x86 download cannot reach the device. The companion bundles and
+  so an x86 download cannot reach the device. The helper bundles and
   distributes no game content; Play refuses accounts that do not own Minecraft.
 - Documented obtaining APKs on Windows in `GETTING-BEDROCK-APKS.md`, covering
-  the companion and the manual launcher route, the arm64-versus-x86 mistake,
+  the helper and the manual launcher route, the arm64-versus-x86 mistake,
   and how to group one download into a complete split set.
 - Fixed installation appearing to freeze the device. The launcher menu exits
   before extraction begins, leaving its last frame on screen for the minutes

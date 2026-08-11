@@ -69,10 +69,8 @@ config.native_platforms = [
 ]
 EOF
 
-cat > "$PREFIX/device-armhf.conf" <<'EOF'
-config.native_platforms = [
-    armeabi-v7a
-]
-EOF
+# The Windows helper intentionally offers only the physically tested arm64
+# route. Remove a stale armhf profile left by an older development build.
+rm -f "$PREFIX/device-armhf.conf"
 
 pause_and_exit "Setup finished. Close this window and press Download again." 0

@@ -126,8 +126,9 @@ def rgds_metadata(root: pathlib.Path) -> None:
     readme = (PACKAGE / "README.md").read_text(encoding="utf-8")
     readme = readme.replace("# Minecraft Bedrock", "# Minecraft Bedrock RGDS", 1)
     readme = readme.replace(
-        "No game files are included",
-        "This is the separate RGDS dual-screen edition. ROCKNIX/Sway is validated.\n\nNo game files are included",
+        "This archive installs an unofficial PortMaster launcher",
+        "This is the separate RGDS dual-screen edition. ROCKNIX/Sway is the "
+        "supported host.\n\nThis archive installs an unofficial PortMaster launcher",
         1,
     )
     write_text_lf(root / "README.md", readme)
@@ -434,16 +435,38 @@ def main() -> int:
         args.out_dir / "release-index.json",
         json.dumps({"schema": 2, "releases": releases}, indent=2) + "\n",
     )
+    status = (
+        "Testing prerelease. Final R36S and revised RGDS physical acceptance "
+        "checks remain pending; this release adds no stable or newly Validated claims."
+        if args.channel == "testing"
+        else "Stable channel release."
+    )
+    helper_note = (
+        "\n- The Windows WSL helper is included for entitled arm64 Google Play "
+        "downloads; verify its SHA-256 before allowing an antivirus exception."
+        if any(path.name.startswith("mcbedrock-get-windows-") for _, path in extras)
+        else ""
+    )
     write_text_lf(
         args.out_dir / "RELEASE_NOTES.md",
         f"# Minecraft Bedrock handheld port {args.version}\n\n"
-        f"Channel: `{args.channel}`\n\n"
-        "This build contains separate standard and RGDS products. The standard "
-        "archive contains no dual-screen runtime. The RGDS archive is arm64-only "
-        "and targets ROCKNIX/Sway. Users must supply an official Mojang APK; no "
-        "game content or authentication bypass is distributed. RGDS terrain maps "
-        "local worlds; LAN client sessions retain live telemetry but explicitly "
-        "mark remote terrain unavailable instead of reusing cached local tiles.\n",
+        f"Channel: `{args.channel}`\n\n{status}\n\n"
+        "## Highlights\n\n"
+        "- Separate standard and RGDS products; the standard archive contains no "
+        "dual-screen runtime, while RGDS is arm64-only for ROCKNIX/Sway.\n"
+        "- Bedrock 1.16.221.01 remains recommended for performance and handheld UI "
+        "scaling. The fingerprinted original 1.21.51.01 is the newest tested "
+        "alternative; 1.26+ is unsupported.\n"
+        "- APK installation, migrations, updates, backups, support collection, and "
+        "controller diagnostics keep user data in the shared data directory."
+        f"{helper_note}\n"
+        "- RGDS maps local worlds. LAN client sessions retain live telemetry and "
+        "show remote terrain as unavailable instead of reusing cached local tiles.\n\n"
+        "## Legal\n\n"
+        "No game files are included. Users must supply an official Minecraft "
+        "Bedrock Android APK or complete split set from an account that owns it.\n\n"
+        "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH "
+        "MOJANG OR MICROSOFT.\n",
     )
     for _, path in sums:
         print(f"built {path.name}: {path.stat().st_size / 1024 / 1024:.2f} MiB")

@@ -23,8 +23,13 @@ Include:
 - firmware / OS version
 - Minecraft APK version
 - whether first-run extraction completed
-- relevant lines from `minecraftbedrock/log.txt`
-- relevant lines from `minecraftbedrock/weston_launch.log`
+- the redacted archive created by **Support bundle**, when available
+- relevant lines from the edition's `logs/launcher.log`
+- controller-test output when the problem involves input
+
+For install problems, also state whether the source was one full APK or a
+split set and whether the ABI was `arm64-v8a` or `armeabi-v7a`. Never include
+the APK filenames if they contain account-specific information.
 
 Do not include:
 

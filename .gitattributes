@@ -12,7 +12,8 @@
 *.h text eol=lf
 *.cpp text eol=lf
 *.patch text eol=lf
-*.diff text eol=lf
+# A unified diff's blank context lines contain a required single-space marker.
+*.diff text eol=lf whitespace=-blank-at-eol
 
 *.png binary
 *.ttf binary

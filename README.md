@@ -1,175 +1,227 @@
-# Minecraft Bedrock handheld port
+# Minecraft Bedrock for ARM Linux handhelds
 
-An unofficial PortMaster launcher for legally acquired Android Bedrock builds.
-It runs the native ARM game library through the open-source minecraft-linux
-launcher. No Mojang APK, game asset, account credential, or license bypass is
-included. No game files are included.
+![Minecraft Bedrock running on a handheld](screenshot.png)
 
-**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
-MOJANG OR MICROSOFT.**
+Run a legally owned Android copy of Minecraft Bedrock natively on supported
+ARM Linux handhelds through PortMaster and the open-source minecraft-linux
+launcher. This is a testing release: supported combinations are documented,
+but the final R36S and revised RGDS physical acceptance checks are still
+pending. Nothing in rc.3 is promoted to stable or newly labelled Validated.
 
-## Choose the correct edition
+> **No game files are included.** You must supply your own official Minecraft
+> Bedrock Android APK or complete split-APK set.
+>
+> **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
+> MOJANG OR MICROSOFT.**
 
-- `minecraftbedrock-standard-vX.Y.Z.zip` is the lightweight single-screen
-  edition for aarch64 and armhf PortMaster systems. It contains no telemetry,
-  minimap, dual-touch runtime, OSK supervisor, or RGDS experimental tooling.
-- `minecraftbedrock-rgds-vX.Y.Z.zip` is the arm64 dual-screen edition. Its
-  supported host is RGDS on ROCKNIX/Sway. It adds live map/status, FMOD
-  telemetry, SELECT screen swapping, dual-touch routing, and OSK supervision.
+## Download v2.0.0-rc.3
 
-The standard edition does not launch on RGDS. It offers a confirmed installer
-for the RGDS edition when the release index and network are available, and
-otherwise displays manual download instructions.
+This version is a prerelease. Download an install archive from the release
+assets, not GitHub's automatically generated **Source code** archives.
 
-## Install
+| Download | Who needs it |
+|---|---|
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-standard-v2.0.0-rc.3.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-rgds-v2.0.0-rc.3.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
+| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/mcbedrock-get-windows-v2.0.0-rc.3.zip) | Downloads your own Google Play purchase in the correct arm64 format |
+| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-source-v2.0.0-rc.3.zip) | Maintainers and license compliance; not an install archive |
+| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-standard-v2.0.0-rc.3.spdx.json) | Machine-readable contents of the standard archive |
+| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-rgds-v2.0.0-rc.3.spdx.json) | Machine-readable contents of the RGDS archive |
+| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/RELEASE_NOTES.md) | Short packaged release summary |
+| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/SHA256SUMS.txt) | Verifies every published file |
 
-1. Extract exactly one edition archive into the device's PortMaster/ports
-   layout.
-2. Launch it once. Existing 1.x data is migrated transactionally.
-3. Copy an official full APK or one complete official split set to
-   `$PORTS/minecraftbedrock-data/apk/`.
-4. Open **Install APK**, select the complete set, and install it.
+Use the **standard edition** unless you own an RG DS and specifically want the
+dual-screen companion. The standard edition intentionally redirects RGDS users
+to the separate RGDS package instead of silently installing experimental code.
 
-For step 3 on Windows, see
-[GETTING-BEDROCK-APKS.md](GETTING-BEDROCK-APKS.md). Google now refuses Play
-downloads to third-party desktop clients, so the working route is the
-minecraft-linux launcher under WSL. The guide covers installing it, selecting
-`arm64-v8a` rather than the default `x86`, and copying a complete split set
-across. No game content is distributed by this project.
+## What you need
 
-The installer reads Android binary manifest metadata and signing data. It
-groups files by package, version code/name, signer, dependencies, and ABI;
-files from different groups are never mixed. Extraction happens in staging and
-is atomically published only after validation. Original APKs and prior installs
-remain intact on failure.
+- A supported ARM Linux handheld with a working PortMaster installation.
+- About 2 GB of free space for the port, runtime, and extracted game.
+- Your own Minecraft Bedrock Android purchase. The Windows helper requires the
+  Google account that owns Minecraft on Google Play; purchases from other
+  storefronts are separate entitlements.
+- A matching Android ABI:
 
-## Data and updates
+| Device class | APK split |
+|---|---|
+| Most 64-bit handhelds, including H700 devices and RGDS | `arm64-v8a` |
+| 32-bit R36S/RK3326-class firmware | `armeabi-v7a` |
 
-The editions share only user-owned game data:
+If you are unsure, launch the installed port once. Its host probe and Support
+bundle report the detected architecture without needing a Minecraft APK.
+
+## Quick start
+
+### 1. Put the port on the SD card
+
+Extract exactly one port archive at the root of the storage that contains your
+ROM folders:
+
+| Firmware | Extract to |
+|---|---|
+| muOS | SD-card root, normally `/mnt/mmc` or `/mnt/sdcard` |
+| Knulli | Share root or second SD-card root, the location containing `roms/` and `ports/` |
+| ROCKNIX | Games-partition root, shown on-device as `/storage/roms` |
+| R36S-class PortMaster setup | Storage root containing `roms/ports/` |
+
+The archive supplies launch entries under both `roms/ports/` and `ports/` so
+the supported firmware layouts find the same payload. Refresh the Ports list,
+then launch **Minecraft Bedrock** once. This creates the shared data folders.
+
+### 2. Download your owned Bedrock APKs on Windows
+
+The easiest supported arm64 route is the Windows helper:
+
+1. Open PowerShell as administrator, run `wsl --install -d Ubuntu`, and reboot
+   if Windows asks.
+2. Extract `mcbedrock-get-windows-v2.0.0-rc.3.zip` to a normal folder.
+3. Run `mcbedrock-get.exe`, enter the Google email that owns Minecraft, and
+   complete Google's sign-in page. The helper never asks for your password.
+4. Accept the one-time WSL setup. An Ubuntu terminal opens and asks for your
+   Ubuntu password while it builds the current minecraft-linux downloader.
+5. Press **Download 1.16.221.01**. Keep every APK created in the selected
+   output folder together.
+
+PyInstaller executables can trigger antivirus heuristics. Verify the bundle
+against the published SHA-256 before allowing it. See
+[the complete Windows guide](GETTING-BEDROCK-APKS.md) for sign-out, manual
+armhf instructions, and troubleshooting.
+
+### 3. Copy and install the complete set
+
+Copy the full APK or **every file from one split-set download** into:
 
 ```text
-$PORTS/minecraftbedrock-data/
-  apk/       user-supplied installers
-  versions/  validated extracted game versions
-  profiles/  worlds, options, and 1.16-isolated profiles
-  backups/   local backups
+ports/minecraftbedrock-data/apk/
 ```
 
-Each edition separately owns `config/`, `logs/`, `runtime/`, caches, temporary
-state, and its `stable` or opt-in `testing` channel. Code updates download an
-exact edition asset, validate its declared size/SHA-256 and archive paths, then
-swap the whole payload atomically. They never overlay another edition or
-modify shared data.
+Launch the port, choose **Install APK**, select the detected set, and confirm.
+Installation can take several minutes. The progress screen now stays visible;
+do not power the device off while it is extracting.
 
-The first 2.x launch inventories the old layout, rejects ambiguous collisions,
-writes a recovery manifest, prefers same-filesystem atomic moves, and leaves
-compatibility links. Rollback state is retained until the first clean game
-exit.
+The installer validates package identity, version, signing data, dependencies,
+and ABI before publishing anything. Mixed or incomplete sets are rejected, and
+a failed install leaves the original APKs and previous versions intact.
 
-## Host compatibility
+### 4. Play
 
-Hardware admission is capability-based, not a promise that every ARM device
-was physically tested. The resolver records ABI, SoC/device tree, RAM,
-compositor, connected DRM modes, graphics stack, audio services, input axes,
-touch/output associations, permissions, and active resolution. It selects a
-Wayland/Sway, Mesa KMSDRM, H700 proprietary-Mali/Weston, or X11 adapter.
+Open **Versions**, select the installed build, then choose **Play**. The
+launcher remembers the selection. After a successful install you may keep the
+APKs for recovery or delete them from the launcher with **X**.
 
-Priority is: explicit user override, validated device profile, then automatic
-capability selection. A connected DRM mode must exist before KMSDRM starts;
-otherwise the launcher selects a safe compositor fallback or exits with an
-actionable diagnostic. This is the R36S mode-selection fix—no fixed 640×480
-mode is assumed.
+## Recommended Bedrock versions
 
-Compatibility labels and the exact Bedrock registry are in
-[`portmaster/minecraftbedrock/COMPATIBILITY.md`](portmaster/minecraftbedrock/COMPATIBILITY.md):
+| Version | ABI | Recommendation | Notes |
+|---|---|---|---|
+| **1.16.221.01** | arm64 / armhf | **Recommended** | Best handheld UI scaling and the smoothest tested everyday experience |
+| **1.21.51.01** | arm64 | Newest tested no-RenderDragon build | Only the registered original native-library fingerprint receives this label; later reuploads may stutter badly |
+| 1.17–1.21 RenderDragon-era builds | arm64 | Optional compatibility tests | Generally have tiny UI and severe stutter on the reference handhelds |
+| 1.26+ | arm64 | **Unsupported** | Uses PairIP/new Android ABI behavior not supported by the legal upstream launcher path |
 
-- **Validated** — passed the physical reference matrix.
-- **Best effort** — admitted through a tested capability/backend path but not
-  validated on that exact combination.
-- **Unsupported** — a known ABI, PairIP, graphics, or runtime incompatibility.
+The launcher identifies installed versions from Android metadata and the game
+library hash, not from filenames. Exact status and evidence are in
+[the compatibility registry](portmaster/minecraftbedrock/COMPATIBILITY.md).
 
-## Bedrock versions
+## Launcher menu
 
-The compatibility registry, not a directory name, controls patches and
-defaults. **1.16.221.01 is the recommended/default Bedrock version** because
-its legacy UI scaling remains usable on handheld screens. The fingerprinted
-original 1.21.51.01 is the newest tested no-RenderDragon arm64 build, but it is
-not selected by default because of its poorer UI scaling. Later 1.21.51.01
-reuploads are not assumed equivalent: only a registered `libminecraftpe.so`
-SHA-256 receives the no-RenderDragon label; unknown variants show a warning.
+- **Play** — start the selected version.
+- **Versions** — select or remove installed game versions without deleting
+  worlds.
+- **Install APK** — install a validated full APK or complete split set.
+- **Settings** — configure FPS cap, render distance, client ABI, UI scale,
+  VSync, performance tuning, and FPS logging.
+- **Backup** — archive and restore profiles, worlds, and launcher settings.
+- **Update port** — install the correct edition/channel update over the current
+  code while preserving shared data.
+- **Support bundle** — create a local redacted diagnostic archive.
+- **Controller test** — record the detected pad and inputs locally.
 
-The 1.16 EduMode and 1.16/1.17 HTTP resolver guards remain. The
-1.20.62 compaction change is opt-in. Every patch first verifies its expected
-symbol/signature; a mismatch logs and disables that patch instead of modifying
-unknown code.
+Menu controls are D-pad to move, **A** to select, **B** to go back, **X** to
+delete, and Left/Right to change settings. The launcher detects firmware
+button-label differences; `MCPE_MENU_CONFIRM=a|b` remains available as an
+advanced override.
 
-PairIP/new-ABI 1.26 packages are rejected before extraction because they need
-legal upstream launcher support. This project does not attempt DRM or license
-bypasses.
+For H700-class systems, start with a 30–40 FPS cap and 3–4 chunk render
+distance. The port restores performance, display, frontend, and input state
+after normal exit or a supervised failure.
 
-## RGDS controls and cleanup
+## Updates and backups
 
-The RGDS edition discovers outputs and touch devices from Sway/libinput
-metadata rather than fixed `DSI-*`, Goodix, or `/dev/input/event*` names. The
-game starts on the physical top panel and the companion UI on the bottom;
-SELECT atomically swaps the two surfaces. Touch mappings follow the surfaces.
+Use **Backup** before testing a new game version, firmware, or port prerelease.
+Backups contain launcher settings, profiles, and worlds, but never the supplied
+APK or extracted version; keep the original complete APK set separately for
+recovery. Use **Update port** to install updates for the current standard or
+RGDS edition and selected channel. An update replaces port code only and keeps
+the shared user-data directory intact.
 
-The lower-screen companion uses a Minecraft-style five-tab shell inspired by
-the AYN Thor second-screen projects: **HUD**, **Chat**, **Items**, **Input**,
-and **Settings**. A persistent status stack shows live position/FPS/dimension
-and LevelDB snapshot health/hunger. HUD contains the centered terrain map;
-Chat and Items are independent lower-screen views, so gameplay stays visible
-on the other panel. Items provides a 36-slot grid and craftable-recipe pane;
-Chat provides history and a touch keyboard. Their state/command ABI is bounded
-and versioned, and unsupported actions stay visibly read-only rather than
-modifying inventory memory. The exact `1.21.51.01` bridge is gated by the
-installed game-library hash plus runtime RTTI/vtable/prologue checks.
+## Standard and RGDS editions
 
-The companion indexes and loads UI/item PNGs directly from the selected,
-user-supplied Minecraft installation. No Mojang texture is included in a port
-or source archive. Input supplies a 3×3 shortcut grid; Settings controls
-status, automatic Items selection, night tint, and map following.
+Both editions share only user-owned data under:
 
-Terrain tiles come from the active local world's LevelDB. When RGDS joins a
-world hosted by another device over LAN, Bedrock does not store that remote
-database on the client. The companion therefore clears any previous local map,
-pauses local terrain rendering, and shows `REMOTE WORLD / MAP UNAVAILABLE`
-while retaining live position and status telemetry. It never presents cached
-terrain from another world as the current LAN map.
+```text
+ports/minecraftbedrock-data/
+  apk/       original installers
+  versions/  validated extracted game versions
+  profiles/  worlds and per-version player data
+  backups/   local backup archives
+```
 
-For local worlds, the terrain worker follows the LevelDB directory actually
-opened by the running game, so switching worlds does not wait for player
-movement to change a log timestamp. Its default 12-chunk scan covers the
-visible map at the normal zoom with one quarter of the old lookup count; the
-central area is published before any optional wider cache ring.
+Their code, logs, runtime, caches, update channel, and temporary state remain
+separate. Updating one edition cannot overlay the other.
 
-Every child process and saved state is supervised. Cleanup is idempotent and
-restores output placement, touch mapping, frontend state, OSK state, mounts,
-temporary shared memory, and tuning after normal exit, signals, or a forced
-game termination. Missing dual-output prerequisites produce diagnostics and a
-clean exit. Non-ROCKNIX RGDS hosts are experimental.
+The RGDS edition adds a five-tab lower-screen companion with HUD, Chat, Items,
+Input, and Settings pages, live status, a local-world terrain map, touch
+routing, on-screen keyboard supervision, and SELECT screen swapping. Its
+supported host is RGDS on ROCKNIX/Sway. Non-ROCKNIX RGDS systems are
+experimental.
 
-## Diagnostics
+When you join a world hosted by another device, Bedrock does not store that
+host's LevelDB world database locally. RGDS therefore keeps live status but
+shows `REMOTE WORLD / MAP UNAVAILABLE` and clears old local terrain instead of
+displaying a misleading cached map.
 
-Use **Support bundle** in the launcher. It creates a local, redacted archive
-containing the resolved profile, runtime hashes, display modes, audio/input
-detection, APK metadata, and relevant logs. Nothing is uploaded automatically.
-Do not publish APKs, extracted game libraries, worlds, or account data.
+## Updating from 1.x
 
-Controller mappings prefer PortMaster's mapping. Unknown pads get a
-conservative fallback based on evdev axis capabilities. Use the local
-controller diagnostic when an unusual pad layout is not recognized.
+The first 2.x launch migrates APKs, installed versions, profiles, and backups
+into the shared data directory. It inventories both locations first, refuses
+ambiguous collisions, writes a recovery manifest, and keeps rollback state
+until the first clean game exit.
 
-## Reproducible releases
+Do not delete an old installation before this migration. If the launcher
+reports that both old and new locations contain data, move one copy aside and
+launch again; it will not choose one destructively.
 
-`VERSION` is the version authority. Pinned container builds create the standard
-aarch64/armhf clients and the RGDS telemetry/independent-companion client from
-the same commits.
-`scripts/build_releases.py` replaces all payload clients with those artifacts,
-adds the versioned Crusty context API module, creates deterministic archives,
-SPDX SBOMs, source/license bundles, SHA-256 sums, release notes, and the
-edition-aware release index. Packaging fails on private/Mojang inputs or any
-dual-screen marker in the standard archive.
+## Troubleshooting
 
-See [TESTING.md](TESTING.md) for current evidence and
-[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for blocking promotion gates.
+| Symptom | What to do |
+|---|---|
+| Installer says the set is incomplete | Copy every APK from one download, including the base and ABI split; do not mix download dates or versions |
+| Game installs but does not start | Confirm `arm64-v8a` for most 64-bit systems or `armeabi-v7a` for armhf firmware |
+| Installation appears frozen | Wait for the progress stage to complete; large asset extraction can take several minutes |
+| Tiny UI or heavy stutter | Select 1.16.221.01 and start with 30–40 FPS and 3–4 chunks |
+| R36S reports no matching video mode | Use rc.3 or newer; the launcher now selects an actual connected DRM mode instead of assuming 640×480 |
+| Buttons are wrong | Run **Controller test**, then include its redacted output in a device report |
+| Black screen or failed relaunch | Reboot once, then create a **Support bundle** before changing files manually |
+| Windows helper cannot find WSL | Install Ubuntu with `wsl --install -d Ubuntu`; set `MCBEDROCK_WSL_DISTRO` only when using a differently named Ubuntu distro |
+| Windows helper says Minecraft is for sale | Sign out and use the Google account that owns the Google Play Android edition |
+
+See [SUPPORT.md](SUPPORT.md) for report requirements. Never upload APKs,
+extracted game libraries/assets, worlds, account data, private server details,
+`versions/`, `profiles/`, or `libminecraftpe.so`.
+
+## Maintainers and source
+
+- [Testing evidence](TESTING.md)
+- [Release checklist](RELEASE_CHECKLIST.md)
+- [Source build and patch information](source_release/README.md)
+- [Legal notes](LEGAL.md) and [third-party notices](THIRD_PARTY_NOTICES.md)
+- [Credits](CREDITS.md) and [contribution guide](CONTRIBUTING.md)
+
+`VERSION` is the release authority. Pinned containers build the standard
+aarch64/armhf clients, RGDS client and companions, and the context bridge.
+Release assembly creates deterministic edition archives, SPDX SBOMs, source
+materials, checksums, and an edition-aware updater index. See the checklist
+before promoting any prerelease to stable.
+
+Port by DankMiimer.

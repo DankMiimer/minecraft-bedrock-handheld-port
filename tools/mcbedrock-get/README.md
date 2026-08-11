@@ -1,97 +1,77 @@
-# mcbedrock-get — download your own Bedrock builds on Windows
+# mcbedrock-get for Windows
 
-Sign in with the Google account that owns Minecraft, press a version, get the
-arm64 APKs for the handheld port. Two versions, no version hunting.
+Download your own Google Play copy of Minecraft Bedrock in the arm64 split-set
+format required by the handheld port. The tool offers the recommended
+1.16.221.01 build and the fingerprinted original 1.21.51.01 build.
 
-| Button | Version code | Why |
-|---|---|---|
-| 1.16.221.01 | 971622101 | Recommended — legacy UI scales properly on a small screen |
-| 1.21.51.01 | 972105101 | Newest tested build without RenderDragon |
+**No game files are included.** Google Play must confirm that the signed-in
+account owns Minecraft before gplaydl returns anything.
 
-No Minecraft content is bundled with or distributed by this tool. It downloads
-your own Play purchase, and only if Google confirms your account owns it.
+**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
+MOJANG OR MICROSOFT.**
 
 ## Use
 
-1. Run **Create desktop shortcut.cmd** once for a desktop launcher.
-2. Enter the email of the account that owns Minecraft → **Sign in…** →
-   complete Google's page.
-3. Press a version. The first time, it offers to install the downloader into
-   WSL — say yes, enter your Ubuntu password in the terminal that opens, and
-   wait a few minutes while it builds.
-4. Press the version again. Files land in the chosen folder.
-5. Copy **every** `.apk` from that folder to the device, into
-   `ports/minecraftbedrock-data/apk/`, then use **Install APK** in the port.
+1. Install Ubuntu with `wsl --install -d Ubuntu` and reboot if prompted.
+2. Run `mcbedrock-get.exe`.
+3. Enter the Google email that owns Minecraft and complete Google's sign-in
+   page. The helper never reads your password.
+4. Press a version. On first use, accept the WSL setup and enter your Ubuntu
+   password in the terminal while gplaydl is built.
+5. Press the version again, then copy every downloaded APK to
+   `ports/minecraftbedrock-data/apk/` on the handheld.
+6. Choose **Install APK** in the port and wait for extraction to finish.
 
-A download is the base APK plus its splits, for example:
+| Version | Play code | Purpose |
+|---|---:|---|
+| 1.16.221.01 | 971622101 | Recommended; best handheld UI scaling |
+| 1.21.51.01 | 972105101 | Newest tested original no-RenderDragon arm64 build |
 
-```text
-minecraft-971622101.apk                    base
-minecraft-971622101.config.arm64_v8a.apk   arm64 game code
-minecraft-971622101.config.en.apk          language
-minecraft-971622101.config.xxhdpi.apk      screen density
-minecraft-971622101.install_pack.apk       assets, when present
-```
+The helper requires a base APK and `config.arm64_v8a` split before publishing
+the result. It does not provide `armeabi-v7a`; 32-bit R36S users should follow
+the manual armhf instructions in the repository's `GETTING-BEDROCK-APKS.md`.
 
-They are one install. Copy the whole set; the port rejects partial sets.
+## Account data
 
-## How it works
-
-Google blocks third-party desktop Play clients — Raccoon died in early 2026,
-apkeep refuses paid apps, and Python clients get `DF-DFERH-01`. The only client
-still able to download Minecraft is minecraft-linux's, which is Linux software.
-So this app splits the job between the two things that actually work:
-
-- **`signin.py`** — Google's own sign-in page in an embedded browser, producing
-  a long-lived account token. Runs in a child process, because the embedded
-  browser needs the main thread and the window already holds it. No password is
-  ever read by this tool; only the token Google issues, kept in
-  `%LOCALAPPDATA%\mcbedrock-get\account.json`.
-- **`wsl_backend.py`** — drives `gplaydl` from
-  [minecraft-linux/google-play-api](https://github.com/minecraft-linux/google-play-api)
-  inside WSL, writing straight into your Windows folder through `/mnt`. Its
-  `--app-version` takes an arbitrary old version code, which is the whole reason
-  old builds are reachable at all.
-- **`wsl-setup.sh`** — one-time build of `gplaydl`, and writes the arm64
-  `device.conf`. Only the ABI is overridden; every other device property keeps
-  the upstream default, which is the identity Google currently accepts.
-
-WSL is required, since the downloader is a Linux binary. Removing that would
-mean porting google-play-api to MSVC.
-
-## Build
-
-```
-build.bat
-```
-
-Produces `dist\mcbedrock-get.exe` plus its notices, the shortcut script and
-`wsl-setup.sh`. Requires Python 3.10+; every dependency installs as a pure
-wheel, so no compiler is needed.
-
-One-file PyInstaller executables are routinely flagged by antivirus heuristics —
-Windows Defender blocks this one on first run until allowed. Publish the SHA-256
-that `build.bat` prints next to the download.
+The Windows token is stored at
+`%LOCALAPPDATA%\mcbedrock-get\account.json`. gplaydl keeps a second session
+cache under `~/.local/share/mcbedrock-get/` inside Ubuntu. **Sign out** removes
+both. If Ubuntu is unavailable, it clears Windows first and tells you to run
+Sign out again after WSL starts. No credential or APK is uploaded by this
+project.
 
 ## Command line
 
-```
-mcbedrock-get --check                    report setup state
-mcbedrock-get --login you@example.com    sign in only
+```text
+mcbedrock-get --check
+mcbedrock-get --login you@example.com
+mcbedrock-get --logout
 mcbedrock-get --download 1.16.221.01 --out D:\apk
 ```
 
-## Troubleshooting
+Set `MCBEDROCK_WSL_DISTRO` when the intended Ubuntu distribution has a custom
+name. Without the override, the helper prefers `Ubuntu`, then a versioned
+`Ubuntu-*` installation.
 
-**"The downloader is not installed in WSL yet."** Say yes to the setup prompt.
-If the terminal reports an error it now stays open so you can read it.
+## How it works
 
-**Play offers Minecraft for sale although you own it.** Wrong Google account, or
-the purchase is on Xbox/Windows/Switch/Amazon — those are separate entitlements
-and do not grant the Play Android app.
+- `signin.py` opens Google's Embedded Setup page and exchanges its one-time
+  cookie for the account token needed by gplaydl.
+- `wsl_backend.py` builds and drives gplaydl from
+  [minecraft-linux/Google-Play-API](https://github.com/minecraft-linux/Google-Play-API)
+  under WSL.
+- Each download is isolated, validated for a base and arm64 split, then moved
+  into the chosen Windows folder as one set.
 
-**The port rejects the set.** Something is missing. Copy every file whose name
-starts with the same `minecraft-<code>` prefix, base APK included.
+The helper distributes no Minecraft code or assets. It is a local interface to
+the account holder's Play entitlement.
 
-**A download produced no `config.arm64_v8a` file.** The tool refuses this case
-rather than handing you an unusable set. Report it with the version code.
+## Build
+
+Run `build.bat` with Python 3.11. It installs the pinned dependencies, builds
+the one-file executable, generates authoritative third-party notices, and
+creates `dist\mcbedrock-get-windows-vX.Y.Z.zip`.
+
+PyInstaller executables can trigger antivirus heuristics. Release users should
+verify the bundle against the SHA-256 published beside it before allowing a
+blocked file.

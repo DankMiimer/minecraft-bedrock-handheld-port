@@ -1,147 +1,167 @@
-# Downloading Bedrock APKs on Windows
+# Downloading your owned Bedrock APKs
 
-How to download **1.16.221.01** (recommended) and **1.21.51.01** for the port,
-using your own Google account.
+This guide obtains **1.16.221.01** (recommended) or **1.21.51.01** for the
+handheld port from your own Google Play purchase.
 
-You need a Google account that owns Minecraft **on Google Play**. A purchase on
-Xbox, Windows, Switch, PlayStation, Amazon or Samsung's store will not work —
-those are separate entitlements.
+**No game files are included.** This project does not host APKs, bypass a
+license check, or download Minecraft for an account that does not own it.
 
-Google now blocks third-party desktop downloaders, so the one client that still
-works is minecraft-linux's, which is Linux software — on Windows it runs through
-WSL. The setup below is a one-time job of about ten minutes.
+**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
+MOJANG OR MICROSOFT.**
 
-## The easy way
+## Before you start
 
-[`tools/mcbedrock-get/`](tools/mcbedrock-get/) wraps all of this in a small app:
-sign in, press **Download 1.16.221.01** or **Download 1.21.51.01**, and the
-arm64 APKs appear in a folder. It installs the downloader into WSL for you and
-refuses any result missing the arm64 split, so you cannot end up with the x86
-build by accident. You still need WSL installed (step 1 below).
+- The Google account must own Minecraft on **Google Play**. Xbox, Windows,
+  Switch, PlayStation, Amazon, and Samsung purchases are separate.
+- The packaged Windows helper downloads `arm64-v8a` sets only. That is correct
+  for most 64-bit handhelds, H700 devices, and RGDS.
+- R36S/RK3326 users on 32-bit firmware need an `armeabi-v7a` set; see the
+  manual armhf section below.
 
-The rest of this page is the manual route, useful if you prefer the launcher's
-full version list or the app misbehaves.
+## Recommended Windows method
 
----
+### 1. Install Ubuntu in WSL
 
-## 1. Install WSL (once)
+Open PowerShell as administrator:
 
-Open **PowerShell as administrator** and run, then reboot:
-
-```bash
-wsl --install
+```powershell
+wsl --install -d Ubuntu
 ```
 
-## 2. Install the launcher (once)
+Reboot if prompted, start Ubuntu once, and create its local username/password.
+The helper accepts `Ubuntu` and versioned names such as `Ubuntu-24.04`. If you
+deliberately use another Ubuntu name, set `MCBEDROCK_WSL_DISTRO` before starting
+the helper.
 
-Open **Ubuntu** from the Start menu and paste these three commands:
+### 2. Download and verify the helper
 
-```bash
-curl -sS https://minecraft-linux.github.io/pkg/deb/pubkey.gpg | sudo tee /etc/apt/trusted.gpg.d/minecraft-linux-pkg.asc
+Download and extract:
+
+[mcbedrock-get-windows-v2.0.0-rc.3.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/mcbedrock-get-windows-v2.0.0-rc.3.zip)
+
+Compare its SHA-256 with the release's
+[SHA256SUMS.txt](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/SHA256SUMS.txt):
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-v2.0.0-rc.3.zip
 ```
 
-```bash
-echo "deb [arch=amd64] https://minecraft-linux.github.io/pkg/deb noble main" | sudo tee /etc/apt/sources.list.d/minecraft-linux-pkg.list
-```
+PyInstaller executables are sometimes flagged by antivirus heuristics. Do not
+allow a blocked file unless its hash matches the published release checksum.
 
-```bash
-sudo apt update && sudo apt install -y mcpelauncher-manifest mcpelauncher-ui-manifest msa-manifest
-```
+### 3. Sign in and install the downloader
 
-## 3. Start it and sign in
+Run `mcbedrock-get.exe`:
 
-```bash
-wsl -d Ubuntu -- bash -lc mcpelauncher-ui-qt
-```
+1. Enter the email of the Google account that owns Minecraft.
+2. Press **Sign in** and complete Google's own sign-in page. The helper never
+   reads your password.
+3. Press a Download button. The first attempt offers a one-time WSL setup.
+4. Accept it and enter your Ubuntu password in the terminal that opens. The
+   setup builds `gplaydl` from minecraft-linux/Google-Play-API.
+5. Close the terminal after it reports success and press Download again.
 
-Sign in with the Google account that owns Minecraft.
+The Windows account token is stored in
+`%LOCALAPPDATA%\mcbedrock-get\account.json`; gplaydl keeps its session inside
+Ubuntu under `~/.local/share/mcbedrock-get/`. Pressing **Sign out** removes both
+copies. If Ubuntu is unavailable it clears Windows first and tells you to run
+Sign out again after WSL starts. Nothing is uploaded by this project.
 
-Startup prints `libEGL warning ...` messages. Ignore them — they are normal
-under WSL and do not affect downloading.
+### 4. Choose a version
 
-## 4. Set the architecture to arm64
+| Button | Play version code | Why |
+|---|---:|---|
+| **1.16.221.01** | 971622101 | Recommended; best UI scaling and smoothest handheld experience |
+| **1.21.51.01** | 972105101 | Newest tested original no-RenderDragon arm64 build |
 
-**This is the step people get wrong.** On a PC the launcher defaults to
-downloading **x86**, which will not run on the handheld. Change the download
-architecture to **`arm64-v8a`** before downloading anything.
+The helper downloads into an isolated temporary directory, requires a base APK
+and `config.arm64_v8a` split, then publishes the complete set together. An old
+or partial download cannot be mistaken for a new success.
 
-(Use `armeabi-v7a` instead only if your device is 32-bit armhf.)
-
-## 5. Download the two versions
-
-In the version list, download:
-
-| Version | Play version code (arm64) | Why |
-|---|---|---|
-| **1.16.221.01** | 971622101 | Recommended default — legacy UI scales properly on a small screen |
-| **1.21.51.01** | 972105101 | Newest tested build without RenderDragon |
-
-Do not download anything from the 1.26 line. The port rejects it.
-
-## 6. Copy the files to your SD card
-
-The downloads are here, reachable from Windows Explorer:
+Typical output:
 
 ```text
-\\wsl.localhost\Ubuntu\home\<your-username>\.local\share\mcpelauncher\apks
+minecraft-971622101.apk
+minecraft-971622101.config.arm64_v8a.apk
+minecraft-971622101.config.en.apk
+minecraft-971622101.config.xxhdpi.apk
+minecraft-971622101.install_pack.apk
 ```
 
-Each download is several files with random-looking names:
+The exact language, density, and install-pack components can vary. Copy every
+APK written for that version.
 
-| File | What it is |
-|---|---|
-| `com.mojang.minecraftpe-main-XXXXXX.apk` | the base APK |
-| `com.mojang.minecraftpe-config.arm64_v8a-XXXXXX.apk` | the arm64 game code |
-| `com.mojang.minecraftpe-config.en-XXXXXX.apk` | language pack |
-| `com.mojang.minecraftpe-config.xxhdpi-XXXXXX.apk` | screen density pack |
-| `com.mojang.minecraftpe-install_pack-XXXXXX.apk` | asset pack, if present |
+### 5. Copy the set to the handheld
 
-The suffixes are random, so group them **by date** — everything from the same
-download shares a date. To list them by date:
-
-```bash
-wsl -d Ubuntu -- bash -lc "ls -la --time-style=+%Y-%m-%d ~/.local/share/mcpelauncher/apks/"
-```
-
-Copy one complete dated group onto the SD card, into:
+Put every file from the selected download into:
 
 ```text
 ports/minecraftbedrock-data/apk/
 ```
 
-Then on the device: start the port, open **Install APK**, select the set, and
-install it.
+Launch **Minecraft Bedrock**, choose **Install APK**, select the detected set,
+and wait for the progress screen to finish. The on-device installer verifies
+package identity, version, signer, dependencies, and ABI again.
 
----
+## Manual armhf route
 
-## If something goes wrong
+The published helper intentionally offers only the physically tested arm64
+downloads. For a 32-bit R36S/RK3326 setup, use the upstream minecraft-linux UI
+inside Ubuntu WSL:
 
-**The game installs but will not start.** You copied the `x86` split instead of
-`arm64_v8a`. Go back to step 4.
+1. Follow the current [minecraft-linux installation guide](https://minecraft-linux.github.io/getting_started/index.html).
+2. Start its developer view with `mcpelauncher-ui-qt -d` so old/unsupported
+   variants can be selected.
+3. Select Bedrock **1.16.221.01** and the **`armeabi-v7a`** Android variant.
+4. Use the launcher's APK-only download option and copy the entire matching set
+   to `ports/minecraftbedrock-data/apk/`.
 
-**The port refuses the set.** Something is missing or two downloads got mixed.
-Copy one complete dated group again, including the `-main-` base APK. The
-installer checks each APK's manifest and signature and rejects incomplete or
-mismatched sets on purpose.
+Do not use an x86/x86_64 download; it cannot run on the handheld. R36S/armhf
+remains Best Effort until its complete physical release matrix is finished.
 
-**Play offers Minecraft for sale even though you own it.** You are signed in
-with the wrong Google account, or your purchase is not a Google Play one.
+## Command line
 
-**You only see the newest version.** Make sure you are picking from the
-launcher's version list, which offers old builds. A phone cannot do this —
-Google Play on a phone only ever installs the current release, which is the
-1.26 line the port rejects.
+The Windows executable also supports:
 
----
+```text
+mcbedrock-get --check
+mcbedrock-get --login you@example.com
+mcbedrock-get --logout
+mcbedrock-get --download 1.16.221.01 --out D:\apk
+```
 
-## For maintainers
+## Troubleshooting
 
-`tools/mcbedrock-get/` is an unfinished Windows downloader built on the `gpapi`
-Python Play client. Sign-in, the version list and the diagnostics work;
-downloading does not, because Google refuses that client's 2019-era protocol
-with `DF-DFERH-01`. This was confirmed not to be a configuration problem — a
-device profile replicating minecraft-linux's exactly, including SDK 36 and a
-current Play client version, fails identically. It is kept for `--diagnose` and
-`--probe` and is not published as a release binary. Reviving it means replacing
-its Play layer with
-[minecraft-linux/google-play-api](https://github.com/minecraft-linux/google-play-api).
+**Ubuntu is not installed in WSL.** Run `wsl --install -d Ubuntu` from an
+administrator PowerShell and reboot. If several Ubuntu distributions exist,
+set `MCBEDROCK_WSL_DISTRO` to the desired name shown by `wsl --list --quiet`.
+
+**The WSL downloader is not installed.** Press Download, accept the setup
+prompt, and leave the terminal open until it says setup finished.
+
+**Play offers Minecraft for sale.** Sign out and use the Google account that
+owns the Google Play Android edition.
+
+**No `config.arm64_v8a` file was returned.** The helper rejects the result.
+Retry once; if it repeats, include the version code and helper error in an
+issue, but never attach the APKs or account data.
+
+**The port rejects the files.** Copy every APK from one version download. Do
+not combine different dates, architectures, or version codes.
+
+**The download times out.** Confirm WSL has network access, rerun the one-time
+setup, and try again. A failed attempt leaves any previously complete set
+unchanged.
+
+## Building the helper from source
+
+From `tools/mcbedrock-get/` on Windows with Python 3.11:
+
+```text
+build.bat
+```
+
+The build pins its direct dependencies and PyInstaller, generates notices from
+the installed environment, and creates the versioned Windows release ZIP.
+`wsl-setup.sh` builds the current upstream gplaydl source inside Ubuntu; no
+Minecraft content enters the executable or repository.

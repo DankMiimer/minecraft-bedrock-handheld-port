@@ -14,9 +14,12 @@ defeats a protection measure or provides any way to obtain Minecraft without
 owning it. APKs a user downloads are their own copy and must not be
 redistributed.
 
-The unfinished `tools/mcbedrock-get/` is a Google Play client kept as source
-for its diagnostics. It is not published as a binary, contains no Minecraft
-code or assets, and keeps any account token on the user's own machine.
+The optional `tools/mcbedrock-get/` Windows helper is published as a separate
+bundle. It contains no Minecraft code or assets. It uses the account holder's
+Google sign-in token locally to drive minecraft-linux's gplaydl inside WSL;
+Google Play still enforces ownership. The token is stored only on the user's
+Windows/WSL installation. Sign out removes both caches when Ubuntu is
+available, or clearly asks the user to rerun it after WSL starts.
 
 Do not use this repository, issues, discussions, releases, or linked materials
 to request, offer, mirror, or distribute Minecraft APKs or extracted game

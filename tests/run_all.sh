@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-find portmaster/minecraftbedrock bottomscreen/release scripts tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+find portmaster/minecraftbedrock bottomscreen/release scripts tests tools/mcbedrock-get -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 python3 -m py_compile \
   portmaster/minecraftbedrock/minecraftbedrock/apkmeta.py \
   portmaster/minecraftbedrock/minecraftbedrock/apk_groups.py \
@@ -14,8 +14,10 @@ python3 -m py_compile \
   bottomscreen/release/discover_rgds.py bottomscreen/release/input_state.py \
   bottomscreen/release/prepare_resources.py \
   bottomscreen/device/osk_supervisor.py \
-  scripts/build_releases.py tests/test_apkmeta.py tests/test_prepare_resources.py \
-  tests/test_release_builder.py
+  scripts/build_releases.py tools/mcbedrock-get/package_release.py \
+  tools/mcbedrock-get/mcbedrock_get.py tools/mcbedrock-get/signin.py \
+  tools/mcbedrock-get/wsl_backend.py tests/test_apkmeta.py \
+  tests/test_prepare_resources.py tests/test_release_builder.py tests/test_docs.py
 for patch in source_release/*.patch; do git apply --recount --numstat "$patch" >/dev/null; done
 bash tests/test_migration.sh
 bash tests/test_platform.sh
@@ -23,6 +25,8 @@ bash tests/test_update.sh
 python3 tests/test_apkmeta.py
 python3 tests/test_version_selection.py
 python3 tests/test_prepare_resources.py
+python3 -m unittest discover -s tools/mcbedrock-get/tests -p 'test_*.py' -v
+python3 tests/test_docs.py
 bash tests/test_terrain_loop.sh
 bash tests/test_rgds_session.sh
 python3 tests/test_release_builder.py

@@ -18,8 +18,15 @@ __pycache__/
 *.pyc
 
 # Local working directories: scratch, build output, release staging, and
-# session logs. None of it belongs in a clone, and none of it may be
-# redistributed. Treat everything under these as local-only.
-/build/
+# session logs. Keep only the pinned container recipes needed by clean CI
+# checkouts; every other build artifact remains local-only.
+/build/*
+!/build/clients/
+!/build/companions/
+/build/clients/*
+!/build/clients/Dockerfile
+!/build/clients/build-in-container.sh
+/build/companions/*
+!/build/companions/Dockerfile
 /dist/
 /recovery/

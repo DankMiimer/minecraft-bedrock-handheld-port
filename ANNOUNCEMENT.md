@@ -1,3 +1,8 @@
+# Archived v1.6 announcement
+
+> Historical document. It describes the v1.6 release and must not be used as
+> current installation guidance. See [`README.md`](README.md) for v2.x.
+
 # Minecraft Bedrock Edition — native port for ARM handhelds
 
 Minecraft Bedrock running **natively** (no emulation, no streaming) on ARM

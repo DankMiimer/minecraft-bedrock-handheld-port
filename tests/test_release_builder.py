@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import struct, subprocess, sys, tempfile, zipfile
+import json, struct, subprocess, sys, tempfile, zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,9 +23,29 @@ def fake_armhf(path: Path):
 with tempfile.TemporaryDirectory(prefix="release-test-") as tmpstr:
     tmp = Path(tmpstr); artifacts = tmp / "artifacts"; out = tmp / "out"
     artifacts.mkdir()
+    legacy = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "build_release_zips.py"),
+            "--staging",
+            str(ROOT / "staging"),
+            "--version",
+            "9.9.9-test",
+            "--out-dir",
+            str(tmp / "legacy"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert legacy.returncode == 2
+    assert "archived v1.x staging builder" in legacy.stderr
+    assert not (tmp / "legacy").exists()
     for name in ("client", "standard-arm64", "bottomd", "bedrockmap", "context-bridge"):
         fake_aarch64(artifacts / name)
     fake_armhf(artifacts / "standard-armhf")
+    helper = artifacts / "mcbedrock-get-windows-v9.9.9-test.zip"
+    with zipfile.ZipFile(helper, "w") as archive:
+        archive.writestr("README.md", "No game files are included.\n")
     subprocess.run([
         sys.executable, str(ROOT / "scripts" / "build_releases.py"),
         "--version", "9.9.9-test", "--out-dir", str(out),
@@ -35,6 +55,7 @@ with tempfile.TemporaryDirectory(prefix="release-test-") as tmpstr:
         "--bottomd", str(artifacts / "bottomd"),
         "--bedrockmap", str(artifacts / "bedrockmap"),
         "--context-bridge", str(artifacts / "context-bridge"),
+        "--extra-asset", str(helper),
     ], check=True)
     standard = out / "minecraftbedrock-standard-v9.9.9-test.zip"
     rgds = out / "minecraftbedrock-rgds-v9.9.9-test.zip"
@@ -65,7 +86,17 @@ with tempfile.TemporaryDirectory(prefix="release-test-") as tmpstr:
         assert ".gitattributes" in names
         assert "build/clients/Dockerfile" in names
         assert "scripts/build_releases.py" in names
-    assert (out / "release-index.json").is_file()
+    index = json.loads((out / "release-index.json").read_text(encoding="utf-8"))
+    assert index["schema"] == 2
+    assert {row["edition"] for row in index["releases"]} == {
+        "minecraftbedrock.standard", "minecraftbedrock.rgds"
+    }
+    assert not any("mcbedrock-get" in row["asset"] for row in index["releases"])
+    assert (out / helper.name).read_bytes() == helper.read_bytes()
+    assert helper.name in (out / "SHA256SUMS.txt").read_text(encoding="utf-8")
+    notes = (out / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+    assert "Windows WSL helper" in notes
+    assert "No game files are included" in notes
     for name in ("release-index.json", "SHA256SUMS.txt", "RELEASE_NOTES.md"):
         assert b"\r" not in (out / name).read_bytes()
 print("release builder tests passed")
