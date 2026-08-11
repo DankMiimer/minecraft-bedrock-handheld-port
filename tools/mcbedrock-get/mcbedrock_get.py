@@ -93,7 +93,7 @@ def fetch(version_code: int, out_dir: Path, log) -> list[Path]:
         raise signin.SignInError("Not signed in yet.")
     if not wsl_backend.is_signed_in():
         log("Passing your Google session to the downloader…")
-        wsl_backend.sign_in(creds.master_token)
+        wsl_backend.sign_in(creds.email, creds.master_token)
     log(f"Downloading build {version_code}. This is a few hundred MB.")
     return wsl_backend.download(version_code, out_dir, on_line=log)
 

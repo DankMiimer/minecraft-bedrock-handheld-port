@@ -37,13 +37,13 @@ the helper.
 
 Download and extract:
 
-[mcbedrock-get-windows-v2.0.0-rc.3.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/mcbedrock-get-windows-v2.0.0-rc.3.zip)
+[mcbedrock-get-windows-v2.0.0-rc.4.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip)
 
 Compare its SHA-256 with the release's
-[SHA256SUMS.txt](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/SHA256SUMS.txt):
+[SHA256SUMS.txt](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/SHA256SUMS.txt):
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-v2.0.0-rc.3.zip
+Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-v2.0.0-rc.4.zip
 ```
 
 PyInstaller executables are sometimes flagged by antivirus heuristics. Do not
@@ -66,6 +66,11 @@ The Windows account token is stored in
 Ubuntu under `~/.local/share/mcbedrock-get/`. Pressing **Sign out** removes both
 copies. If Ubuntu is unavailable it clears Windows first and tells you to run
 Sign out again after WSL starts. Nothing is uploaded by this project.
+
+Do not use the rc.3 helper: its interactive WSL authentication could loop at
+**Passing your Google session to the downloader** until the five-minute
+timeout. rc.4 transfers the same valid token privately over stdin and uses the
+upstream non-interactive path.
 
 ### 4. Choose a version
 

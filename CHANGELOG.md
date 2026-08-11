@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.0.0-rc.4 (testing)
+
+- Fixed the Windows helper hanging for five minutes at **Passing your Google
+  session to the downloader**. The upstream interactive master-token path
+  retried forever after its initial verification request failed and stdin had
+  already closed.
+- Replaced that prompt automation with the upstream non-interactive
+  `--login-no-verify` path, which was verified against Google Play with the
+  same valid account token. The private WSL config is transferred only over
+  stdin, normalized to Linux line endings, stored with mode `0600`, and never
+  placed in a process command line.
+- Require both the WSL credential config and service-token cache before a
+  session is considered ready. Failed or timed-out setup removes partial
+  state and now returns an actionable error instead of a raw subprocess
+  timeout.
+
 ## v2.0.0-rc.3 (testing)
 
 - Rewrote the GitHub and packaged READMEs around a beginner-first install

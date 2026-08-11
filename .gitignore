@@ -39,3 +39,7 @@ __pycache__/
 !/build/companions/Dockerfile
 /dist/
 /recovery/
+# Google Play session files must never enter the repository.
+playdl.conf
+playdl.conf.*
+token_cache.conf

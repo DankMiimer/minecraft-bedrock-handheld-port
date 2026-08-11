@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -68,9 +69,40 @@ class SessionTests(unittest.TestCase):
         completed = mock.Mock(stdout="signed in", stderr="", returncode=0)
         with mock.patch.object(wsl_backend, "_run", return_value=completed) as run, \
                 mock.patch.object(wsl_backend, "is_signed_in", return_value=True):
-            wsl_backend.sign_in("secret-master-token")
-        self.assertIn("gplayver", run.call_args.args[0])
-        self.assertEqual(run.call_args.kwargs["stdin"], "3\nsecret-master-token\ny\n")
+            wsl_backend.sign_in("owner@example.com", "secret-master-token")
+        command = run.call_args.args[0]
+        self.assertIn("gplayver", command)
+        self.assertIn("--login-no-verify", command)
+        self.assertNotIn("--interactive", command)
+        self.assertNotIn("owner@example.com", command)
+        self.assertNotIn("secret-master-token", command)
+        self.assertNotIn("$?", command)
+        self.assertNotIn("$session", command)
+        self.assertIn("tr -d", command)
+        self.assertEqual(
+            run.call_args.kwargs["stdin"],
+            'user_email = "owner@example.com"\nuser_token = "secret-master-token"\n',
+        )
+        self.assertEqual(run.call_args.kwargs["timeout"], 120)
+
+    def test_sign_in_rejects_multiline_credentials(self):
+        with mock.patch.object(wsl_backend, "_run") as run:
+            with self.assertRaisesRegex(wsl_backend.WslError, "saved Google token is invalid"):
+                wsl_backend.sign_in("owner@example.com", "secret\ninjected = value")
+        run.assert_not_called()
+
+    def test_sign_in_reports_noninteractive_failure(self):
+        completed = mock.Mock(stdout="upstream error", stderr="", returncode=1)
+        with mock.patch.object(wsl_backend, "_run", return_value=completed):
+            with self.assertRaisesRegex(wsl_backend.WslError, "upstream error"):
+                wsl_backend.sign_in("owner@example.com", "secret-master-token")
+
+    def test_run_turns_timeout_into_actionable_error(self):
+        expired = subprocess.TimeoutExpired(cmd=["wsl.exe"], timeout=12)
+        with mock.patch.object(wsl_backend, "selected_distro", return_value="Ubuntu-Test"), \
+                mock.patch.object(wsl_backend.subprocess, "run", side_effect=expired):
+            with self.assertRaisesRegex(wsl_backend.WslError, "timed out after 12 seconds"):
+                wsl_backend._run("true", timeout=12)
 
     def test_sign_out_removes_both_caches(self):
         completed = mock.Mock(returncode=0)
@@ -79,6 +111,14 @@ class SessionTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("token_cache.conf", command)
         self.assertIn("playdl.conf", command)
+
+    def test_signed_in_requires_config_and_cache(self):
+        completed = mock.Mock(returncode=0)
+        with mock.patch.object(wsl_backend, "_run", return_value=completed) as run:
+            self.assertTrue(wsl_backend.is_signed_in())
+        command = run.call_args.args[0]
+        self.assertIn("playdl.conf", command)
+        self.assertIn("token_cache.conf", command)
 
     def test_sign_out_reports_unavailable_wsl(self):
         with mock.patch.object(wsl_backend, "_run", side_effect=OSError("missing")):

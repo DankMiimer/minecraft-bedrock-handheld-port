@@ -40,6 +40,11 @@ both. If Ubuntu is unavailable, it clears Windows first and tells you to run
 Sign out again after WSL starts. No credential or APK is uploaded by this
 project.
 
+The WSL config is transferred over stdin, normalized to Linux line endings,
+and stored with mode `0600`. The token is never placed in a Windows or Linux
+process command line. rc.4 and newer use gplayver's non-interactive path;
+rc.3's interactive path could loop until its five-minute timeout.
+
 ## Command line
 
 ```text
