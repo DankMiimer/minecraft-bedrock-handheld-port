@@ -6,7 +6,7 @@ Run a legally owned Android copy of Minecraft Bedrock natively on supported
 ARM Linux handhelds through PortMaster and the open-source minecraft-linux
 launcher. This is a testing release: supported combinations are documented,
 but the final R36S and revised RGDS physical acceptance checks are still
-pending. Nothing in rc.3 is promoted to stable or newly labelled Validated.
+pending. Nothing in rc.4 is promoted to stable or newly labelled Validated.
 
 > **No game files are included.** You must supply your own official Minecraft
 > Bedrock Android APK or complete split-APK set.
@@ -14,21 +14,21 @@ pending. Nothing in rc.3 is promoted to stable or newly labelled Validated.
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
 
-## Download v2.0.0-rc.3
+## Download v2.0.0-rc.4
 
 This version is a prerelease. Download an install archive from the release
 assets, not GitHub's automatically generated **Source code** archives.
 
 | Download | Who needs it |
 |---|---|
-| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-standard-v2.0.0-rc.3.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
-| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-rgds-v2.0.0-rc.3.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
-| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/mcbedrock-get-windows-v2.0.0-rc.3.zip) | Downloads your own Google Play purchase in the correct arm64 format |
-| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-source-v2.0.0-rc.3.zip) | Maintainers and license compliance; not an install archive |
-| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-standard-v2.0.0-rc.3.spdx.json) | Machine-readable contents of the standard archive |
-| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-rgds-v2.0.0-rc.3.spdx.json) | Machine-readable contents of the RGDS archive |
-| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/RELEASE_NOTES.md) | Short packaged release summary |
-| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/SHA256SUMS.txt) | Verifies every published file |
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-standard-v2.0.0-rc.4.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-rgds-v2.0.0-rc.4.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
+| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip) | Downloads your own Google Play purchase in the correct arm64 format |
+| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-source-v2.0.0-rc.4.zip) | Maintainers and license compliance; not an install archive |
+| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-standard-v2.0.0-rc.4.spdx.json) | Machine-readable contents of the standard archive |
+| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-rgds-v2.0.0-rc.4.spdx.json) | Machine-readable contents of the RGDS archive |
+| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/RELEASE_NOTES.md) | Short packaged release summary |
+| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/SHA256SUMS.txt) | Verifies every published file |
 
 Use the **standard edition** unless you own an RG DS and specifically want the
 dual-screen companion. The standard edition intentionally redirects RGDS users
@@ -75,7 +75,7 @@ The easiest supported arm64 route is the Windows helper:
 
 1. Open PowerShell as administrator, run `wsl --install -d Ubuntu`, and reboot
    if Windows asks.
-2. Extract `mcbedrock-get-windows-v2.0.0-rc.3.zip` to a normal folder.
+2. Extract `mcbedrock-get-windows-v2.0.0-rc.4.zip` to a normal folder.
 3. Run `mcbedrock-get.exe`, enter the Google email that owns Minecraft, and
    complete Google's sign-in page. The helper never asks for your password.
 4. Accept the one-time WSL setup. An Ubuntu terminal opens and asks for your
@@ -204,6 +204,7 @@ launch again; it will not choose one destructively.
 | Buttons are wrong | Run **Controller test**, then include its redacted output in a device report |
 | Black screen or failed relaunch | Reboot once, then create a **Support bundle** before changing files manually |
 | Windows helper cannot find WSL | Install Ubuntu with `wsl --install -d Ubuntu`; set `MCBEDROCK_WSL_DISTRO` only when using a differently named Ubuntu distro |
+| Windows helper hangs at “Passing your Google session” | Replace rc.3 with rc.4 or newer; rc.3 could loop in upstream interactive authentication until its five-minute timeout |
 | Windows helper says Minecraft is for sale | Sign out and use the Google account that owns the Google Play Android edition |
 
 See [SUPPORT.md](SUPPORT.md) for report requirements. Never upload APKs,

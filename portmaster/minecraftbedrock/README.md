@@ -5,7 +5,7 @@ Android copy of Minecraft Bedrock. It runs the native ARM game library through
 the open-source minecraft-linux launcher.
 
 This is a testing prerelease. Final R36S and revised RGDS physical acceptance
-checks remain pending; rc.3 adds no stable or newly Validated claims.
+checks remain pending; rc.4 adds no stable or newly Validated claims.
 
 **No game files are included.** Supply your own official full APK or complete
 split-APK set.
@@ -53,7 +53,7 @@ newer are unsupported.
 
 Windows arm64 users can download their own Google Play purchase with:
 
-https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/mcbedrock-get-windows-v2.0.0-rc.3.zip
+https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip
 
 The helper requires Ubuntu under WSL and the Google account that owns the
 Android edition. It downloads no game for an account without that entitlement.

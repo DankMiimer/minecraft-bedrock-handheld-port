@@ -4,7 +4,7 @@ gplaydl comes from minecraft-linux/google-play-api and is the only Play client
 still able to download Minecraft. It is a Linux binary, so it runs under WSL and
 writes straight into a Windows folder through /mnt.
 
-The account holder's Google sign-in is handled by playstore.py; this module only
+The account holder's Google sign-in is handled by signin.py; this module only
 passes the resulting long-lived token through to gplaydl.
 """
 from __future__ import annotations
@@ -63,14 +63,17 @@ def selected_distro() -> str:
 
 
 def _run(script: str, stdin: str | None = None, timeout: int = 120) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["wsl.exe", "-d", selected_distro(), "--", "bash", "-lc", script],
-        input=stdin,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        creationflags=_NO_WINDOW,
-    )
+    try:
+        return subprocess.run(
+            ["wsl.exe", "-d", selected_distro(), "--", "bash", "-lc", script],
+            input=stdin,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            creationflags=_NO_WINDOW,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise WslError(f"WSL command timed out after {timeout} seconds.") from error
 
 
 def is_available() -> bool:
@@ -91,7 +94,10 @@ def is_installed() -> bool:
 
 def is_signed_in() -> bool:
     try:
-        return _run(f"test -s {PREFIX}/token_cache.conf", timeout=60).returncode == 0
+        return _run(
+            f"test -s {PREFIX}/playdl.conf && test -s {PREFIX}/token_cache.conf",
+            timeout=60,
+        ).returncode == 0
     except (OSError, subprocess.SubprocessError, WslError):
         return False
 
@@ -106,26 +112,46 @@ def sign_out() -> bool:
     return result.returncode == 0
 
 
-def sign_in(master_token: str) -> None:
-    """Hand gplaydl the account token and let it cache its own session.
+def _config_value(value: str, label: str) -> str:
+    """Quote one upstream config value without allowing extra config lines."""
+    if not value or "\n" in value or "\r" in value:
+        raise WslError(f"The saved Google {label} is invalid. Sign out and sign in again.")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-    Option 3 of its interactive menu takes a master token, which is what our
-    sign-in already produces and what survives longest.
+
+def sign_in(email: str, master_token: str) -> None:
+    """Create gplaydl's private config and establish its cached session.
+
+    Upstream's interactive master-token path retries forever when its initial
+    verification call fails and stdin has already closed. The token itself is
+    still valid for Google Play API calls, so use the upstream non-interactive
+    no-verify path. Send the config on stdin so credentials never appear in a
+    Windows or Linux process command line.
     """
-    # gplayver, not gplaydl: this only needs to authenticate and cache a
-    # session. Asking gplaydl to log in would also make it start a download.
-    result = _run(
-        f"cd {PREFIX} && ./gplayver --interactive --device device-arm64.conf "
-        f"--save-auth --accept-tos --app {PACKAGE} 2>&1 || true",
-        stdin=f"3\n{master_token}\ny\n",
-        timeout=300,
+    config = (
+        f"user_email = {_config_value(email, 'email')}\n"
+        f"user_token = {_config_value(master_token, 'token')}\n"
     )
+    script = (
+        f"cd {PREFIX} || exit 1; umask 077; "
+        "rm -f playdl.conf.new; trap 'rm -f playdl.conf.new' EXIT HUP INT TERM; "
+        "tr -d '\\r' > playdl.conf.new || exit 1; chmod 600 playdl.conf.new || exit 1; "
+        "mv -f playdl.conf.new playdl.conf || exit 1; rm -f token_cache.conf; "
+        "if ./gplayver --login-no-verify --device device-arm64.conf "
+        f"--accept-tos --app {PACKAGE} 2>&1; then exit 0; "
+        "else rm -f playdl.conf token_cache.conf; exit 1; fi"
+    )
+    try:
+        result = _run(script, stdin=config, timeout=120)
+    except WslError:
+        # A killed WSL wrapper can leave the file written before gplayver ran.
+        sign_out()
+        raise
     output = (result.stdout or "") + (result.stderr or "")
-    if "Failed to login" in output:
-        raise WslError(
-            "gplaydl rejected the account token. Sign out in this app and sign in again."
-        )
+    if result.returncode != 0:
+        raise WslError("Google Play session setup failed.\n\n" + output.strip()[-500:])
     if not is_signed_in():
+        sign_out()
         raise WslError("gplaydl did not save a session.\n\n" + output.strip()[-500:])
 
 

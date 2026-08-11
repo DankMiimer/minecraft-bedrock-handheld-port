@@ -442,8 +442,10 @@ def main() -> int:
         else "Stable channel release."
     )
     helper_note = (
-        "\n- The Windows WSL helper is included for entitled arm64 Google Play "
-        "downloads; verify its SHA-256 before allowing an antivirus exception."
+        "\n- The Windows WSL helper fixes rc.3's five-minute authentication loop "
+        "with a private, non-interactive session transfer for entitled arm64 "
+        "Google Play downloads; verify its SHA-256 before allowing an antivirus "
+        "exception."
         if any(path.name.startswith("mcbedrock-get-windows-") for _, path in extras)
         else ""
     )
