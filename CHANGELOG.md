@@ -1,5 +1,109 @@
 # Changelog
 
+## v2.0.0-rc.3 (testing)
+
+- Rewrote the GitHub and packaged READMEs around a beginner-first install
+  path: exact edition downloads, per-firmware extraction locations, Windows
+  WSL setup, ABI selection, complete split-set transfer, launcher steps,
+  updates, RGDS limitations, and symptom-based troubleshooting.
+- Hardened and published the Windows helper as a versioned bundle with pinned
+  build tooling, deterministic packaging, generated notices, WSL distro
+  discovery, isolated downloads, complete arm64-set validation, enforced
+  timeouts, safe redownloads, and Windows-plus-WSL sign-out.
+- Fixed clean-checkout release CI by tracking the pinned client/companion
+  container recipes, adding Windows helper tests/builds, scanning every ZIP,
+  and guarding public documentation against stale paths and claims.
+- Added a Windows helper, `tools/mcbedrock-get`, that signs in with the
+  user's own Google account and downloads the arm64 split APKs for the
+  recommended 1.16.221.01 and the newest tested 1.21.51.01. Google no longer
+  serves Play downloads to third-party desktop clients, so the download itself
+  is delegated to `gplaydl` from minecraft-linux/google-play-api running under
+  WSL, which is also the only client that accepts a specific older version
+  code. A result without an `arm64_v8a` split is refused rather than written,
+  so an x86 download cannot reach the device. The helper bundles and
+  distributes no game content; Play refuses accounts that do not own Minecraft.
+- Documented obtaining APKs on Windows in `GETTING-BEDROCK-APKS.md`, covering
+  the helper and the manual launcher route, the arm64-versus-x86 mistake,
+  and how to group one download into a complete split set.
+- Fixed installation appearing to freeze the device. The launcher menu exits
+  before extraction begins, leaving its last frame on screen for the minutes
+  that follow. The installer now publishes progress and stage, and the launcher
+  draws a bar until extraction finishes. It stays inert where it cannot draw —
+  under sway, or with no writable `/dev/tty1` — so Wayland/Sway, KMSDRM, Mali
+  Weston, and X11 hosts behave exactly as before.
+- Fixed 1.16-era split sets being rejected with "split set must contain exactly
+  one base APK". A split name, not the payload, identifies the base, but the
+  resource-pack test ran first and 1.16 keeps its assets inside the base APK.
+  A base carrying resource packs now also satisfies the assets requirement.
+  1.21.51.01 is unaffected: its `install_pack` declares a split name.
+- Placed the canonical package tree, RGDS companion sources, release scripts,
+  and the host-side test suite under version control. Build scratch, release
+  staging, and local research directories stay excluded from the repository.
+
+- Replaced the Chat and Items framebuffer mirrors with independent lower-screen
+  views. Gameplay remains visible on the other panel; companion touches are
+  consumed locally and expressed as bounded, versioned commands.
+- Added an AYN-style 36-slot inventory surface, craftable recipe pane, chat
+  history pane, and touch keyboard. Unsupported actions remain visibly
+  read-only and are rejected rather than editing player memory.
+- Added runtime indexing and PNG loading for the user's installed Bedrock
+  resource packs. The port never packages or redistributes Mojang artwork.
+- Added a fail-closed `1.21.51.01` native profile pinned to library SHA-256
+  `45382be72491ec2cbe5dd4d1262989ad894b8fc611e5cbc16141d04171510927`.
+  It validates RTTI, the vtable target, and the instruction prologue before
+  changing a game-library pointer.
+- Fixed bottom-panel touch injection on the installed ROCKNIX/Sway build by
+  using its accepted unquoted input-identifier syntax.
+- Removed the render readback/mirror writer from the RGDS launcher client.
+
+## v2.0.0-rc.2 (testing)
+
+- Rebuilt the RGDS lower-screen UI around a persistent status stack and five
+  Minecraft-style bottom tabs: HUD, Chat, Items, Input, and Settings. The HUD
+  centers the terrain map; Input provides a 3×3 shortcut grid; settings expose
+  status, automatic Items selection, map night tint, and player following.
+- Added LevelDB snapshot health/hunger/dimension/world-time consumption and
+  on-demand Bedrock framebuffer mirroring for Chat and Items with lower-panel
+  touch forwarding. Capture stops off those tabs and stale frames fall back to
+  an explicit unavailable state instead of freezing or blanking the display.
+- Changed the RGDS release contract to require both telemetry and mirror hooks
+  in the pinned launcher client. The standard edition remains free of all
+  dual-screen markers and behavior.
+- Fixed the RGDS companion retaining terrain from the last local world after
+  joining another device's world over LAN. The client now detects direct
+  Bedrock network peers, invalidates cached local tiles and waypoints, pauses
+  local LevelDB rendering, and displays an explicit remote-world/map-unavailable
+  state while keeping live position and status telemetry.
+- Extended remote-session detection to IPv6 and direct public Bedrock peers;
+  IPv4-only detection missed the physical RGDS-to-RG34XX-SP LAN path.
+- Fixed delayed/inconsistent local-world selection by following the LevelDB
+  directory actually opened by the game instead of waiting for movement to
+  update a database log's mtime. Reduced the default scan radius from 24 to 12
+  chunks and publish the central visible area before any configured outer ring.
+- Restored bottom-panel touch by shipping the stable RGDS `bottomd` target,
+  which follows the displayed map panel through dynamically discovered raw
+  evdev devices rather than falling back to unreliable Wayland touch routing.
+- Kept LAN packet contents and peer addresses out of telemetry, logs, and
+  support bundles; the detector records only a short-lived remote-session flag.
+- Made 1.16.221.01 the recommended/default no-RenderDragon version for its
+  handheld-friendly UI scaling, while fingerprinting the original
+  1.21.51.01 library as the newest tested no-RenderDragon arm64 option.
+
+## v2.0.0-rc.1 (testing)
+
+- Split the port into a lightweight universal standard edition and a separate
+  arm64 RGDS dual-screen edition, both using the same shared user-data root.
+- Replaced Bedrock directory-name heuristics with manifest metadata, guarded
+  compatibility rules, and native-library fingerprints.
+- Made Bedrock 1.16.221.01 the recommended/default version because its UI
+  scaling is the most usable on handheld displays.
+- Registered the exact original no-RenderDragon 1.21.51.01 native library as
+  the newest tested no-RenderDragon arm64 build. Later or unknown reuploads
+  using the same version name show a warning and are never selected by default.
+- Moved RenderDragon-era builds to optional, non-blocking compatibility smoke
+  coverage because their stutter makes them unsuitable recommendations on the
+  physical reference devices.
+
 ## v1.6 (2026-07-10)
 
 - **New launcher menu.** Starting **Minecraft Bedrock** now opens a full

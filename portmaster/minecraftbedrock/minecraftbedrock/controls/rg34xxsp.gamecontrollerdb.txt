@@ -1,0 +1,1 @@
+19000000010000000100000000010000,Anbernic RG34XX-SP Controller,a:b1,b:b0,x:b2,y:b3,leftstick:b9,rightstick:b8,leftshoulder:b10,rightshoulder:b11,lefttrigger:b4,righttrigger:b5,back:b6,start:b7,guide:b12,dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,leftx:a0,lefty:a1,rightx:a2,righty:a3,

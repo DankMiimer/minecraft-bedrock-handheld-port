@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the release zip from the staging tree.
+"""LEGACY v1.x ONLY: build the old single release zip from staging.
 
 Produces, in --out-dir:
   minecraftbedrock-<version>.zip   one zip for every supported firmware
@@ -24,7 +24,7 @@ source patches ride along under ports/minecraftbedrock/.
 Then runs check_release_safety.py against the zip.
 
 Usage:
-  python scripts/build_release_zips.py --staging ../staging --version 1.5
+  python scripts/build_release_zips.py --allow-legacy --staging ../staging --version 1.5
 """
 
 from __future__ import annotations
@@ -110,7 +110,20 @@ def main() -> int:
     parser.add_argument("--out-dir", type=pathlib.Path, default=pathlib.Path("."),
                         help="output directory (default: cwd)")
     parser.add_argument("--skip-safety-check", action="store_true")
+    parser.add_argument(
+        "--allow-legacy",
+        action="store_true",
+        help="acknowledge this obsolete v1.x builder; never use it for 2.x",
+    )
     args = parser.parse_args()
+
+    if not args.allow_legacy:
+        print(
+            "ERROR: this is the archived v1.x staging builder. "
+            "Use scripts/build_releases.py for every 2.x build.",
+            file=sys.stderr,
+        )
+        return 2
 
     staging = args.staging.resolve()
     if not (staging / "minecraftbedrock").is_dir():

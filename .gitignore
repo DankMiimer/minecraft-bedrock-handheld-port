@@ -14,3 +14,28 @@
 # Local testing noise.
 *.log
 *.csv
+__pycache__/
+*.pyc
+
+# Host-test executables are generated from the checked-in C sources.
+/bottomscreen/bottomd/bottomd
+/bottomscreen/bottomd/test_daynight
+/bottomscreen/bottomd/test_worldinfo
+/bottomscreen/telemetry/telemetry_dump
+/bottomscreen/telemetry/test_downscale
+/bottomscreen/telemetry/test_feed
+/bottomscreen/telemetry/test_mirror
+
+# Local working directories: scratch, build output, release staging, and
+# session logs. Keep only the pinned container recipes needed by clean CI
+# checkouts; every other build artifact remains local-only.
+/build/*
+!/build/clients/
+!/build/companions/
+/build/clients/*
+!/build/clients/Dockerfile
+!/build/clients/build-in-container.sh
+/build/companions/*
+!/build/companions/Dockerfile
+/dist/
+/recovery/

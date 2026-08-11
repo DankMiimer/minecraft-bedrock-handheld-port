@@ -1,0 +1,33 @@
+--- a/mcpelauncher-client/src/jni/main_activity.h
++++ b/mcpelauncher-client/src/jni/main_activity.h
+@@
++    // ---- MCPE_TF_CONTAINER_OPEN feed -------------------------------
++    // Bedrock unlocks the mouse cursor whenever a UI screen takes over
++    // the world view (inventory, crafting table, chest, pause, chat) and
++    // re-locks it on return to gameplay. Cursor-lock state is therefore
++    // a VERSION-INDEPENDENT "a screen is up" signal, which matters
++    // because 1.20.62.02 is fully stripped — it has no ScreenController
++    // exports to hook at all (bottomscreen/analysis/SYMBOL_FINDINGS.md).
++    // Hooking here in the launcher costs nothing and works on every
++    // version we ship.
++    //
++    // NOTE the signal is BROADER than "container": pause and chat also
++    // unlock the cursor. For the bottom screen that is the semantics we
++    // actually want — "the player is in a UI, not in the world".
++    //
++    // Weak symbols: this is a no-op when the telemetry module is not
++    // linked in, exactly like the FMOD listener hook.
++    static void telemetryContainer(int open) {
++        if(&mcpe_telemetry_container)
++            mcpe_telemetry_container(open);
++    }
++
+     void lockCursor() {
+         window->setCursorDisabled(true);
++        telemetryContainer(0);
+     }
+
+     void unlockCursor() {
+         window->setCursorDisabled(false);
++        telemetryContainer(1);
+     }

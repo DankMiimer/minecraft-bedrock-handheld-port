@@ -1,3 +1,10 @@
+# Legacy v1.6 staging snapshot
+
+> This directory is retained only as historical v1.x packaging input. Do not
+> install or release it. Current 2.x packages are built from
+> `portmaster/minecraftbedrock/` with `scripts/build_releases.py`; current user
+> instructions are in the repository root `README.md`.
+
 # Minecraft Bedrock Edition — manual install port
 
 Minecraft Bedrock Edition running **natively** (no emulation, no streaming)

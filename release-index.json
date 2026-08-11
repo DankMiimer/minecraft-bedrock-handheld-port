@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "releases": [
+    {
+      "edition": "minecraftbedrock.rgds",
+      "channel": "testing",
+      "version": "2.0.0-rc.3",
+      "asset": "minecraftbedrock-rgds-v2.0.0-rc.3.zip",
+      "url": "https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-rgds-v2.0.0-rc.3.zip",
+      "sha256": "734b371f3073f44b743c0b2236e4126260a5586089d64938369ab56969a4f02b",
+      "size": 6184183,
+      "minimum_updater": 2
+    },
+    {
+      "edition": "minecraftbedrock.standard",
+      "channel": "testing",
+      "version": "2.0.0-rc.3",
+      "asset": "minecraftbedrock-standard-v2.0.0-rc.3.zip",
+      "url": "https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.3/minecraftbedrock-standard-v2.0.0-rc.3.zip",
+      "sha256": "fa392ef2d571c55bde8fd80ab4e1b5d3416afe0cdf21ab0a304c6c70ce9216d1",
+      "size": 11189936,
+      "minimum_updater": 2
+    }
+  ]
+}

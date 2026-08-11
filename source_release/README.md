@@ -1,5 +1,11 @@
 # Modified mcpelauncher source (GPL source offer)
 
+No game files are included. This archive contains only launcher/runtime source,
+patches, build recipes, tests, and licensing material.
+
+**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
+MOJANG OR MICROSOFT.**
+
 The `mcpelauncher-client` binary shipped with this port is built from the
 minecraft-linux project with the modifications in these patch files:
 
@@ -37,9 +43,10 @@ Debian bookworm container, clang cross-compiling to aarch64:
 4. `make mcpelauncher-client` — see `eglut_build/_container_build.sh` /
    `_container_build_incr.sh` for the exact invocation.
 
-These patches include changes that are specific to Westonpack 0.2.7.1
-aarch64 (private crusty struct offsets in `game-window`) — see the port
-README for details.
+The EGLUT context hand-off uses the exported
+`crusty_gamewindow_context_v1(1, active)` API supplied by the matching
+`crusty-context-v1` runtime module. It does not read Westonpack private data
+addresses. See `CRUSTY_CONTEXT_API.md` for the contract and failure rules.
 
 This directory must accompany any public release of the port zip (or be
 published at a URL linked from the release) to satisfy the GPL.

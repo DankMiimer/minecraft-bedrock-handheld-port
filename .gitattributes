@@ -1,6 +1,21 @@
-* text=auto
+* text=auto eol=lf
+
 *.sh text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
 *.patch text eol=lf
-*.diff text eol=lf
-*.zip binary
+# A unified diff's blank context lines contain a required single-space marker.
+*.diff text eol=lf whitespace=-blank-at-eol
+
 *.png binary
+*.ttf binary
+*.so binary
+*.zip binary

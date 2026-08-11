@@ -1,0 +1,157 @@
+diff --git a/include/mcpelauncher/minecraft_utils.h b/include/mcpelauncher/minecraft_utils.h
+index f570279..ecc97a7 100644
+--- a/include/mcpelauncher/minecraft_utils.h
++++ b/include/mcpelauncher/minecraft_utils.h
+@@ -29,7 +29,9 @@ public:
+ 
+     static void* loadMinecraftLib(void *showMousePointerCallback = nullptr, void *hideMousePointerCallback = nullptr, void *fullscreenCallback = nullptr);
+ 
+-    static void* loadFMod();
++    // overrides are pre-seeded into the fake libfmod.so symbol table and
++    // take precedence over host symbols (telemetry interposer)
++    static void* loadFMod(std::unordered_map<std::string, void*> overrides = {});
+     static void stubFMod();
+ 
+     static const char *getLibraryAbi();
+diff --git a/src/hybris_utils.cpp b/src/hybris_utils.cpp
+index da92f73..0992d15 100644
+--- a/src/hybris_utils.cpp
++++ b/src/hybris_utils.cpp
+@@ -29,7 +29,8 @@ void* HybrisUtils::loadLibraryOS(const char *name, std::string const &path, cons
+         if (sym == nullptr)
+             break;
+         void* ptr = dlsym(handle, sym);
+-        if (ptr)
++        // pre-seeded entries are interposers (e.g. telemetry fmod hook) - keep them
++        if (ptr && syms.find(sym) == syms.end())
+             syms[sym] = ptr;
+         i++;
+     }
+diff --git a/src/minecraft_utils.cpp b/src/minecraft_utils.cpp
+index 10db238..00d8463 100644
+--- a/src/minecraft_utils.cpp
++++ b/src/minecraft_utils.cpp
+@@ -8,6 +8,13 @@
+ #include <minecraft/imported/egl_symbols.h>
+ #include <minecraft/imported/libm_symbols.h>
+ #include <minecraft/imported/fmod_symbols.h>
++
++// bottom-screen telemetry FMOD interposer (defined in the client's
++// telemetry module; weak so mcpelauncher-core links without it)
++extern "C" {
++__attribute__((weak)) void mcpe_telemetry_set_real_fmod_listener(void*);
++__attribute__((weak)) int mcpe_telemetry_fmod_listener_hook(void*, int, const void*, const void*, const void*, const void*);
++}
+ #include <minecraft/imported/glesv2_symbols.h>
+ #include <minecraft/imported/libz_symbols.h>
+ #include <log.h>
+@@ -45,7 +52,7 @@ void* MinecraftUtils::loadLibM() {
+     return libmLib;
+ }
+ 
+-void* MinecraftUtils::loadFMod() {
++void* MinecraftUtils::loadFMod(std::unordered_map<std::string, void*> overrides) {
+ void* fmodLib = HybrisUtils::loadLibraryOS("libfmod.so", PathHelper::findDataFile(std::string("lib/native/") + getLibraryAbi() +
+ #ifdef __APPLE__
+ #if defined(__i386__)
+@@ -63,7 +70,7 @@ void* fmodLib = HybrisUtils::loadLibraryOS("libfmod.so", PathHelper::findDataFil
+     (linker::dlopen("libc++_shared.so", 0) ? "/libfmod.so.12.0" : "/libfmod.so.10.20")
+ #endif
+ #endif
+-), fmod_symbols);
++), fmod_symbols, std::move(overrides));
+     if (fmodLib == nullptr)
+         throw std::runtime_error("Failed to load fmod");
+     return fmodLib;
+@@ -234,6 +241,17 @@ void* MinecraftUtils::loadMinecraftLib(void *showMousePointerCallback, void *hid
+ 
+     void* fmod = linker::dlopen("libfmod.so", 0);
+     if(fmod) {
++        // bottom-screen telemetry: interpose the FMOD 3D-listener call on
++        // the android-libfmod path (weak: only active when the final
++        // executable also links the telemetry module)
++        static const char* telemetryFmodSym = "_ZN4FMOD6System23set3DListenerAttributesEiPK11FMOD_VECTORS3_S3_S3_";
++        if (&mcpe_telemetry_set_real_fmod_listener && &mcpe_telemetry_fmod_listener_hook) {
++            void* realListener = linker::dlsym(fmod, telemetryFmodSym);
++            if (realListener && realListener != (void*)&mcpe_telemetry_fmod_listener_hook) {
++                mcpe_telemetry_set_real_fmod_listener(realListener);
++                hooks.emplace_back(mcpelauncher_hook_t{ telemetryFmodSym, (void*)&mcpe_telemetry_fmod_listener_hook });
++            }
++        }
+         static int (*fmodinit)(void* t, int maxchannels, unsigned int flags, void *extradriverdata) = (decltype(fmodinit))linker::dlsym(fmod, "_ZN4FMOD6System4initEijPv");
+         static int (*fmodsf)(void* t, int samplerate, int speakermode, int numrawspeakers) = (decltype(fmodsf))linker::dlsym(fmod, "_ZN4FMOD6System17setSoftwareFormatEi16FMOD_SPEAKERMODEi");
+         if(fmodinit && fmodsf && linker::get_library_base(fmod)) {
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0f53b98..88151dc 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -8,7 +8,7 @@ find_package(OpenSSL REQUIRED)
+ git_commit_hash(${CMAKE_CURRENT_SOURCE_DIR} CLIENT_GIT_COMMIT_HASH)
+ configure_file(src/build_info.h.in ${CMAKE_CURRENT_BINARY_DIR}/build_info/build_info.h)
+ 
+-add_executable(mcpelauncher-client src/main.cpp src/main.h src/window_callbacks.cpp src/window_callbacks.h src/xbox_live_helper.cpp src/xbox_live_helper.h src/splitscreen_patch.cpp src/splitscreen_patch.h src/cll_upload_auth_step.cpp src/cll_upload_auth_step.h src/gl_core_patch.cpp src/gl_core_patch.h src/hbui_patch.cpp src/hbui_patch.h src/utf8_util.h src/shader_error_patch.cpp src/shader_error_patch.h src/jni/jni_descriptors.cpp src/jni/java_types.h src/jni/main_activity.cpp src/jni/main_activity.h src/jni/store.cpp src/jni/store.h src/jni/cert_manager.cpp src/jni/cert_manager.h src/jni/http_stub.cpp src/jni/http_stub.h src/jni/package_source.cpp src/jni/package_source.h src/jni/jni_support.h src/jni/jni_support.cpp src/fake_looper.cpp src/fake_looper.h src/fake_window.cpp src/fake_window.h src/fake_assetmanager.cpp src/fake_assetmanager.h src/fake_egl.cpp src/fake_egl.h src/fake_inputqueue.cpp src/fake_inputqueue.h src/symbols.cpp src/symbols.h src/text_input_handler.cpp src/text_input_handler.h src/jni/xbox_live.cpp src/jni/xbox_live.h src/core_patches.cpp src/core_patches.h  src/thread_mover.cpp src/thread_mover.h src/jni/lib_http_client.cpp src/jni/lib_http_client.h src/jni/lib_http_client_websocket.cpp src/jni/lib_http_client_websocket.h src/jni/accounts.cpp src/jni/accounts.h src/jni/arrays.cpp src/jni/arrays.h src/jni/ecdsa.cpp src/jni/ecdsa.h src/jni/jbase64.cpp src/jni/jbase64.h src/jni/locale.cpp src/jni/locale.h src/jni/securerandom.cpp src/jni/securerandom.h src/jni/shahasher.cpp src/jni/shahasher.h src/jni/signature.cpp src/jni/signature.h src/jni/uuid.cpp src/jni/uuid.h src/jni/webview.cpp src/jni/webview.h src/util.cpp src/util.h src/xal_webview_factory.cpp src/xal_webview_factory.h src/xal_webview.h src/settings.cpp src/settings.h )
++add_executable(mcpelauncher-client src/main.cpp src/main.h src/window_callbacks.cpp src/window_callbacks.h src/xbox_live_helper.cpp src/xbox_live_helper.h src/splitscreen_patch.cpp src/splitscreen_patch.h src/cll_upload_auth_step.cpp src/cll_upload_auth_step.h src/gl_core_patch.cpp src/gl_core_patch.h src/hbui_patch.cpp src/hbui_patch.h src/utf8_util.h src/shader_error_patch.cpp src/shader_error_patch.h src/jni/jni_descriptors.cpp src/jni/java_types.h src/jni/main_activity.cpp src/jni/main_activity.h src/jni/store.cpp src/jni/store.h src/jni/cert_manager.cpp src/jni/cert_manager.h src/jni/http_stub.cpp src/jni/http_stub.h src/jni/package_source.cpp src/jni/package_source.h src/jni/jni_support.h src/jni/jni_support.cpp src/fake_looper.cpp src/fake_looper.h src/fake_window.cpp src/fake_window.h src/fake_assetmanager.cpp src/fake_assetmanager.h src/fake_egl.cpp src/fake_egl.h src/fake_inputqueue.cpp src/fake_inputqueue.h src/symbols.cpp src/symbols.h src/text_input_handler.cpp src/text_input_handler.h src/jni/xbox_live.cpp src/jni/xbox_live.h src/core_patches.cpp src/core_patches.h  src/thread_mover.cpp src/thread_mover.h src/jni/lib_http_client.cpp src/jni/lib_http_client.h src/jni/lib_http_client_websocket.cpp src/jni/lib_http_client_websocket.h src/jni/accounts.cpp src/jni/accounts.h src/jni/arrays.cpp src/jni/arrays.h src/jni/ecdsa.cpp src/jni/ecdsa.h src/jni/jbase64.cpp src/jni/jbase64.h src/jni/locale.cpp src/jni/locale.h src/jni/securerandom.cpp src/jni/securerandom.h src/jni/shahasher.cpp src/jni/shahasher.h src/jni/signature.cpp src/jni/signature.h src/jni/uuid.cpp src/jni/uuid.h src/jni/webview.cpp src/jni/webview.h src/util.cpp src/util.h src/xal_webview_factory.cpp src/xal_webview_factory.h src/xal_webview.h src/settings.cpp src/settings.h src/telemetry/telemetry_writer.c src/telemetry/telemetry_writer.h src/telemetry/fmod_listener_hook.c src/telemetry/telemetry_integration.h src/telemetry/mcpe_telemetry_abi.h )
+ target_link_libraries(mcpelauncher-client logger properties-parser mcpelauncher-core gamewindow filepicker msa-daemon-client daemon-server-utils cll-telemetry argparser baron android-support-headers libc-shim OpenSSL::Crypto ${CURL_LIBRARIES})
+ target_include_directories(mcpelauncher-client PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/build_info/ ${CURL_INCLUDE_DIRS})
+ 
+diff --git a/src/fake_egl.cpp b/src/fake_egl.cpp
+index a3834d3..322760d 100644
+--- a/src/fake_egl.cpp
++++ b/src/fake_egl.cpp
+@@ -1,4 +1,5 @@
+ #include "fake_egl.h"
++#include "telemetry/telemetry_writer.h"
+ #include "gl_core_patch.h"
+ #include "settings.h"
+ #include "imgui_ui.h"
+@@ -59,8 +60,20 @@ struct FrameMetricsState {
+             previousFrame = frameStart;
+         }
+ 
+-        if(!file)
++        {
++            auto frameUs = std::chrono::duration_cast<
++                std::chrono::microseconds>(frameStart - previousFrame).count();
++            auto swapUs = std::chrono::duration_cast<
++                std::chrono::microseconds>(swapEnd - frameStart).count();
++            if (frame)
++                mcpe_telemetry_frame((float)frameUs / 1000.0f,
++                                     (float)swapUs / 1000.0f);
++        }
++        if(!file) {
++            previousFrame = frameStart;
++            frame++;
+             return;
++        }
+ 
+         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+             frameStart - firstFrame).count();
+diff --git a/src/main.cpp b/src/main.cpp
+index b64d463..a24bf94 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -26,6 +26,8 @@
+ #include <mcpelauncher/linker.h>
+ #include <minecraft/imported/android_symbols.h>
+ #include "main.h"
++#include <dlfcn.h>
++#include "telemetry/telemetry_integration.h"
+ #include "fake_looper.h"
+ #include "fake_window.h"
+ #include "fake_assetmanager.h"
+@@ -480,7 +482,14 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
+     linker::update_LD_LIBRARY_PATH(PathHelper::findGameFile(std::string("lib/") + MinecraftUtils::getLibraryAbi()).data());
+     if(!disableFmod) {
+         try {
+-            MinecraftUtils::loadFMod();
++            // bottom-screen telemetry: interpose the FMOD 3D-listener call
++            // to publish camera pos/heading (see src/telemetry/)
++            void* fmodHostLib = MinecraftUtils::loadFMod(
++                {{MCPE_TELEMETRY_FMOD_LISTENER_SYM,
++                  (void*) &mcpe_telemetry_fmod_listener_hook}});
++            if (fmodHostLib)
++                mcpe_telemetry_set_real_fmod_listener(dlsym(
++                    fmodHostLib, MCPE_TELEMETRY_FMOD_LISTENER_SYM));
+         } catch(std::exception& e) {
+             Log::warn("FMOD", "Failed to load host libfmod: '%s', use experimental pulseaudio backend if available", e.what());
+         }
