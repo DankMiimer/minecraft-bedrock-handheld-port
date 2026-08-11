@@ -2,6 +2,33 @@
 
 ## v2.0.0-rc.3 (testing)
 
+- Added a Windows companion, `tools/mcbedrock-get`, that signs in with the
+  user's own Google account and downloads the arm64 split APKs for the
+  recommended 1.16.221.01 and the newest tested 1.21.51.01. Google no longer
+  serves Play downloads to third-party desktop clients, so the download itself
+  is delegated to `gplaydl` from minecraft-linux/google-play-api running under
+  WSL, which is also the only client that accepts a specific older version
+  code. A result without an `arm64_v8a` split is refused rather than written,
+  so an x86 download cannot reach the device. The companion bundles and
+  distributes no game content; Play refuses accounts that do not own Minecraft.
+- Documented obtaining APKs on Windows in `GETTING-BEDROCK-APKS.md`, covering
+  the companion and the manual launcher route, the arm64-versus-x86 mistake,
+  and how to group one download into a complete split set.
+- Fixed installation appearing to freeze the device. The launcher menu exits
+  before extraction begins, leaving its last frame on screen for the minutes
+  that follow. The installer now publishes progress and stage, and the launcher
+  draws a bar until extraction finishes. It stays inert where it cannot draw —
+  under sway, or with no writable `/dev/tty1` — so Wayland/Sway, KMSDRM, Mali
+  Weston, and X11 hosts behave exactly as before.
+- Fixed 1.16-era split sets being rejected with "split set must contain exactly
+  one base APK". A split name, not the payload, identifies the base, but the
+  resource-pack test ran first and 1.16 keeps its assets inside the base APK.
+  A base carrying resource packs now also satisfies the assets requirement.
+  1.21.51.01 is unaffected: its `install_pack` declares a split name.
+- Placed the canonical package tree, RGDS companion sources, release scripts,
+  and the host-side test suite under version control. Build scratch, release
+  staging, and local research directories stay excluded from the repository.
+
 - Replaced the Chat and Items framebuffer mirrors with independent lower-screen
   views. Gameplay remains visible on the other panel; companion touches are
   consumed locally and expressed as bounded, versioned commands.
