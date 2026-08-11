@@ -52,7 +52,7 @@ mkdir -p "$PROTO_OUT"
 "$AARCH64_CC" -O2 -ffunction-sections -fdata-sections -Wall -Wextra -std=c11 \
   -DBOTTOMD_HAVE_WAYLAND -I"$BD/wl_include" -I"$BD" -I"$PROTO_OUT" \
   -o "$OUT/bottomd" \
-  "$BD/bottomd.c" "$BD/companion.c" "$BD/draw.c" "$BD/gamepad.c" \
+  "$BD/bottomd.c" "$BD/companion.c" "$BD/draw.c" "$BD/gamepad.c" "$BD/keyfwd.c" \
   "$BD/pages.c" "$BD/paneltouch.c" "$BD/screenflip.c" "$BD/texture.c" "$BD/tiles.c" \
   "$BD/touchfwd.c" "$BD/worldinfo.c" "$BD/backend_ppm.c" \
   "$BD/backend_fbdev.c" "$BD/backend_wayland.c" "$PROTO_OUT/xdg-shell-protocol.c" \
