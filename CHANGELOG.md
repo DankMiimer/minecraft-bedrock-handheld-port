@@ -1,5 +1,71 @@
 # Changelog
 
+## v2.0.0-rc.3 (testing)
+
+- Replaced the Chat and Items framebuffer mirrors with independent lower-screen
+  views. Gameplay remains visible on the other panel; companion touches are
+  consumed locally and expressed as bounded, versioned commands.
+- Added an AYN-style 36-slot inventory surface, craftable recipe pane, chat
+  history pane, and touch keyboard. Unsupported actions remain visibly
+  read-only and are rejected rather than editing player memory.
+- Added runtime indexing and PNG loading for the user's installed Bedrock
+  resource packs. The port never packages or redistributes Mojang artwork.
+- Added a fail-closed `1.21.51.01` native profile pinned to library SHA-256
+  `45382be72491ec2cbe5dd4d1262989ad894b8fc611e5cbc16141d04171510927`.
+  It validates RTTI, the vtable target, and the instruction prologue before
+  changing a game-library pointer.
+- Fixed bottom-panel touch injection on the installed ROCKNIX/Sway build by
+  using its accepted unquoted input-identifier syntax.
+- Removed the render readback/mirror writer from the RGDS launcher client.
+
+## v2.0.0-rc.2 (testing)
+
+- Rebuilt the RGDS lower-screen UI around a persistent status stack and five
+  Minecraft-style bottom tabs: HUD, Chat, Items, Input, and Settings. The HUD
+  centers the terrain map; Input provides a 3×3 shortcut grid; settings expose
+  status, automatic Items selection, map night tint, and player following.
+- Added LevelDB snapshot health/hunger/dimension/world-time consumption and
+  on-demand Bedrock framebuffer mirroring for Chat and Items with lower-panel
+  touch forwarding. Capture stops off those tabs and stale frames fall back to
+  an explicit unavailable state instead of freezing or blanking the display.
+- Changed the RGDS release contract to require both telemetry and mirror hooks
+  in the pinned launcher client. The standard edition remains free of all
+  dual-screen markers and behavior.
+- Fixed the RGDS companion retaining terrain from the last local world after
+  joining another device's world over LAN. The client now detects direct
+  Bedrock network peers, invalidates cached local tiles and waypoints, pauses
+  local LevelDB rendering, and displays an explicit remote-world/map-unavailable
+  state while keeping live position and status telemetry.
+- Extended remote-session detection to IPv6 and direct public Bedrock peers;
+  IPv4-only detection missed the physical RGDS-to-RG34XX-SP LAN path.
+- Fixed delayed/inconsistent local-world selection by following the LevelDB
+  directory actually opened by the game instead of waiting for movement to
+  update a database log's mtime. Reduced the default scan radius from 24 to 12
+  chunks and publish the central visible area before any configured outer ring.
+- Restored bottom-panel touch by shipping the stable RGDS `bottomd` target,
+  which follows the displayed map panel through dynamically discovered raw
+  evdev devices rather than falling back to unreliable Wayland touch routing.
+- Kept LAN packet contents and peer addresses out of telemetry, logs, and
+  support bundles; the detector records only a short-lived remote-session flag.
+- Made 1.16.221.01 the recommended/default no-RenderDragon version for its
+  handheld-friendly UI scaling, while fingerprinting the original
+  1.21.51.01 library as the newest tested no-RenderDragon arm64 option.
+
+## v2.0.0-rc.1 (testing)
+
+- Split the port into a lightweight universal standard edition and a separate
+  arm64 RGDS dual-screen edition, both using the same shared user-data root.
+- Replaced Bedrock directory-name heuristics with manifest metadata, guarded
+  compatibility rules, and native-library fingerprints.
+- Made Bedrock 1.16.221.01 the recommended/default version because its UI
+  scaling is the most usable on handheld displays.
+- Registered the exact original no-RenderDragon 1.21.51.01 native library as
+  the newest tested no-RenderDragon arm64 build. Later or unknown reuploads
+  using the same version name show a warning and are never selected by default.
+- Moved RenderDragon-era builds to optional, non-blocking compatibility smoke
+  coverage because their stutter makes them unsuitable recommendations on the
+  physical reference devices.
+
 ## v1.6 (2026-07-10)
 
 - **New launcher menu.** Starting **Minecraft Bedrock** now opens a full

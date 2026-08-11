@@ -1,0 +1,31 @@
+{
+  "schema": 2,
+  "labels": {
+    "validated": "Passed the physical reference matrix",
+    "best_effort": "Uses a tested capability path but is not validated on this exact combination",
+    "unsupported": "Known ABI, licensing, graphics, or launcher incompatibility"
+  },
+  "recommendations": {
+    "recommended": "Default everyday build with the best handheld UI scaling",
+    "newest_tested_no_renderdragon": "Newest exact no-RenderDragon artifact tested on the physical arm64 matrix",
+    "optional_smoke": "Selectable for compatibility diagnostics but not a release gate",
+    "not_recommended": "Known or unclassified renderer variant that is not selected automatically"
+  },
+  "defaults": [
+    {"range": "1.16-1.21", "status": "best_effort"},
+    {"range": "1.26+", "status": "unsupported", "reason": "PairIP/new Android ABI requires legal upstream launcher support"}
+  ],
+  "versions": [
+    {"version": "1.16.40.02", "abi": "armhf", "status": "best_effort", "profile": "legacy_1_16", "renderer_profile": "legacy_gles_no_renderdragon", "recommendation": "optional_smoke", "patches": ["edumode_guard", "http_resolver_guard"], "reason": "older no-RenderDragon armhf anchor; physical release gate pending"},
+    {"version": "1.16.221.01", "abi": "arm64", "status": "best_effort", "profile": "legacy_1_16", "renderer_profile": "legacy_gles_no_renderdragon", "recommendation": "recommended", "patches": ["edumode_guard", "http_resolver_guard"], "reason": "recommended everyday build because its legacy UI scales cleanly on handheld displays; guarded patches, Mali rendering, active RG34 audio, RGDS live telemetry and companion startup, and forced-timeout restoration passed on RG34XX-SP/Knulli and RGDS/ROCKNIX; full acceptance remains pending"},
+    {"version": "1.16.221.01", "abi": "armhf", "status": "best_effort", "profile": "legacy_1_16", "renderer_profile": "legacy_gles_no_renderdragon", "recommendation": "recommended", "patches": ["edumode_guard", "http_resolver_guard"], "reason": "recommended armhf target for usable UI scaling; R36S KMSDRM validation required"},
+    {"version": "1.17.41.01", "abi": "arm64", "status": "best_effort", "renderer_profile": "renderdragon_or_unclassified", "recommendation": "optional_smoke", "patches": ["http_resolver_guard"], "reason": "RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter"},
+    {"version": "1.20.15.01", "abi": "arm64", "status": "best_effort", "renderer_profile": "renderdragon_or_unclassified", "recommendation": "optional_smoke", "reason": "RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter"},
+    {"version": "1.20.51.01", "abi": "arm64", "status": "best_effort", "renderer_profile": "renderdragon_or_unclassified", "recommendation": "optional_smoke", "asset_layout": "preserve_nested", "reason": "RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter"},
+    {"version": "1.20.62.02", "abi": "arm64", "status": "best_effort", "renderer_profile": "renderdragon_or_unclassified", "recommendation": "optional_smoke", "asset_layout": "preserve_nested", "optional_patches": ["auto_compaction"], "reason": "guarded compaction signature matched and timed launch/cleanup passed on RG34XX-SP/Knulli; retained as an optional compatibility smoke, not a 2.0 release gate"},
+    {"version": "1.21.50.28", "abi": "arm64", "status": "best_effort", "renderer_profile": "renderdragon_or_unclassified", "recommendation": "optional_smoke", "reason": "RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter"},
+    {"version": "1.21.51.01", "abi": "arm64", "game_library_sha256": "45382be72491ec2cbe5dd4d1262989ad894b8fc611e5cbc16141d04171510927", "status": "best_effort", "profile": "default", "renderer_profile": "legacy_gles_no_renderdragon", "recommendation": "newest_tested_no_renderdragon", "asset_layout": "preserve_nested", "known_limitations": ["RGDS terrain tiles are available for local worlds only; a LAN client has no local copy of the host LevelDB, so the companion preserves live telemetry but labels the remote terrain map unavailable and never displays cached terrain from another world"], "reason": "exact original-release native library: install, world load, gameplay, audio, clean exit, dual-screen telemetry, local-world minimap, swapping, controls, and touch passed on RG34XX-SP/Knulli and RGDS/ROCKNIX; newer UI scaling is less usable than 1.16.221.01"},
+    {"version": "1.21.51.01", "abi": "arm64", "status": "best_effort", "profile": "default", "renderer_profile": "unclassified_reupload", "recommendation": "not_recommended", "asset_layout": "preserve_nested", "warning": "This 1.21.51.01 native library does not match the tested original no-RenderDragon fingerprint. A later reupload enabled RenderDragon and may stutter badly; use 1.16.221.01 or the fingerprinted original release.", "reason": "version-name-only classification is unsafe because the later reupload reused 1.21.51.01 with different renderer behavior"},
+    {"version": "1.26.32.2", "abi": "arm64", "status": "unsupported", "renderer_profile": "new_android_abi", "recommendation": "not_recommended", "reason": "PairIP/new Android ABI"}
+  ]
+}

@@ -9,6 +9,7 @@ attached to the actual projects.
 | [MCMrARM/linux-gamepad](https://github.com/MCMrARM/linux-gamepad) | Gamepad input library used by the launcher stack. |
 | ImpressiveStay | Original R36S/RK3326 MCPE launcher port that inspired this handheld porting work. |
 | binarycounter | Westonpack/crusty graphics work that helped make libmali handheld devices viable. |
+| [exojosh/AynThorSecondScreen](https://github.com/exojosh/AynThorSecondScreen) and [Android companion](https://github.com/exojosh/Android_AynThor_MinecraftSecondScreen) | CC0 AYN Thor project whose persistent status, tool-page, and bottom-navigation architecture inspired the original RGDS companion redesign. No source or Minecraft assets are redistributed. |
 | Knulli and ROCKNIX communities | Firmware environments and testing context for RG34XX-SP and RG DS. |
 | Mojang Studios / Microsoft | Minecraft itself. Buy the game; no game files are distributed here. |
 

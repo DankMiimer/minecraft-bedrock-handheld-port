@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "modules": [
+    {
+      "id": "weston_pkg_0.2.aarch64",
+      "architecture": "aarch64",
+      "backends": ["mali", "x11", "wayland"],
+      "api": "westonpack-0.2",
+      "filename": "weston_pkg_0.2.aarch64.squashfs",
+      "url": "https://raw.githubusercontent.com/PortsMaster/PortMaster-New/main/runtimes/weston_pkg_0.2.aarch64.squashfs",
+      "sha256": "0bccaeebc11296bb1fe4278c9677cb82965c5a04bcd63745fa09d78228bc1a93",
+      "size": 55398400,
+      "license": "see PortMaster runtime metadata"
+    }
+  ]
+}

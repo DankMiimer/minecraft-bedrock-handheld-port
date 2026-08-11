@@ -31,7 +31,7 @@ index 0c59a90..993dfa8 100644
          focusedWindow->onGamepadAxis(gp->getIndex(), mapAxisId(axis), value);
  }
 diff --git a/src/window_eglut.cpp b/src/window_eglut.cpp
-index 138dff1..88b7b71 100644
+index 138dff1..c68161a 100644
 --- a/src/window_eglut.cpp
 +++ b/src/window_eglut.cpp
 @@ -3,6 +3,10 @@
@@ -45,63 +45,40 @@ index 138dff1..88b7b71 100644
  #include <sstream>
  #include <eglut.h>
  #define XK_MISCELLANY
-@@ -62,6 +66,55 @@ void EGLUTWindow::setIcon(std::string const &iconPath) {
+@@ -62,6 +66,32 @@ void EGLUTWindow::setIcon(std::string const &iconPath) {
  }
  
  void EGLUTWindow::makeCurrent(bool active) {
 +    const char* crustyBridgeEnv = std::getenv("GAMEWINDOW_EGLUT_CRUSTY_CONTEXT");
 +    if (crustyBridgeEnv && *crustyBridgeEnv && strcmp(crustyBridgeEnv, "0") != 0) {
-+        // Crusty's public eglMakeCurrent is intentionally a success-returning
-+        // stub for application callers. Transfer its real SDL context using
-+        // the private handle slots from Westonpack 0.2.7.1's aarch64 crusty
-+        // X11-EGL build.
-+        using MakeCurrent = int (*)(void *, void *);
-+        using GetError = const char *(*)();
-+        static auto makeBackendCurrent = reinterpret_cast<MakeCurrent>(
-+            dlsym(RTLD_DEFAULT, "_SDL_GL_MakeCurrent"));
-+        static auto getBackendError = reinterpret_cast<GetError>(
-+            dlsym(RTLD_DEFAULT, "_SDL_GetError"));
-+
-+        Dl_info info{};
-+        bool crustyPresent = makeBackendCurrent &&
-+            dladdr(reinterpret_cast<void *>(makeBackendCurrent), &info) &&
-+            info.dli_fbase;
-+        if (!crustyPresent) {
-+            // No crusty in this process (e.g. Mesa/Panfrost device where
-+            // westonwrap bypasses the shim) -> use the native EGL path.
-+            static bool warned = false;
-+            if (!warned) {
-+                fprintf(stderr, "EGLUT crusty context bridge unavailable; "
-+                                "using native EGL context path\n");
-+                warned = true;
-+            }
-+        } else {
-+
-+        constexpr uintptr_t SDL_WINDOW_SLOT = 0x1e978;
-+        constexpr uintptr_t SDL_CONTEXT_SLOT = 0x1e980;
-+        auto base = reinterpret_cast<uintptr_t>(info.dli_fbase);
-+        auto windowSlot = reinterpret_cast<void **>(base + SDL_WINDOW_SLOT);
-+        auto contextSlot = reinterpret_cast<void **>(base + SDL_CONTEXT_SLOT);
-+        void *window = *windowSlot;
-+        void *context = active ? *contextSlot : nullptr;
-+
-+        if (!window || (active && !context)) {
-+            fprintf(stderr, "EGLUT crusty context handles are unavailable\n");
-+            return;
++        // The matching runtime bridge records Crusty's SDL handles through
++        // normal symbol interposition and exposes this stable API. No private
++        // data address from a particular Westonpack build is read here.
++        using ContextApiV1 = int (*)(unsigned int, int);
++        static auto contextApi = reinterpret_cast<ContextApiV1>(
++            dlsym(RTLD_DEFAULT, "crusty_gamewindow_context_v1"));
++        if (contextApi) {
++            int result = contextApi(1U, active ? 1 : 0);
++            if (result == 0)
++                return;
++            fprintf(stderr, "EGLUT crusty context API v1 unavailable: %d; "
++                            "using native EGL context path\n", result);
 +        }
-+
-+        int result = makeBackendCurrent(window, context);
-+        if (result != 0)
-+            fprintf(stderr, "EGLUT crusty context bridge failed: %d (%s)\n",
-+                    result, getBackendError ? getBackendError() : "unknown SDL error");
-+        return;
++        // No crusty bridge in this process (for example a Panfrost bypass):
++        // continue through the native EGL path. The launcher validates that
++        // the bridge module exists before enabling a Crusty backend.
++        static bool warned = false;
++        if (!warned) {
++            fprintf(stderr, "EGLUT crusty context API v1 unavailable; "
++                            "using native EGL context path\n");
++            warned = true;
 +        }
 +    }
 +
  #ifdef GAMEWINDOW_X11_LOCK
      std::lock_guard<std::recursive_mutex> lock(x11_sync);
  #endif
-@@ -75,6 +128,8 @@ void EGLUTWindow::show() {
+@@ -75,6 +105,8 @@ void EGLUTWindow::show() {
      eglutShowWindow();
      currentWindow = this;
      addWindowToGamepadManager();
@@ -110,7 +87,7 @@ index 138dff1..88b7b71 100644
  }
  
  void EGLUTWindow::close() {
-@@ -141,6 +196,8 @@ void EGLUTWindow::setSwapInterval(int interval) {
+@@ -141,6 +173,8 @@ void EGLUTWindow::setSwapInterval(int interval) {
  void EGLUTWindow::_eglutIdleFunc() {
      if (currentWindow == nullptr)
          return;

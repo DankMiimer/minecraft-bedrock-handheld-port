@@ -1,1 +1,5 @@
-016b331e03d1d6787d207a096cd7ec43572e5dd9c5dc8daaf2697f78ae9dcddb  minecraftbedrock-1.6.zip
+5aea156a1ca7e0f6ed8ea4933a07b1e17930a5dbb5ec08aa0f87b7465169af4b  minecraftbedrock-standard-v2.0.0-rc.2.zip
+c43cf8edead9b3dabbb50c41c74eb78978a97eca460b7e6ad6b41a6c3478fddc  minecraftbedrock-rgds-v2.0.0-rc.2.zip
+bd951b40d9e26758eae41ab0de710636665bf5cad5c391c5a8b6243348bde4fa  minecraftbedrock-source-v2.0.0-rc.2.zip
+94c923183488e1ada8f38180127bd00d755fc2b704bb65cc34392b85cd2f726e  minecraftbedrock-standard-v2.0.0-rc.2.spdx.json
+536eb116305fc89ca12abb33fa86baf3f02bfb008b0e20fa22533b1487f2983f  minecraftbedrock-rgds-v2.0.0-rc.2.spdx.json

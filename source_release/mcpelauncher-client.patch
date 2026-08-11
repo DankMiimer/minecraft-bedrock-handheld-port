@@ -670,9 +670,11 @@ index d0e1907..b64d463 100644
 +    // This changes the scheduled "Running AutoCompaction" task into its
 +    // existing no-op return path. Load/save and threshold-triggered
 +    // compactions remain intact.
-+    auto gameDir = PathHelper::getGameDir();
-+    if(gameDir.find("1.20.62.02-official-arm64") == std::string::npos) {
-+        Log::warn("Smoothness", "Periodic auto-compaction patch is unavailable for %s", gameDir.c_str());
++    const char *versionName = std::getenv("MCPE_BEDROCK_VERSION_NAME");
++    const char *abi = std::getenv("MCPE_BEDROCK_ABI_LABEL");
++    if(versionName == nullptr || std::strcmp(versionName, "1.20.62.02") != 0 ||
++       abi == nullptr || std::strcmp(abi, "arm64") != 0) {
++        Log::warn("Smoothness", "Periodic auto-compaction patch rejected by version metadata");
 +        return;
 +    }
 +

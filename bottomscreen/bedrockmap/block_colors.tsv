@@ -1,0 +1,161 @@
+minecraft:stone	112	112	112
+minecraft:cobblestone	100	100	100
+minecraft:mossy_cobblestone	90	105	90
+minecraft:stonebrick	100	100	104
+minecraft:stone_bricks	100	100	104
+minecraft:granite	149	103	85
+minecraft:diorite	188	188	190
+minecraft:andesite	130	131	131
+minecraft:deepslate	80	80	86
+minecraft:bedrock	60	60	60
+minecraft:grass	118	170	76
+minecraft:grass_block	118	170	76
+minecraft:grass_path	148	120	68
+minecraft:dirt_path	148	120	68
+minecraft:dirt	134	96	67
+minecraft:coarse_dirt	119	85	59
+minecraft:podzol	122	80	42
+minecraft:mycelium	110	92	104
+minecraft:farmland	114	76	48
+minecraft:mud	60	57	60
+minecraft:clay	160	166	179
+minecraft:sand	219	207	163
+minecraft:red_sand	190	102	33
+minecraft:sandstone	216	203	155
+minecraft:red_sandstone	186	99	29
+minecraft:gravel	131	127	126
+minecraft:water	42	80	162
+minecraft:flowing_water	42	80	162
+minecraft:lava	207	91	19	15
+minecraft:flowing_lava	207	91	19	15
+minecraft:ice	145	183	253
+minecraft:packed_ice	120	160	240
+minecraft:blue_ice	100	140	235
+minecraft:snow	248	248	248
+minecraft:snow_layer	240	240	240
+minecraft:powder_snow	235	235	240
+minecraft:leaves	54	108	32
+minecraft:leaves2	54	108	32
+minecraft:oak_leaves	54	108	32
+minecraft:spruce_leaves	42	80	40
+minecraft:birch_leaves	96	128	64
+minecraft:jungle_leaves	52	120	40
+minecraft:acacia_leaves	80	120	36
+minecraft:dark_oak_leaves	40	88	24
+minecraft:mangrove_leaves	48	112	36
+minecraft:cherry_leaves	228	160	196
+minecraft:azalea_leaves	70	118	46
+minecraft:log	102	81	50
+minecraft:log2	102	81	50
+minecraft:oak_log	102	81	50
+minecraft:spruce_log	62	44	24
+minecraft:birch_log	200	196	180
+minecraft:jungle_log	86	68	28
+minecraft:acacia_log	110	62	38
+minecraft:dark_oak_log	52	40	24
+minecraft:mangrove_log	70	40	32
+minecraft:cherry_log	54	33	44
+minecraft:planks	158	132	80
+minecraft:oak_planks	158	132	80
+minecraft:spruce_planks	104	78	47
+minecraft:birch_planks	192	175	121
+minecraft:jungle_planks	154	110	77
+minecraft:acacia_planks	168	90	50
+minecraft:dark_oak_planks	66	43	20
+minecraft:tallgrass	110	160	70
+minecraft:tall_grass	110	160	70
+minecraft:double_plant	110	160	70
+minecraft:fern	100	150	66
+minecraft:large_fern	100	150	66
+minecraft:deadbush	146	99	40
+minecraft:cactus	88	128	38
+minecraft:reeds	148	192	101
+minecraft:sugar_cane	148	192	101
+minecraft:bamboo	94	130	36
+minecraft:vine	60	110	40
+minecraft:waterlily	32	96	32
+minecraft:lily_pad	32	96	32
+minecraft:pumpkin	196	118	22
+minecraft:melon_block	110	160	48
+minecraft:melon	110	160	48
+minecraft:wheat	220	190	90
+minecraft:hay_block	198	164	38
+minecraft:yellow_flower	220	200	60
+minecraft:red_flower	200	60	60
+minecraft:poppy	200	60	60
+minecraft:dandelion	220	200	60
+minecraft:kelp	40	100	60
+minecraft:seagrass	50	110	60
+minecraft:coal_ore	70	70	70
+minecraft:iron_ore	150	130	110
+minecraft:copper_ore	120	125	110
+minecraft:gold_ore	160	140	80
+minecraft:diamond_ore	100	160	160
+minecraft:redstone_ore	120	70	70
+minecraft:lapis_ore	80	95	140
+minecraft:emerald_ore	80	140	95
+minecraft:obsidian	22	18	32
+minecraft:crying_obsidian	32	20	48	10
+minecraft:netherrack	100	40	38
+minecraft:soul_sand	82	62	50
+minecraft:soul_soil	76	58	46
+minecraft:crimson_nylium	140	32	32
+minecraft:warped_nylium	22	116	106
+minecraft:basalt	74	74	78
+minecraft:blackstone	42	38	44
+minecraft:glowstone	200	160	80	15
+minecraft:magma	140	64	28	3
+minecraft:quartz_ore	110	86	82
+minecraft:end_stone	220	224	160
+minecraft:purpur_block	170	126	170
+minecraft:mushroom_stem	200	190	180
+minecraft:brown_mushroom_block	140	104	80
+minecraft:red_mushroom_block	180	46	42
+minecraft:glass	200	220	230
+minecraft:bricks	146	80	68
+minecraft:brick_block	146	80	68
+minecraft:bookshelf	158	132	80
+minecraft:crafting_table	140	104	64
+minecraft:furnace	90	90	90
+minecraft:chest	158	116	48
+minecraft:torch	240	200	100	14
+minecraft:wool	230	230	230
+minecraft:white_wool	230	230	230
+minecraft:concrete	160	160	160
+minecraft:terracotta	152	94	68
+minecraft:hardened_clay	152	94	68
+minecraft:rail	120	110	90
+minecraft:golden_rail	160	130	60
+minecraft:mob_spawner	28	40	56
+minecraft:web	220	220	220
+minecraft:fire	230	120	40	15
+minecraft:amethyst_cluster	220	170	90	5
+minecraft:beacon	220	170	90	15
+minecraft:brewing_stand	220	170	90	1
+minecraft:campfire	220	170	90	15
+minecraft:candle	220	170	90	3
+minecraft:conduit	220	170	90	15
+minecraft:end_gateway	220	170	90	15
+minecraft:end_portal	220	170	90	15
+minecraft:end_rod	220	170	90	14
+minecraft:froglight	220	170	90	15
+minecraft:glow_lichen	220	170	90	7
+minecraft:jack_o_lantern	220	170	90	15
+minecraft:lantern	220	170	90	15
+minecraft:lit_furnace	220	170	90	13
+minecraft:lit_pumpkin	220	170	90	15
+minecraft:lit_redstone_lamp	220	170	90	15
+minecraft:ochre_froglight	220	170	90	15
+minecraft:pearlescent_froglight	220	170	90	15
+minecraft:redstone_lamp	220	170	90	15
+minecraft:redstone_torch	220	170	90	7
+minecraft:respawn_anchor	220	170	90	15
+minecraft:sculk_catalyst	220	170	90	6
+minecraft:seaLantern	220	170	90	15
+minecraft:sea_lantern	220	170	90	15
+minecraft:shroomlight	220	170	90	15
+minecraft:soul_campfire	220	170	90	10
+minecraft:soul_fire	220	170	90	10
+minecraft:soul_lantern	220	170	90	10
+minecraft:soul_torch	220	170	90	10
+minecraft:verdant_froglight	220	170	90	15

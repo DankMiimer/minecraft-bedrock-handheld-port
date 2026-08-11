@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "minecraftbedrock.rgds",
+  "version": "2.0.0-rc.1",
+  "name": "Minecraft Bedrock RGDS",
+  "payload": "minecraftbedrock-rgds",
+  "entrypoint": "Minecraft Bedrock RGDS.sh",
+  "channel": "testing",
+  "shared_data": "minecraftbedrock-data",
+  "host_abis": [
+    "aarch64"
+  ],
+  "updater_schema": 2
+}

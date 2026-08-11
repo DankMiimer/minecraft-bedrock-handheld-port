@@ -14,3 +14,15 @@
 # Local testing noise.
 *.log
 *.csv
+__pycache__/
+*.pyc
+
+# Local research and build scratch. Never publish these:
+#   build/analysis-*.txt        objdump disassembly of libminecraftpe.so
+#   build/device-captures/      UI textures captured from the running game
+#   build/screenshots/          the same
+# Those are derived Minecraft material and must not be redistributed. The rest
+# is multi-hundred-MB build output and release staging that no clone needs.
+/build/
+/dist/
+/recovery/

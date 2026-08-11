@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<gameList>
+    <game>
+        <path>./Minecraft Bedrock.sh</path>
+        <name>Minecraft Bedrock</name>
+        <desc>Lightweight single-screen PortMaster launcher with capability-selected aarch64 and armhf backends. RGDS uses a separate dual-screen edition. Requires a legally acquired official APK; no game files or license bypass are included.</desc>
+        <releasedate>20110101T000000</releasedate>
+        <developer>Mojang Studios</developer>
+        <publisher>Xbox Game Studios</publisher>
+        <genre>Sandbox/Survival</genre>
+        <image>./screenshot.png</image>
+    </game>
+</gameList>
