@@ -1,6 +1,6 @@
 fa392ef2d571c55bde8fd80ab4e1b5d3416afe0cdf21ab0a304c6c70ce9216d1  minecraftbedrock-standard-v2.0.0-rc.3.zip
 734b371f3073f44b743c0b2236e4126260a5586089d64938369ab56969a4f02b  minecraftbedrock-rgds-v2.0.0-rc.3.zip
-ca2c3cc0b81f3f09e938d75b3965170b345e62f0afbcb9150e6ab49dd5f93f02  minecraftbedrock-source-v2.0.0-rc.3.zip
+6ffd57d8612b1d19dae23edad16acff5d5bbf24145d8b2a55d2ac68e98702a9a  minecraftbedrock-source-v2.0.0-rc.3.zip
 2706e301c7a86f40fa9c5c6b49d0b7dc6e2b3597537c5506c5fb2a3c158d2813  minecraftbedrock-standard-v2.0.0-rc.3.spdx.json
 7753b8475dc83f7d09bf8242f4267225342a733ee8cdc22c88d7c970da87df8c  minecraftbedrock-rgds-v2.0.0-rc.3.spdx.json
-0a5203fbb1ed46ee4ec6dc3cf3aa85a8013b9a5adc4b373ba1ab3680659c3e26  mcbedrock-get-windows-v2.0.0-rc.3.zip
+eb09f3b32c910d2529c353fd03dcbb42c52d926ec57c7f99e3be73ee6fb4548c  mcbedrock-get-windows-v2.0.0-rc.3.zip
