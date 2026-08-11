@@ -17,12 +17,9 @@
 __pycache__/
 *.pyc
 
-# Local research and build scratch. Never publish these:
-#   build/analysis-*.txt        objdump disassembly of libminecraftpe.so
-#   build/device-captures/      UI textures captured from the running game
-#   build/screenshots/          the same
-# Those are derived Minecraft material and must not be redistributed. The rest
-# is multi-hundred-MB build output and release staging that no clone needs.
+# Local working directories: scratch, build output, release staging, and
+# session logs. None of it belongs in a clone, and none of it may be
+# redistributed. Treat everything under these as local-only.
 /build/
 /dist/
 /recovery/
