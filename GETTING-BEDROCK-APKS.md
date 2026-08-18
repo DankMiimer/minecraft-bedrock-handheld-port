@@ -35,19 +35,24 @@ the helper.
 
 ### 2. Download and verify the helper
 
-Download and extract:
+Go to the [releases page](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases)
+and download the **newest** `mcbedrock-get-windows-*.zip`, then extract it.
 
-[mcbedrock-get-windows-v2.0.0-rc.4.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip)
+> The helper is currently attached to a **prerelease**, so it may not be on
+> whichever release GitHub marks *Latest*. Scroll to the newest release that has
+> an `mcbedrock-get-windows-*.zip` asset. No version is linked from this page on
+> purpose — a pinned link stops being right the moment a new helper is
+> published.
 
-Compare its SHA-256 with the release's
-[SHA256SUMS.txt](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/SHA256SUMS.txt):
+Compare its SHA-256 with the `SHA256SUMS.txt` published **on that same release**:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-v2.0.0-rc.4.zip
+Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-<version>.zip
 ```
 
 PyInstaller executables are sometimes flagged by antivirus heuristics. Do not
-allow a blocked file unless its hash matches the published release checksum.
+allow a blocked file unless its hash matches the checksum published alongside
+it.
 
 ### 3. Sign in and install the downloader
 
@@ -67,10 +72,11 @@ Ubuntu under `~/.local/share/mcbedrock-get/`. Pressing **Sign out** removes both
 copies. If Ubuntu is unavailable it clears Windows first and tells you to run
 Sign out again after WSL starts. Nothing is uploaded by this project.
 
-Do not use the rc.3 helper: its interactive WSL authentication could loop at
-**Passing your Google session to the downloader** until the five-minute
-timeout. rc.4 transfers the same valid token privately over stdin and uses the
-upstream non-interactive path.
+**Always take the newest helper.** The rc.3 build in particular should not be
+used: its interactive WSL authentication could loop at **Passing your Google
+session to the downloader** until the five-minute timeout. rc.4 and later
+transfer the same valid token privately over stdin and use the upstream
+non-interactive path.
 
 ### 4. Choose a version
 
