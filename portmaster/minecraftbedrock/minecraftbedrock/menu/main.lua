@@ -42,6 +42,13 @@ local EXIT_ON_PLAY = os.getenv("MCPE_MENU_EXIT_ON_PLAY") == "1"
 -- by remote display tests so the GL context is never hard-killed mid-frame,
 -- which corrupts the display state on fbdev-mali devices. Unset in normal use.
 local AUTOQUIT = tonumber(os.getenv("MCPE_MENU_AUTOQUIT") or "")
+-- Test hook: write a PNG of the Nth drawn frame to this absolute path. LOVE
+-- renders through DRM on fbdev-mali devices, where framebuffer grabbers only
+-- ever see the frontend's last frame, so the UI can only be inspected from
+-- inside the process. Unset in normal use.
+local SHOT_PATH = os.getenv("MCPE_MENU_SHOT")
+local SHOT_AT = tonumber(os.getenv("MCPE_MENU_SHOT_FRAME") or "") or 45
+local shotFrames, shotDone = 0, false
 local firstFrameReported = false
 
 -- ---------------------------------------------------------------- palette --
@@ -768,6 +775,17 @@ local function shadowText(font, color, str, x, y, limit, align)
   text(font, color, str, x, y, limit, align)
 end
 
+-- Trim a string until it fits on one line. Header text that wraps drops its
+-- tail onto the accent rule below, where it is unreadable; a shortened line
+-- is always better than a second one. Narrow panels need this even when the
+-- 720px screens have room.
+local function fitText(font, str, maxw)
+  if font:getWidth(str) <= maxw then return str end
+  local s = str
+  while #s > 1 and font:getWidth(s .. "...") > maxw do s = s:sub(1, #s - 1) end
+  return s .. "..."
+end
+
 local function lerp(a, b, t) return a + (b - a) * t end
 
 -- Posterized gradient sky drawn as plain batched rectangles every frame —
@@ -962,10 +980,21 @@ local function drawChrome(subtitle)
   px(COL.panel, 0, 0, W, hh)
   px(COL.bevel_lt, 0, 0, W, S)
   shadowText(fonts.title, COL.accent_hi, "MINECRAFT BEDROCK", 8 * S, hh * 0.14)
-  text(fonts.small, COL.dim, subtitle, 9 * S, hh * 0.62)
+  -- Version tag: always one line. Wrapped, its tail lands on the accent rule
+  -- below and is unreadable, so shed the "PORT " prefix before the version
+  -- itself and reserve its width from the subtitle beside it.
+  local fsm, vw, vlabel = fonts.small, 0, nil
   if portVersion ~= "" then
-    text(fonts.small, COL.faint, "PORT " .. portVersion:upper(),
-         W - 100 * S, hh * 0.62, 92 * S, "right")
+    vlabel = "PORT " .. portVersion:upper()
+    if fsm:getWidth(vlabel) > W * 0.42 then vlabel = portVersion:upper() end
+    vlabel = fitText(fsm, vlabel, W * 0.42)
+    vw = fsm:getWidth(vlabel)
+  end
+  text(fsm, COL.dim, fitText(fsm, subtitle, W - 26 * S - vw),
+       9 * S, hh * 0.62, W - 26 * S - vw)
+  if vlabel then
+    text(fsm, COL.faint, vlabel, W - 8 * S - vw,
+         math.min(hh * 0.62, hh - fsm:getHeight() - 2 * S), vw + 2 * S)
   end
   px(COL.accent, 0, hh, W, 2 * S)
   px(COL.accent_dk, 0, hh + 2 * S, W, S)
@@ -1008,13 +1037,25 @@ end
 --          slider={pos=0..1, label=}, toggle=true/false}
 local function drawList(top, items, selected, opts)
   opts = opts or {}
-  local rowH = floor(H * (opts.rowH or 0.115))
+  local ih, sh = fonts.item:getHeight(), fonts.small:getHeight()
+  local hasDesc = false
+  for _, it in ipairs(items) do
+    if it.desc and it.desc ~= "" then hasDesc = true break end
+  end
+  -- A row is never shorter than the text it holds. Fractions of the screen
+  -- height alone gave 33px rows for two lines needing 37, so the second line
+  -- ran through the row's own border and under the first one.
+  local minRow = (hasDesc and (ih + sh) or ih) + 8 * S
+  local rowH = math.max(floor(H * (opts.rowH or 0.115)), minRow)
   local x, w = floor(W * 0.05), floor(W * 0.90)
-  local listH = H - top - floor(H * 0.08)
+  -- Strip above the list for the position counter, always reserved so the
+  -- row geometry does not shift when a list grows past one screen.
+  local gap = math.max(floor(H * 0.022), sh + 3 * S)
+  local listH = H - top - gap - floor(H * 0.08)
   local visible = math.max(1, floor(listH / rowH))
   local first = math.max(1, math.min(selected - floor(visible / 2),
                                      #items - visible + 1))
-  local y = top + floor(H * 0.022)
+  local y = top + gap
   for i = first, math.min(#items, first + visible - 1) do
     local it = items[i]
     local isSel = (i == selected)
@@ -1022,6 +1063,10 @@ local function drawList(top, items, selected, opts)
     local by = isSel and (y - S) or y   -- the selected button lifts slightly
     local st = isSel and (it.danger and BTN.dangerSel or BTN.selected)
                       or BTN.normal
+    -- Title and description are stacked by font metrics and centred as one
+    -- block, so neither line can overlap the other or cross the row border.
+    local blockH = (it.desc and it.desc ~= "") and (ih + sh) or ih
+    local ty0 = by + floor((bh - blockH) / 2)
     button3d(x, by, w, bh, st, isSel and 3 or 2)
     local tx = x + 18 * S
     if it.icon then
@@ -1032,7 +1077,7 @@ local function drawList(top, items, selected, opts)
       tx = x + 31 * S
     elseif isSel and blinkOn then
       text(fonts.item, it.danger and COL.danger or COL.accent,
-           ">", x + 5 * S, by + rowH * 0.13)
+           ">", x + 5 * S, ty0)
     end
     -- right-hand widget first, so the row's text can stop short of it
     local wleft = x + w - 12 * S
@@ -1041,7 +1086,7 @@ local function drawList(top, items, selected, opts)
       local sx = x + w - sw - 12 * S
       drawSlider(sx, by + floor(bh / 2) - 4 * S, sw, it.slider.pos, isSel)
       text(fonts.small, isSel and COL.accent_hi or COL.dim, it.slider.label,
-           tx, by + rowH * 0.18, sx - tx - 14 * S, "right")
+           tx, ty0 + floor((ih - sh) / 2), sx - tx - 14 * S, "right")
       wleft = sx - 14 * S
     elseif it.toggle ~= nil then
       local wx = x + w - 56 * S
@@ -1050,22 +1095,24 @@ local function drawList(top, items, selected, opts)
     elseif it.value then
       local vcol = isSel and COL.accent_hi or COL.dim
       text(fonts.item, vcol, "< " .. it.value .. " >",
-           tx, by + rowH * 0.13, x + w - tx - 12 * S, "right")
+           tx, ty0, x + w - tx - 12 * S, "right")
     end
     local mainCol = it.disabled and COL.faint
         or (it.danger and (isSel and COL.danger or COL.danger_dk)
         or (isSel and COL.fg or COL.dim))
-    text(fonts.item, mainCol, it.title, tx, by + rowH * 0.13, wleft - tx)
+    text(fonts.item, mainCol, it.title, tx, ty0, wleft - tx)
     if it.desc and it.desc ~= "" then
       text(fonts.small, isSel and COL.dim or COL.faint, it.desc,
-           tx, by + rowH * 0.56, wleft - tx)
+           tx, ty0 + ih, wleft - tx)
     end
     y = y + rowH
   end
   if #items > visible then
+    -- Right-aligned to the list frame, not the screen edge, and lifted clear
+    -- of the first row: it used to be drawn straight through the border.
     text(fonts.small, COL.faint,
          string.format("%d/%d", selected, #items),
-         W - 60 * S, top + 2 * S, 54 * S, "right")
+         x + w - 80 * S, top + S, 80 * S, "right")
   end
 end
 
@@ -1313,6 +1360,17 @@ function love.draw()
   end
 
   if launching then drawLaunchOverlay() end
+
+  if SHOT_PATH and not shotDone then
+    shotFrames = shotFrames + 1
+    if shotFrames >= SHOT_AT then
+      shotDone = true
+      love.graphics.captureScreenshot(function(img)
+        local fh = io.open(SHOT_PATH, "wb")
+        if fh then fh:write(img:encode("png"):getString()); fh:close() end
+      end)
+    end
+  end
 end
 
 -- input ----------------------------------------------------------------------
