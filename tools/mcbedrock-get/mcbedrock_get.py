@@ -3,7 +3,7 @@
 Sign in with the Google account that owns Minecraft, pick any version from the
 list, get the matching arm64 or armhf APKs. The version list comes from
 mcpelauncher-versiondb (see catalog.py); downloading is done by gplaydl
-(minecraft-linux/google-play-api) running inside WSL, see wsl-setup.sh.
+(minecraft-linux/google-play-api) running inside WSL, see setup-downloader.sh.
 
 No Minecraft content is bundled with or distributed by this tool.
 
@@ -28,7 +28,11 @@ from pathlib import Path
 
 import catalog
 import signin
-import wsl_backend
+
+if sys.platform == "win32":
+    import wsl_backend as backend
+else:
+    import linux_backend as backend
 
 
 def app_dir() -> Path:
@@ -50,12 +54,42 @@ def login_in_subprocess(email: str = "") -> None:
     if getattr(sys, "frozen", False):
         command = [sys.executable, *argv]
     else:
-        command = [sys.executable, str(Path(__file__).resolve()), *argv]
+        command = [signin_interpreter(), str(Path(__file__).resolve()), *argv]
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, env=signin_environment())
     if result.returncode != 0:
         message = (result.stderr or result.stdout or "Sign-in failed.").strip()
         raise signin.SignInError(message.splitlines()[-1] if message else "Sign-in failed.")
+
+def signin_interpreter() -> str:
+    """Which Python draws Google's sign-in page.
+
+    On Windows, this one: the sign-in window is Edge WebView2, which the bundled
+    interpreter can drive.
+
+    On Linux it must be the SYSTEM python3. The window is drawn by WebKitGTK
+    through PyGObject, and PyGObject is a compiled extension built against the
+    system interpreter -- a bundled Python of a different version cannot import
+    it at any price. Everything this program adds on top (pywebview, gpsoauth)
+    is pure Python, so the system interpreter can import those from here, which
+    is what makes the split work at all.
+    """
+    if sys.platform == "win32" or not getattr(sys, "frozen", False):
+        return sys.executable
+    return os.environ.get("MCBEDROCK_SYSTEM_PYTHON") or "python3"
+
+
+def signin_environment() -> dict:
+    """Let a system interpreter import the pure-Python parts shipped with us."""
+    environment = dict(os.environ)
+    if sys.platform == "win32":
+        return environment
+    bundled = os.environ.get("MCBEDROCK_PURE_PYTHON", "")
+    if bundled:
+        existing = environment.get("PYTHONPATH", "")
+        environment["PYTHONPATH"] = f"{bundled}:{existing}" if existing else bundled
+    return environment
+
 
 APP_NAME = "Minecraft Bedrock APK downloader"
 
@@ -164,17 +198,28 @@ def default_output_dir() -> Path:
     return Path.home() / "Documents" / "MinecraftBedrockPort"
 
 
-SETUP_STEPS = (
+WINDOWS_SETUP_STEPS = (
     ("feature", "Windows Subsystem for Linux"),
     ("distro", "Ubuntu Linux"),
     ("tool", "Google Play downloader"),
     ("account", "Google account"),
 )
 
+# Linux runs the downloader directly, so the two install steps that exist only
+# to give Windows a Linux to run it in simply are not there.
+LINUX_SETUP_STEPS = (
+    ("tool", "Google Play downloader"),
+    ("account", "Google account"),
+)
+
+
+def setup_steps() -> tuple[tuple[str, str], ...]:
+    return WINDOWS_SETUP_STEPS if sys.platform == "win32" else LINUX_SETUP_STEPS
+
 # Shown BEFORE anything is installed. Nobody should discover afterwards that a
 # second operating system arrived on their computer, so this says so first, in
 # the plainest words available, with the sizes and the way back out.
-SETUP_EXPLANATION = (
+WINDOWS_SETUP_EXPLANATION = (
     "This installs a complete Ubuntu Linux system inside Windows.\n\n"
     "WHY\n"
     "Google Play only hands Minecraft to a Play client, and the only one that "
@@ -198,6 +243,37 @@ SETUP_EXPLANATION = (
     "No Minecraft files come from this program.\n\n"
     "Set it up now?"
 )
+
+
+LINUX_SETUP_EXPLANATION = (
+    "This builds the Google Play downloader on this computer.\n\n"
+    "WHY\n"
+    "Google Play only hands Minecraft to a Play client, and the only one that "
+    "still works is gplaydl. No distribution packages it, so it is compiled "
+    "here from its own source.\n\n"
+    "WHAT WILL HAPPEN\n"
+    "1. Build tools are installed with your package manager ({manager}). You "
+    "will be asked to authorise that once - it is the only part that needs "
+    "administrator rights.\n"
+    "2. gplaydl is downloaded from minecraft-linux/Google-Play-API and "
+    "compiled. This takes a few minutes.\n"
+    "3. It is installed under ~/.local/share/mcbedrock-get. Nothing else on "
+    "the system is touched.\n\n"
+    "The build itself runs as you, not as root, so what it produces belongs to "
+    "you and lands in your own home directory.\n\n"
+    "TO REMOVE IT ALL LATER\n"
+    "Delete ~/.local/share/mcbedrock-get\n\n"
+    "No Minecraft files come from this program.\n\n"
+    "Set it up now?"
+)
+
+
+def setup_explanation() -> str:
+    """What this machine is about to have installed on it, in full."""
+    if sys.platform == "win32":
+        return WINDOWS_SETUP_EXPLANATION
+    manager = backend.package_manager() or "your package manager"
+    return LINUX_SETUP_EXPLANATION.format(manager=manager)
 
 
 @dataclass(frozen=True)
@@ -232,13 +308,13 @@ def readiness() -> Readiness:
     starts a sixty-second timeout for an answer already known.
     """
     account = signin.load() is not None
-    if not wsl_backend.windows_feature_present():
+    if not backend.windows_feature_present():
         return Readiness(account=account)
-    if not wsl_backend.distro_present():
+    if not backend.distro_present():
         return Readiness(feature=True, account=account)
     # An install made by an older helper under a normal user's home is adopted
     # rather than rebuilt.
-    tool = wsl_backend.is_installed() or wsl_backend.adopt_legacy_install()
+    tool = backend.is_installed() or backend.adopt_legacy_install()
     return Readiness(feature=True, distro=True, tool=tool, account=account)
 
 
@@ -247,10 +323,10 @@ def setup_state() -> tuple[bool, bool, bool, str]:
     creds = signin.load()
     signed_in = creds is not None
 
-    if not wsl_backend.is_available():
+    if not backend.is_available():
         return False, False, signed_in, "WSL is not installed. See GETTING-BEDROCK-APKS.md."
-    if not wsl_backend.is_installed():
-        return True, False, signed_in, "Downloader not installed in WSL — run wsl-setup.sh."
+    if not backend.is_installed():
+        return True, False, signed_in, "Downloader not installed in WSL — run setup-downloader.sh."
     if not signed_in:
         return True, True, False, "Not signed in."
     return True, True, True, f"Ready. Signed in as {creds.email}."
@@ -261,12 +337,12 @@ def fetch(version_code: int, out_dir: Path, log, abi: str = "arm64") -> list[Pat
     creds = signin.load()
     if creds is None:
         raise signin.SignInError("Not signed in yet.")
-    if not wsl_backend.is_signed_in():
+    if not backend.is_signed_in():
         log("Passing your Google session to the downloader…")
-        wsl_backend.sign_in(creds.email, creds.master_token)
+        backend.sign_in(creds.email, creds.master_token)
     label = catalog.ABI_LABELS[abi]
     log(f"Downloading {label} build {version_code}. This is a few hundred MB.")
-    return wsl_backend.download(version_code, out_dir, on_line=log, abi=abi)
+    return backend.download(version_code, out_dir, on_line=log, abi=abi)
 
 
 # --------------------------------------------------------------------------
@@ -584,7 +660,7 @@ class Window:
         body = shell.body
 
         self.step_labels = {}
-        for key, title in SETUP_STEPS:
+        for key, title in setup_steps():
             label = ttk.Label(body, text="·  " + title, style="Step.TLabel",
                               wraplength=px(258), justify="left")
             label.pack(anchor="w", pady=(0, px(3)))
@@ -846,7 +922,7 @@ class Window:
             return
         creds = signin.load()
         upcoming = state.next_step()
-        for key, title in SETUP_STEPS:
+        for key, title in setup_steps():
             label, _ = self.step_labels[key]
             done = getattr(state, key)
             text = title
@@ -1066,7 +1142,9 @@ class Window:
     def on_explain(self) -> None:
         from tkinter import messagebox
 
-        messagebox.showinfo(APP_NAME, SETUP_EXPLANATION.replace("\n\nSet it up now?", ""))
+        messagebox.showinfo(
+            APP_NAME, setup_explanation().replace("\n\nSet it up now?", "")
+        )
 
     def on_setup(self) -> None:
         """Do whatever is still missing, in order, without asking again."""
@@ -1078,8 +1156,13 @@ class Window:
         if state.next_step() == "account":
             self.on_sign_in()
             return
-        if state.installs_an_os and not messagebox.askyesno(
-            APP_NAME, SETUP_EXPLANATION, icon="warning", default="no"
+        # Windows is about to gain an operating system; Linux is about to gain
+        # a compiler and a binary. Either way, say so before doing it.
+        needs_consent = state.installs_an_os or sys.platform != "win32"
+        if needs_consent and not messagebox.askyesno(
+            APP_NAME, setup_explanation(),
+            icon="warning" if state.installs_an_os else "question",
+            default="no",
         ):
             return
 
@@ -1090,16 +1173,16 @@ class Window:
 
         def work() -> None:
             try:
-                if not wsl_backend.windows_feature_present():
-                    wsl_backend.install_windows_feature(log)  # raises RestartNeeded
-                if not wsl_backend.distro_present():
-                    wsl_backend.install_distro(log)
-                if not wsl_backend.is_installed() and not wsl_backend.adopt_legacy_install():
+                if not backend.windows_feature_present():
+                    backend.install_windows_feature(log)  # raises RestartNeeded
+                if not backend.distro_present():
+                    backend.install_distro(log)
+                if not backend.is_installed() and not backend.adopt_legacy_install():
                     log("Building the Play downloader inside Ubuntu. A few minutes.")
-                    wsl_backend.build_downloader(app_dir() / "wsl-setup.sh", log)
+                    backend.build_downloader(app_dir() / "setup-downloader.sh", log)
                 self.post("status", "Setup finished.")
                 self.refresh()
-            except wsl_backend.RestartNeeded as pause:
+            except backend.RestartNeeded as pause:
                 self.post("notice", str(pause))
                 self.refresh()
             except Exception as error:
@@ -1127,7 +1210,7 @@ class Window:
 
         def work() -> None:
             try:
-                wsl_cleared = wsl_backend.sign_out()
+                wsl_cleared = backend.sign_out()
                 signin.forget()
                 message = (
                     "Signed out on Windows and in WSL."
@@ -1291,12 +1374,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.check:
-        wsl, tool, signed_in, summary = setup_state()
-        print(f"WSL:        {'yes' if wsl else 'no'}")
-        print(f"downloader: {'yes' if tool else 'no'}")
-        print(f"signed in:  {'yes' if signed_in else 'no'}")
-        print(summary)
-        return 0 if (wsl and tool) else 1
+        state = readiness()
+        # "WSL" means nothing on a Linux desktop, where there is no subsystem
+        # and no distribution -- only the downloader and the account.
+        for key, title in setup_steps():
+            print(f"{title + ':':<32}{'yes' if getattr(state, key) else 'no'}")
+        creds = signin.load()
+        print(f"Ready. Signed in as {creds.email}." if state.ready and creds
+              else "Setup is not finished.")
+        return 0 if (state.tool and state.distro and state.feature) else 1
 
     if args.list:
         available = catalog.load(force_refresh=args.refresh)
@@ -1328,7 +1414,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.logout:
-        wsl_cleared = wsl_backend.sign_out()
+        wsl_cleared = backend.sign_out()
         signin.forget()
         if wsl_cleared:
             print("Signed out on Windows and in WSL.")
@@ -1366,6 +1452,6 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (signin.SignInError, wsl_backend.WslError, catalog.CatalogError) as error:
+    except (signin.SignInError, backend.WslError, catalog.CatalogError) as error:
         print(error, file=sys.stderr)
         sys.exit(1)

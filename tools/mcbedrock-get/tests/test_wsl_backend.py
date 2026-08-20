@@ -60,6 +60,7 @@ class DistroTests(unittest.TestCase):
             with self.assertRaises(wsl_backend.WslError):
                 wsl_backend.selected_distro()
 
+    @unittest.skipUnless(sys.platform == "win32", "WSL distro detection is Windows-only")
     def test_setup_state_handles_missing_ubuntu(self):
         with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(
             wsl_backend, "installed_distros", return_value=[]
@@ -142,7 +143,7 @@ class SessionTests(unittest.TestCase):
             self.assertFalse(wsl_backend.sign_out())
 
     def test_cli_logout_clears_windows_and_wsl_sessions(self):
-        with mock.patch.object(wsl_backend, "sign_out", return_value=True) as wsl_logout, \
+        with mock.patch.object(mcbedrock_get.backend, "sign_out", return_value=True) as wsl_logout, \
                 mock.patch.object(signin, "forget") as windows_logout:
             self.assertEqual(mcbedrock_get.main(["--logout"]), 0)
         wsl_logout.assert_called_once_with()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import unittest
@@ -19,7 +20,7 @@ class ReadinessTests(unittest.TestCase):
 
     def look(self, feature: bool, distro: bool, tool: bool, account: bool):
         return mock.patch.multiple(
-            wsl_backend,
+            mcbedrock_get.backend,
             windows_feature_present=mock.Mock(return_value=feature),
             distro_present=mock.Mock(return_value=distro),
             is_installed=mock.Mock(return_value=tool),
@@ -62,8 +63,8 @@ class ReadinessTests(unittest.TestCase):
     def test_no_distro_question_is_asked_before_wsl_exists(self):
         # Asking costs a 60-second timeout for an answer already known.
         with mock.patch.object(
-            wsl_backend, "windows_feature_present", return_value=False
-        ), mock.patch.object(wsl_backend, "distro_present") as distro, mock.patch.object(
+            mcbedrock_get.backend, "windows_feature_present", return_value=False
+        ), mock.patch.object(mcbedrock_get.backend, "distro_present") as distro, mock.patch.object(
             signin, "load", return_value=None
         ):
             mcbedrock_get.readiness()
@@ -71,7 +72,7 @@ class ReadinessTests(unittest.TestCase):
 
     def test_an_older_install_is_adopted_instead_of_rebuilt(self):
         with mock.patch.multiple(
-            wsl_backend,
+            mcbedrock_get.backend,
             windows_feature_present=mock.Mock(return_value=True),
             distro_present=mock.Mock(return_value=True),
             is_installed=mock.Mock(return_value=False),
@@ -81,23 +82,113 @@ class ReadinessTests(unittest.TestCase):
 
 
 class DisclosureTests(unittest.TestCase):
-    """Nobody should find out afterwards that an OS was installed."""
+    """Nobody should find out afterwards what was installed on their machine."""
 
-    def test_it_says_an_operating_system_is_being_installed(self):
-        text = mcbedrock_get.SETUP_EXPLANATION.lower()
+    def test_windows_says_an_operating_system_is_being_installed(self):
+        text = mcbedrock_get.WINDOWS_SETUP_EXPLANATION.lower()
         self.assertIn("ubuntu linux", text)
         self.assertIn("operating system", text)
         self.assertIn("inside windows", text)
 
-    def test_it_gives_the_sizes(self):
-        self.assertIn("1.5 GB", mcbedrock_get.SETUP_EXPLANATION)
-        self.assertIn("500 MB", mcbedrock_get.SETUP_EXPLANATION)
+    def test_windows_gives_the_sizes(self):
+        self.assertIn("1.5 GB", mcbedrock_get.WINDOWS_SETUP_EXPLANATION)
+        self.assertIn("500 MB", mcbedrock_get.WINDOWS_SETUP_EXPLANATION)
 
-    def test_it_says_how_to_remove_it(self):
-        self.assertIn("wsl --unregister", mcbedrock_get.SETUP_EXPLANATION)
+    def test_windows_says_how_to_remove_it(self):
+        self.assertIn("wsl --unregister", mcbedrock_get.WINDOWS_SETUP_EXPLANATION)
 
-    def test_it_says_no_linux_password_is_needed(self):
-        self.assertIn("root", mcbedrock_get.SETUP_EXPLANATION.lower())
+    def test_windows_says_no_linux_password_is_needed(self):
+        self.assertIn("root", mcbedrock_get.WINDOWS_SETUP_EXPLANATION.lower())
+
+    def test_linux_does_not_claim_to_install_an_operating_system(self):
+        # It would be false, and this panel exists precisely to be true.
+        text = mcbedrock_get.LINUX_SETUP_EXPLANATION.lower()
+        self.assertNotIn("operating system", text)
+        self.assertNotIn("ubuntu", text)
+        self.assertNotIn("virtual machine", text)
+
+    def test_linux_says_what_it_does_install_and_how_to_remove_it(self):
+        text = mcbedrock_get.LINUX_SETUP_EXPLANATION
+        self.assertIn("gplaydl", text)
+        self.assertIn("~/.local/share/mcbedrock-get", text)
+        self.assertIn("{manager}", text)
+
+    def test_each_platform_gets_its_own_text(self):
+        chosen = mcbedrock_get.setup_explanation()
+        if sys.platform == "win32":
+            self.assertIs(chosen, mcbedrock_get.WINDOWS_SETUP_EXPLANATION)
+        else:
+            self.assertIn("gplaydl", chosen)
+            self.assertNotIn("{manager}", chosen)
+
+
+class PlatformShapeTests(unittest.TestCase):
+    """The two install steps exist only to give Windows a Linux to run in."""
+
+    def test_windows_has_the_subsystem_and_distro_steps(self):
+        keys = [key for key, _ in mcbedrock_get.WINDOWS_SETUP_STEPS]
+        self.assertEqual(keys, ["feature", "distro", "tool", "account"])
+
+    def test_linux_has_neither(self):
+        keys = [key for key, _ in mcbedrock_get.LINUX_SETUP_STEPS]
+        self.assertEqual(keys, ["tool", "account"])
+
+    def test_the_running_platform_picks_one(self):
+        expected = (
+            mcbedrock_get.WINDOWS_SETUP_STEPS
+            if sys.platform == "win32"
+            else mcbedrock_get.LINUX_SETUP_STEPS
+        )
+        self.assertIs(mcbedrock_get.setup_steps(), expected)
+
+
+
+class SignInInterpreterTests(unittest.TestCase):
+    """Which Python draws Google's sign-in page, and why it is not always ours.
+
+    PyGObject is a compiled extension built against the system interpreter, so a
+    bundled Python cannot import it however it is packaged. Bundling Qt instead
+    measured 525 MB against 58 MB for everything else, to draw one login page.
+    So on Linux the sign-in child runs on the system python3 and imports the
+    pure-Python parts out of the bundle.
+    """
+
+    def test_windows_signs_in_with_its_own_interpreter(self):
+        with mock.patch.object(sys, "platform", "win32"):
+            self.assertEqual(mcbedrock_get.signin_interpreter(), sys.executable)
+
+    def test_an_unfrozen_checkout_uses_its_own_interpreter(self):
+        # Running from source, whatever is running this already has the deps.
+        with mock.patch.object(sys, "platform", "linux"),                 mock.patch.object(sys, "frozen", False, create=True):
+            self.assertEqual(mcbedrock_get.signin_interpreter(), sys.executable)
+
+    def test_a_linux_bundle_reaches_for_the_system_python(self):
+        with mock.patch.object(sys, "platform", "linux"),                 mock.patch.object(sys, "frozen", True, create=True),                 mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(mcbedrock_get.signin_interpreter(), "python3")
+
+    def test_the_system_python_can_be_named_explicitly(self):
+        with mock.patch.object(sys, "platform", "linux"),                 mock.patch.object(sys, "frozen", True, create=True),                 mock.patch.dict(os.environ, {"MCBEDROCK_SYSTEM_PYTHON": "/usr/bin/python3.12"}):
+            self.assertEqual(mcbedrock_get.signin_interpreter(), "/usr/bin/python3.12")
+
+    def test_the_bundle_lends_its_pure_python_packages_to_that_interpreter(self):
+        with mock.patch.object(sys, "platform", "linux"),                 mock.patch.dict(os.environ, {"MCBEDROCK_PURE_PYTHON": "/app/site-packages"}, clear=True):
+            self.assertEqual(
+                mcbedrock_get.signin_environment()["PYTHONPATH"], "/app/site-packages"
+            )
+
+    def test_an_existing_pythonpath_is_kept(self):
+        with mock.patch.object(sys, "platform", "linux"),                 mock.patch.dict(os.environ, {
+                    "MCBEDROCK_PURE_PYTHON": "/app/site-packages",
+                    "PYTHONPATH": "/somewhere/else",
+                }, clear=True):
+            self.assertEqual(
+                mcbedrock_get.signin_environment()["PYTHONPATH"],
+                "/app/site-packages:/somewhere/else",
+            )
+
+    def test_windows_environment_is_left_alone(self):
+        with mock.patch.object(sys, "platform", "win32"),                 mock.patch.dict(os.environ, {"MCBEDROCK_PURE_PYTHON": "/app"}, clear=True):
+            self.assertNotIn("PYTHONPATH", mcbedrock_get.signin_environment())
 
 
 class RootExecutionTests(unittest.TestCase):

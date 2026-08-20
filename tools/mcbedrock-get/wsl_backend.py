@@ -16,9 +16,10 @@ import sys
 import subprocess
 import tempfile
 import threading
-import zipfile
 from pathlib import Path
 from typing import Callable
+
+import apkset
 
 # Everything runs as root inside the distribution. Windows grants that without
 # a password by design, which removes the whole "create a UNIX user, remember a
@@ -29,10 +30,8 @@ WSL_USER = "root"
 DISTRO = "Ubuntu"
 PREFIX = "$HOME/.local/share/mcbedrock-get"
 PACKAGE = "com.mojang.minecraftpe"
-ABI_PROFILES = {
-    "arm64": ("device-arm64.conf", "arm64-v8a", "arm64_v8a"),
-    "armhf": ("device-armhf.conf", "armeabi-v7a", "armeabi_v7a"),
-}
+# What a complete download looks like is shared with the Linux backend.
+ABI_PROFILES = apkset.ABI_PROFILES
 
 # Suppress the console window that would otherwise flash on every call.
 _NO_WINDOW = 0x08000000
@@ -102,7 +101,7 @@ def is_available() -> bool:
 
 
 def is_installed() -> bool:
-    """True when wsl-setup.sh has been run."""
+    """True when setup-downloader.sh has been run."""
     try:
         return _run(f"test -x {PREFIX}/gplaydl", timeout=60).returncode == 0
     except (OSError, subprocess.SubprocessError, WslError):
@@ -136,26 +135,11 @@ def _config_value(value: str, label: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def _apk_has_native_lib(apk: Path, native_platform: str) -> bool:
-    """True if a monolithic APK carries lib/<abi>/ itself.
-
-    Old builds predate split APKs, so the ABI check cannot rely on a
-    config.<abi>.apk filename and has to look inside the archive instead.
-    """
-    prefix = f"lib/{native_platform}/"
-    try:
-        with zipfile.ZipFile(apk) as archive:
-            return any(name.startswith(prefix) for name in archive.namelist())
-    except (zipfile.BadZipFile, OSError):
-        return False
-
-
 def _abi_profile(abi: str) -> tuple[str, str, str]:
     try:
-        return ABI_PROFILES[abi]
-    except KeyError as error:
-        choices = ", ".join(ABI_PROFILES)
-        raise WslError(f"Unknown APK architecture {abi!r}; use {choices}.") from error
+        return apkset.abi_profile(abi)
+    except apkset.DownloadError as error:
+        raise WslError(str(error)) from error
 
 
 def ensure_device_profile(abi: str) -> None:
@@ -377,13 +361,13 @@ def adopt_legacy_install() -> bool:
 
 
 def build_downloader(script: Path, on_line=None, timeout: int = 3600) -> None:
-    """Run wsl-setup.sh as root, with its output coming back to the window.
+    """Run setup-downloader.sh as root, with its output coming back to the window.
 
     No terminal and no password: the script sees it is root and skips sudo, and
     MCBEDROCK_NONINTERACTIVE stops it waiting for a keypress at the end.
     """
     if not script.is_file():
-        raise WslError("wsl-setup.sh is missing. Expected it at:\n\n%s" % script)
+        raise WslError("setup-downloader.sh is missing. Expected it at:\n\n%s" % script)
     argv = _wsl_argv(
         "--", "bash", "-lc",
         "MCBEDROCK_NONINTERACTIVE=1 bash " + shlex.quote(to_wsl_path(script)),
@@ -508,48 +492,9 @@ def download(
         base = staging / f"{prefix}.apk"
         returncode, tail = _download_into(version_code, base, on_line, timeout, abi)
 
-        # Judge success by the isolated output, not gplaydl's unreliable exit
-        # code and never by files left by an earlier download.
         written = sorted(staging.glob(f"{prefix}*.apk"))
-        if not base.is_file():
-            raise WslError(
-                f"The download produced no base APK (gplaydl exit {returncode}).\n\n"
-                + "\n".join(tail[-12:])
-            )
-
-        if not any(split_marker in path.name for path in written):
-            # Pre-App-Bundle builds (roughly <= 1.13, e.g. 1.12.1.1) are shipped
-            # as ONE monolithic APK carrying lib/<abi>/ inside it — there are no
-            # config.* split parts to look for, and demanding one rejects every
-            # old version outright. Accept the base APK, but only after proving
-            # the native library for this ABI is genuinely inside it.
-            if not _apk_has_native_lib(base, native_platform):
-                names = ", ".join(path.name for path in written)
-                raise WslError(
-                    f"Play did not return the {native_platform} part for this build, so it will "
-                    f"not run on the device. Got: {names}"
-                )
-            if on_line is not None:
-                on_line(
-                    f"No split parts (pre-bundle build); base APK carries "
-                    f"lib/{native_platform}/ itself."
-                )
-
-        backup = staging / "previous"
-        backup.mkdir()
-        previous = sorted(target.glob(f"{prefix}*.apk"))
-        moved: list[Path] = []
         try:
-            for old in previous:
-                old.replace(backup / old.name)
-            for source in written:
-                destination = target / source.name
-                source.replace(destination)
-                moved.append(destination)
-        except OSError:
-            for destination in moved:
-                destination.unlink(missing_ok=True)
-            for old in backup.glob("*.apk"):
-                old.replace(target / old.name)
-            raise
-        return moved
+            apkset.check_complete(base, written, abi, returncode, tail, on_line)
+        except apkset.DownloadError as error:
+            raise WslError(str(error)) from error
+        return apkset.publish(staging, target, prefix)

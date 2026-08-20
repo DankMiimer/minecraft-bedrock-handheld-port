@@ -18,6 +18,8 @@ from pathlib import Path
 
 import gpsoauth
 
+import paths
+
 EMBEDDED_SETUP_URL = "https://accounts.google.com/EmbeddedSetup"
 
 # Reading back which account signed in, so the address does not have to be
@@ -69,8 +71,7 @@ class Credentials:
 
 
 def credentials_path() -> Path:
-    root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-    return Path(root) / "mcbedrock-get" / "account.json"
+    return paths.data_dir() / "account.json"
 
 
 def load() -> Credentials | None:

@@ -53,7 +53,7 @@ def main() -> int:
         (args.dist / "mcbedrock-get.exe", "mcbedrock-get.exe"),
         (args.dist / "mcbedrock-get-NOTICES.txt", "mcbedrock-get-NOTICES.txt"),
         (TOOL_DIR / "Create desktop shortcut.cmd", "Create desktop shortcut.cmd"),
-        (TOOL_DIR / "wsl-setup.sh", "wsl-setup.sh"),
+        (TOOL_DIR / "setup-downloader.sh", "setup-downloader.sh"),
     ]
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for source, name in files:

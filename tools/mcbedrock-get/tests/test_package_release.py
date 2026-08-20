@@ -15,7 +15,7 @@ EXPECTED = {
     "mcbedrock-get.exe",
     "mcbedrock-get-NOTICES.txt",
     "Create desktop shortcut.cmd",
-    "wsl-setup.sh",
+    "setup-downloader.sh",
 }
 
 

@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck gcc make libpng-dev
-      - run: find portmaster/minecraftbedrock bottomscreen/release scripts tests tools/mcbedrock-get -name '*.sh' -type f -print0 | xargs -0 shellcheck -S error
+      - run: find portmaster/minecraftbedrock bottomscreen/release scripts tests tools/mcbedrock-get tools/ondevice-downloader -name '*.sh' -type f -print0 | xargs -0 shellcheck -S error
       - run: bash tests/run_all.sh
 
   compatibility-docs:
@@ -75,6 +75,34 @@ jobs:
             build/container-output/crusty-context-v1.so
           if-no-files-found: error
 
+  linux-helper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Helper unit tests
+        working-directory: tools/mcbedrock-get
+        run: python3 -m unittest discover -s tests -p "test_*.py" -t .
+      - name: Build the AppImage
+        working-directory: tools/mcbedrock-get
+        run: bash build-appimage.sh "$GITHUB_WORKSPACE/dist-linux"
+      - name: Smoke-test the AppImage
+        run: |
+          set -euo pipefail
+          APP=$(ls "$GITHUB_WORKSPACE"/dist-linux/*.AppImage)
+          chmod +x "$APP"
+          # No FUSE on the runner, so run it the way a FUSE-less machine would.
+          out=$("$APP" --appimage-extract-and-run --list --abi arm64 | head -3)
+          echo "$out"
+          echo "$out" | grep -q "1.16.221.01" || {
+            echo "the bundled catalog did not list the recommended build" >&2
+            exit 1
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-helper
+          path: dist-linux/*.AppImage
+          if-no-files-found: error
+
   windows-helper:
     runs-on: windows-latest
     steps:
@@ -117,7 +145,7 @@ jobs:
           if-no-files-found: error
 
   reproducibility:
-    needs: [host-tests, compatibility-docs, clients, companions, windows-helper]
+    needs: [host-tests, compatibility-docs, clients, companions, windows-helper, linux-helper]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -134,6 +162,10 @@ jobs:
         with:
           name: windows-helper
           path: build/release-inputs
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-helper
+          path: build/release-inputs
       - name: Assemble twice and compare
         env:
           CHANNEL: ${{ inputs.channel || 'testing' }}
@@ -146,7 +178,7 @@ jobs:
             --bottomd build/release-inputs/bottomd \
             --bedrockmap build/release-inputs/bedrockmap \
             --context-bridge build/release-inputs/crusty-context-v1.so \
-            --extra-asset build/release-inputs/mcbedrock-get-windows-v$VERSION.zip"
+            --extra-asset build/release-inputs/mcbedrock-get-windows-v$VERSION.zip \n            --extra-asset build/release-inputs/mcbedrock-get-linux-x86_64-v$VERSION.AppImage"
           python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release
           python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release-repeat
           diff -qr dist/release dist/release-repeat

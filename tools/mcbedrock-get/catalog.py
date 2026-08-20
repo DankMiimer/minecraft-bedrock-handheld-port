@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
+import paths
+
 VERSIONDB_URL = (
     "https://raw.githubusercontent.com/minecraft-linux/mcpelauncher-versiondb"
     "/master/versions.{db}.json.min"
@@ -296,8 +298,7 @@ def cache_dir() -> Path:
     override = os.environ.get("MCBEDROCK_CACHE_DIR", "").strip()
     if override:
         return Path(override)
-    root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-    return Path(root) / "mcbedrock-get" / "versiondb"
+    return paths.data_dir() / "versiondb"
 
 
 def _cache_file(abi: str) -> Path:

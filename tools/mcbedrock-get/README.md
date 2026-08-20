@@ -59,6 +59,40 @@ only job is to invent a username and password, never appears. An install made
 by an older version of this helper under a normal user's home is adopted rather
 than rebuilt.
 
+## On Linux
+
+Download `mcbedrock-get-linux-x86_64-*.AppImage` from the
+[latest release][releases], make it executable, and run it:
+
+```text
+chmod +x mcbedrock-get-linux-x86_64-*.AppImage
+./mcbedrock-get-linux-x86_64-*.AppImage
+```
+
+Everything else is the same as on Windows, minus the parts Windows only needs
+in order to have a Linux to run in. There is no subsystem and no distribution
+to install, so step 1 has two entries instead of four: the Play downloader, and
+your Google account.
+
+The downloader is still compiled on your machine from
+[Google-Play-API][gpa], because shipping someone else's GPL binary would mean
+shipping its source too. Pressing the step 1 button installs the build tools
+with your package manager — **apt, dnf and pacman** are handled — and asks for
+authorisation once, graphically, through `pkexec`. Only that package install is
+privileged; the build itself runs as you, so what it produces lands in your own
+home directory at `~/.local/share/mcbedrock-get`.
+
+The same step installs the GTK packages that draw Google's sign-in page
+(`python3-gi`, `gir1.2-gtk-3.0`, `gir1.2-webkit2-4.1`, `gir1.2-soup-3.0`, or
+your distribution's equivalents). Those come from the system on purpose: the
+alternative, bundling Qt's browser engine, measured **525 MB against 58 MB for
+everything else**, to draw one login page. The AppImage is about **26 MB**
+instead of roughly 200 MB.
+
+That does mean the sign-in window is the one part relying on packages from your
+distribution rather than from the bundle. If sign-in cannot open, those four
+packages are what is missing.
+
 ## Choosing a version
 
 The list is read from
