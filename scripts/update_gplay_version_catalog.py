@@ -6,10 +6,10 @@ PairIP packaging the upstream launcher cannot open at all. Offering a download
 that provably cannot install is worse than not offering it, especially over a
 handheld's network.
 
-The classification in each row -- edition, named update, renderer, warnings --
-is NOT decided here. It comes from the Windows helper's catalog module, so the
-on-device list and the desktop downloader cannot drift apart: there is one
-implementation of "is this RenderDragon", and both read its answer.
+The classification in each row -- edition, named update, renderer, UI size,
+warnings -- is NOT decided here. It comes from the Windows helper's catalog
+module, so the on-device list and the desktop downloader cannot drift apart:
+there is one implementation of "is this RenderDragon", and both read its answer.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ TESTED_FROM = "1.16"
 
 COLUMNS = (
     "version_code", "abi", "channel", "version_name",
-    "edition", "update", "renderer", "notes",
+    "edition", "update", "renderer", "ui", "notes",
 )
 
 
@@ -57,6 +57,7 @@ def catalogued(release: catalog.Release, abi: str) -> tuple[str, ...]:
         release.edition,
         release.update_name,
         release.renderer_label(abi),
+        "Tiny UI" if release.tiny_ui else "",
         notes,
     )
 

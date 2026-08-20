@@ -232,6 +232,13 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn("Play code ", menu)
         self.assertNotIn("972006202", menu)
         self.assertNotIn("951604002", menu)
+        # Every marking the desktop helper shows in its columns is on the
+        # row here too, and the renderer is stated both ways round.
+        self.assertIn("AVOID: RenderDragon", menu)
+        self.assertIn("Pocket Edition (touch only)", menu)
+        # A hundred-row list is unusable if a held direction does not repeat.
+        self.assertIn("tickRepeat", menu)
+        self.assertIn("heldDirection", menu)
 
         progress_ui = (MODULE / "progress-ui/main.lua").read_text(encoding="utf-8")
         self.assertIn("MCPE_PROGRESS_EXIT_INTERACTIVE", progress_ui)
@@ -251,14 +258,15 @@ class DownloaderTests(unittest.TestCase):
 
     def test_complete_supported_google_play_catalog(self):
         catalog = MODULE / "version_catalog.tsv"
-        rows = []
+        rows, uis = [], set()
         for line in catalog.read_text(encoding="utf-8").splitlines():
             if not line or line.startswith("#"):
                 continue
             fields = line.split("\t")
-            self.assertEqual(len(fields), 8, line)
+            self.assertEqual(len(fields), 9, line)
             code, abi, channel, version = fields[:4]
             rows.append((code, abi, channel, version))
+            uis.add(fields[7])
 
         # Every build Play still serves, minus 1.26+, is roughly a thousand.
         self.assertGreater(len(rows), 900)
@@ -272,6 +280,9 @@ class DownloaderTests(unittest.TestCase):
         self.assertTrue(any(row[3].startswith("1.2.") for row in rows))
         self.assertTrue(any(row[3].startswith("0.") for row in rows))
         self.assertFalse(any(row[3].startswith(("1.26.", "1.27.")) for row in rows))
+        # The UI column is what the menu shows as the "Tiny UI" marking, so it
+        # must be a flag the Lua can test, not prose.
+        self.assertEqual(uis, {"", "Tiny UI"})
 
         requests = {(code, abi) for code, abi, _channel, _version in rows}
         for request in {

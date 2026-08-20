@@ -318,21 +318,36 @@ local OTHER_DOWNLOADS = {
   armhf = {release = {}, preview = {}},
 }
 
+-- The tile shortcuts above also appear somewhere in this list. Carry their
+-- label across so the recommendation is not lost among a hundred rows that
+-- nobody has tested.
+local CURATED_LABEL = {}
+for _, d in ipairs(DOWNLOADS) do
+  CURATED_LABEL[d.code .. ":" .. d.abi] = d.desc:match("^%s*(.-)%s*|")
+end
+
 local function loadDownloadCatalog()
   local f = io.open(GAMEDIR .. "/downloader/version_catalog.tsv", "r")
   if not f then return end
   for line in f:lines() do
-    local code, abi, channel, version, edition, update, renderer, notes =
-      line:match("^(%d+)	([^	]*)	([^	]*)	([^	]*)	([^	]*)	([^	]*)	([^	]*)	(.*)$")
+    local code, abi, channel, version, edition, update, renderer, ui, notes =
+      line:match("^(%d+)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t(.*)$")
     if code and OTHER_DOWNLOADS[abi] and OTHER_DOWNLOADS[abi][channel] then
       local architecture = abi == "armhf" and "ARM32" or "ARM64"
       local isPreview = channel == "preview"
       local avoid = renderer == "RenderDragon"
+      -- The same markings the desktop helper puts in its columns, in the same
+      -- order: what it is, then what is wrong with it. Renderer is stated both
+      -- ways round -- "No RenderDragon" is the reason to pick a build, not the
+      -- absence of a reason to avoid one. The Play code is not repeated here;
+      -- it is on the confirmation screen, and the space buys these labels.
       local summary = {}
-      if avoid then summary[#summary + 1] = "AVOID" end
-      if edition == "Pocket Edition" then summary[#summary + 1] = "POCKET EDITION" end
+      summary[#summary + 1] = CURATED_LABEL[code .. ":" .. abi]
+      summary[#summary + 1] = avoid and "AVOID: RenderDragon" or renderer
+      summary[#summary + 1] = edition == "Pocket Edition"
+        and "Pocket Edition (touch only)" or edition
       if update ~= "" then summary[#summary + 1] = update end
-      summary[#summary + 1] = "Play code " .. code
+      if ui ~= "" then summary[#summary + 1] = ui end
       table.insert(OTHER_DOWNLOADS[abi][channel], {
         code = code,
         abi = abi,
@@ -494,6 +509,7 @@ local confirm = nil          -- {title, lines, danger, onYes, back, yesLabel}
 local W, H, S                -- S = pixel scale unit
 local fonts = {}
 local ditherTile             -- tiny 8x8 checker, wrap=repeat (power-of-two)
+local backdrop               -- dot grid + scanlines, one static SpriteBatch
 local ditherQuad
 local skyBands = {}          -- precomputed gradient band rects
 local clock = 0
@@ -816,6 +832,24 @@ local function buildBackground()
   ditherTile:setWrap("repeat", "repeat")
   ditherTile:setFilter("nearest", "nearest")
   ditherQuad = love.graphics.newQuad(0, 0, W, 4, 8, 8)
+  -- The dot grid and scanlines never change for the life of the window, but
+  -- drawing them as individual rectangles cost about 1500 draw calls every
+  -- frame. Baked into one static SpriteBatch they cost one. A SpriteBatch is
+  -- a vertex buffer, not a Canvas, so this stays off the FBO path that
+  -- corrupts on this GLES stack.
+  local dot = love.image.newImageData(1, 1)
+  dot:setPixel(0, 0, 1, 1, 1, 1)
+  local step = 16 * S
+  local dots = math.floor(H / step) * math.floor(W / step)
+  local lines = math.floor(H / 3) + 1
+  backdrop = love.graphics.newSpriteBatch(love.graphics.newImage(dot),
+                                          dots + lines + 8, "static")
+  backdrop:setColor(1, 1, 1, 0.03)
+  for y = step, H, step do
+    for x = step, W, step do backdrop:add(x, y, 0, S, S) end
+  end
+  backdrop:setColor(0, 0, 0, 0.10)
+  for y = 0, H, 3 do backdrop:add(0, y, 0, W, 1) end
 end
 
 local function drawBackground()
@@ -829,19 +863,9 @@ local function drawBackground()
     love.graphics.setColor(band.c[1], band.c[2], band.c[3], 1)
     love.graphics.draw(ditherTile, ditherQuad, 0, floor(band.y - 4))
   end
-  -- faint pixel-grid dots (single color -> one batch)
-  love.graphics.setColor(1, 1, 1, 0.03)
-  local step = 16 * S
-  for y = step, H, step do
-    for x = step, W, step do
-      love.graphics.rectangle("fill", x, y, S, S)
-    end
-  end
-  -- scanlines (single color -> one batch)
-  love.graphics.setColor(0, 0, 0, 0.10)
-  for y = 0, H, 3 do
-    love.graphics.rectangle("fill", 0, y, W, 1)
-  end
+  -- dot grid and scanlines, baked at load into a single batch
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.draw(backdrop)
 end
 
 local function initEmbers()
@@ -944,6 +968,10 @@ function love.load()
   end
 end
 
+-- Held D-pad repeat; defined with the input handlers further down, where
+-- moveDirectional is in scope.
+local tickRepeat
+
 function love.update(dt)
   clock = clock + dt
   blinkOn = (clock % 0.8) < 0.5
@@ -954,6 +982,7 @@ function love.update(dt)
       e.x = (e.x + 37 * S) % W
     end
   end
+  if not launching then tickRepeat(dt) end
   if launching then
     launching.t = launching.t + dt
     launching.frames = launching.frames + 1
@@ -1100,10 +1129,14 @@ local function drawList(top, items, selected, opts)
     local mainCol = it.disabled and COL.faint
         or (it.danger and (isSel and COL.danger or COL.danger_dk)
         or (isSel and COL.fg or COL.dim))
-    text(fonts.item, mainCol, it.title, tx, ty0, wleft - tx)
+    -- One line each: the row is sized for exactly two, so anything that
+    -- wrapped would push out through the border. Trim instead -- a build's
+    -- warnings are shown in full on the confirmation screen.
+    text(fonts.item, mainCol, fitText(fonts.item, it.title, wleft - tx),
+         tx, ty0, wleft - tx)
     if it.desc and it.desc ~= "" then
-      text(fonts.small, isSel and COL.dim or COL.faint, it.desc,
-           tx, ty0 + ih, wleft - tx)
+      text(fonts.small, isSel and COL.dim or COL.faint,
+           fitText(fonts.small, it.desc, wleft - tx), tx, ty0 + ih, wleft - tx)
     end
     y = y + rowH
   end
@@ -1625,6 +1658,52 @@ local function moveDirectional(direction)
       downloadOtherAbi = downloadOtherAbi == "arm64" and "armhf" or "arm64"
       sel.download_other = 1
     elseif screen == "settings" then adjustSetting(1) end
+  end
+end
+
+-- Held up/down repeats. The version browser is over a hundred rows deep and
+-- stepping it one press at a time is unusable. This polls rather than pairing
+-- press with release events, because the same D-pad reaches us as keyboard,
+-- gamepad or raw hat depending on the device profile, and a missed release on
+-- any one of those paths would leave the list scrolling by itself.
+-- Left/right is deliberately excluded: it toggles ARM64/ARM32, which must not
+-- flip back and forth while a direction is held.
+local REPEAT_DELAY, REPEAT_RATE = 0.35, 0.10
+local REPEAT_RAMP, REPEAT_FAST = 1.2, 0.04
+local repeatDir, repeatWait, repeatHeld = nil, 0, 0
+
+local function heldDirection()
+  if love.keyboard.isDown("up") then return "up" end
+  if love.keyboard.isDown("down") then return "down" end
+  for _, js in ipairs(love.joystick.getJoysticks()) do
+    local ok, mapped = pcall(function() return js:isGamepad() end)
+    if ok and mapped then
+      if js:isGamepadDown("dpup") then return "up" end
+      if js:isGamepadDown("dpdown") then return "down" end
+    else
+      local hatOk, dir = pcall(function() return js:getHat(1) end)
+      if hatOk and type(dir) == "string" then
+        if dir:find("u", 1, true) then return "up" end
+        if dir:find("d", 1, true) then return "down" end
+      end
+    end
+  end
+  return nil
+end
+
+-- The first step comes from the press callback, so the timer starts at the
+-- long delay: a tap never moves twice.
+function tickRepeat(dt)
+  local dir = heldDirection()
+  if dir ~= repeatDir then
+    repeatDir, repeatWait, repeatHeld = dir, REPEAT_DELAY, 0
+  elseif dir then
+    repeatHeld = repeatHeld + dt
+    repeatWait = repeatWait - dt
+    if repeatWait <= 0 then
+      moveDirectional(dir)
+      repeatWait = (repeatHeld > REPEAT_RAMP) and REPEAT_FAST or REPEAT_RATE
+    end
   end
 end
 
