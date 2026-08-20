@@ -1,6 +1,6 @@
-c525e8ae2c87b6d42c2d05fbce6ac6fe90b8ae72a412b85c87700f11403d34b3  minecraftbedrock-standard-v2.0.0-rc.4.zip
-620fe3c0ee954932d0585aa576f7027f30b99ed2bf56440b89e05d9ffb82d034  minecraftbedrock-rgds-v2.0.0-rc.4.zip
-3364ef4786c0673077387f28012184dba939d62730036dddf43c02e1449cd1e0  minecraftbedrock-source-v2.0.0-rc.4.zip
-2f96ce14c4e0bf3ac9de9fcd75c353f0362cf6a6696f7732cc1b6e12127bab47  minecraftbedrock-standard-v2.0.0-rc.4.spdx.json
-47bca594b86c51a0ec8c7d040f61b7fccec12518ae5b7f8a856f8ff53d931d16  minecraftbedrock-rgds-v2.0.0-rc.4.spdx.json
-5d87666342a7ef5de88267d33fafc63f905f676443391fa02f1e5eb0d59b9e49  mcbedrock-get-windows-v2.0.0-rc.4.zip
+3c9a455fdea4f3c1fcbcb661816f740bac112b24360f9694266a77424ad8d2b3  minecraftbedrock-standard-v2.0.0-rc.5.zip
+69df918ef17dc2137eebdb1ac29cd56111ef088ff47045ba5e414e247157b2f8  minecraftbedrock-rgds-v2.0.0-rc.5.zip
+b2226b4e64d4b9407902a829e96dbc72c0e22f3e036879a207e1244cdd10abe8  minecraftbedrock-source-v2.0.0-rc.5.zip
+150c675e071a1ab61b10e77809e368a6395ddeb08076da90a5696de12cbb8ddb  minecraftbedrock-standard-v2.0.0-rc.5.spdx.json
+35c59aee1b932e40a26354dbebdf288001476198ad9bc6ab1c13c5d267b1a7b3  minecraftbedrock-rgds-v2.0.0-rc.5.spdx.json
+305a6db8dfd31c527ccaf8c431e7b6fc4269703c1a929116c146cfccd23dba40  mcbedrock-get-windows-v2.0.0-rc.5.zip
