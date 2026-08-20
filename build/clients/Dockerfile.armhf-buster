@@ -1,0 +1,44 @@
+# The stock R36S firmware is Ubuntu 19.10 (glibc 2.30 / GCC 9 runtime).
+# Build armhf on Debian Buster so the client remains compatible with that ABI
+# instead of inheriting Bookworm's GLIBC_2.34 and GLIBCXX_3.4.30 requirements.
+FROM debian:buster-slim@sha256:bb3dc79fddbca7e8903248ab916bb775c96ec61014b3d02b4f06043b604726dc AS deps
+ENV DEBIAN_FRONTEND=noninteractive SOURCE_DATE_EPOCH=1783900800 \
+    CLIENT_CC=clang CLIENT_CXX=clang++ \
+    CLIENT_TARGET_FLAGS="--target=arm-linux-gnueabihf --gcc-toolchain=/usr" \
+    CLIENT_CXX_FLAGS="-isystem /usr/arm-linux-gnueabihf/include/c++/8/arm-linux-gnueabihf" \
+    PATH=/opt/cmake/bin:$PATH
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20240612T000000Z buster main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20240612T000000Z buster/updates main' \
+      > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/* && \
+    dpkg --add-architecture armhf && \
+    apt-get -o Acquire::Check-Valid-Until=false update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates clang curl file git lld make patch pkg-config protobuf-compiler python3 \
+      libwayland-bin wayland-protocols \
+      binutils-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
+      libssl-dev:armhf libpng-dev:armhf zlib1g-dev:armhf libx11-dev:armhf \
+      libxext-dev:armhf libxi-dev:armhf libxcursor-dev:armhf libxrandr-dev:armhf \
+      libxinerama-dev:armhf libegl1-mesa-dev:armhf libgles2-mesa-dev:armhf \
+      libudev-dev:armhf libevdev-dev:armhf libuv1-dev:armhf libzip-dev:armhf \
+      libprotobuf-dev:armhf libopenal-dev:armhf libpulse-dev:armhf libasound2-dev:armhf \
+      libwayland-dev:armhf libxkbcommon-dev:armhf libdrm-dev:armhf libgbm-dev:armhf && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /opt/cmake && \
+    curl --fail --location --silent --show-error --retry 3 \
+      --connect-timeout 15 --max-time 180 \
+      -o /tmp/cmake.tar.gz \
+      https://github.com/Kitware/CMake/releases/download/v3.25.2/cmake-3.25.2-linux-x86_64.tar.gz && \
+    echo '783da74f132fd1fea91b8236d267efa4df5b91c5eec1dea0a87f0cf233748d99  /tmp/cmake.tar.gz' | sha256sum -c - && \
+    tar -xzf /tmp/cmake.tar.gz --strip-components=1 -C /opt/cmake && \
+    rm -f /tmp/cmake.tar.gz
+
+FROM deps AS build
+COPY source_release /patches
+COPY bottomscreen/telemetry /telemetry
+COPY build/clients/build-in-container.sh /usr/local/bin/build-client
+RUN chmod 0755 /usr/local/bin/build-client && build-client armhf standard
+
+FROM scratch AS export
+COPY --from=build /out/ /

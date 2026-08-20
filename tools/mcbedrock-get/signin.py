@@ -37,7 +37,7 @@ LIST_ACCOUNTS_PATHS = (
 
 # Started once, then polled: pywebview hands back the value of the expression,
 # and a promise is not a value, so the result is parked on window instead.
-READ_ACCOUNT_JS = """
+READ_ACCOUNT_JS = r"""
 (function () {
   if (!window.__mcbStarted) {
     window.__mcbStarted = true;

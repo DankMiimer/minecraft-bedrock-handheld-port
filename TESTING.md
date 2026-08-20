@@ -7,6 +7,18 @@ complete physical acceptance matrix has passed.
 
 ## Current 2.0 testing evidence
 
+- Portability checkpoint (2026-08-14): all host-side tests, deterministic
+  release assembly, installer bundle/rollback fixtures, Knulli/muOS/ROCKNIX/
+  dArkOS host fixtures, and exact upstream patch-apply checks passed. The live
+  RG34XXSP/Knulli device selected arm64, discovered its existing 1.16.221.01
+  install with hidden transaction state present, selected an installed UTF-8
+  locale, and produced the expanded redacted support bundle without launching
+  Minecraft or changing frontend state. The arm64 native client was then built
+  twice from the pinned container/source inputs with matching SHA-256
+  `ced5e57e1a4d5574998b80edaf80e81d3f855ff5eea639cbf86b73f835bff966`
+  and deployed with its predecessor retained. A user-driven menu/game launch
+  remains the final physical acceptance action for this checkpoint.
+
 - RG34XX-SP, Knulli Scarab, arm64/H700/Mali: the original no-RenderDragon
   Bedrock 1.21.51.01 official split set (native-library SHA-256
   `45382be72491ec2cbe5dd4d1262989ad894b8fc611e5cbc16141d04171510927`)

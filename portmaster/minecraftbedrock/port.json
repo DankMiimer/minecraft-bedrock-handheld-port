@@ -13,8 +13,8 @@
         ],
         "desc": "Lightweight single-screen Minecraft Bedrock launcher for PortMaster ARM systems. Capability-selected aarch64 and armhf backends; exact devices are best effort unless listed as validated. RGDS redirects to a separate dual-screen edition. Requires a legally acquired official APK; no game files or license bypass are included.",
         "desc_md": null,
-        "inst": "Launch once, then copy one official full APK or complete official split set to ports/minecraftbedrock-data/apk/. Install it from the launcher. Use arm64-v8a on aarch64 or armeabi-v7a on armhf. PairIP/new-ABI 1.26 packages are unsupported.",
-        "inst_md": "1. Launch **Minecraft Bedrock** once so the shared data layout is created.\n2. Copy your official APK or complete split set to `ports/minecraftbedrock-data/apk/`.\n3. Choose **Install APK** and select the complete metadata-matched set.\n4. Keep or remove the original APK after a successful install.\n\nRGDS users must install the separate **Minecraft Bedrock RGDS** edition.\n\n**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**",
+        "inst": "Launch once, then copy one official full APK, APKM/APKS/XAPK bundle, or complete official split set to ports/minecraftbedrock-data/apk/. Install it from the launcher. Use arm64-v8a on aarch64 or armeabi-v7a on armhf. PairIP/new-ABI 1.26 packages are unsupported.",
+        "inst_md": "1. Launch **Minecraft Bedrock** once so the shared data layout is created.\n2. Copy your official APK, APKM/APKS/XAPK bundle, or complete split set to `ports/minecraftbedrock-data/apk/`.\n3. Choose **Install APK** and select the complete metadata-matched set.\n4. Keep or remove the original installer after a successful install.\n\nRGDS users must install the separate **Minecraft Bedrock RGDS** edition.\n\n**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**",
         "genres": [
             "other"
         ],

@@ -19,14 +19,16 @@ command -v python3 >/dev/null 2>&1 || fail \
 if [ "$#" -gt 0 ]; then
   APKS=("$@")
 else
-  shopt -s nullglob
-  APKS=("$APKDIR"/*.apk)
-  shopt -u nullglob
+  shopt -s nullglob nocaseglob
+  APKS=("$APKDIR"/*.apk "$APKDIR"/*.apks "$APKDIR"/*.apkm \
+        "$APKDIR"/*.xapk "$APKDIR"/*.zip)
+  shopt -u nullglob nocaseglob
 fi
-[ "${#APKS[@]}" -gt 0 ] || fail "no APK files found in $APKDIR"
+[ "${#APKS[@]}" -gt 0 ] || fail \
+  "no APK, APKS, APKM, XAPK, or ZIP files found in $APKDIR"
 
 for apk in "${APKS[@]}"; do
-  [ -f "$apk" ] || fail "APK not found: $apk"
+  [ -f "$apk" ] || fail "installer input not found: $apk"
 done
 
 echo "[setup] Inspecting manifests, splits, ABIs, and signing identity..."
@@ -39,5 +41,5 @@ if [ "$status" -ne 0 ]; then
   exit "$status"
 fi
 
-echo "[setup] Installation committed atomically. Original APK files were retained."
-echo "[setup] Delete the APKs yourself after confirming the game launches."
+echo "[setup] Installation committed atomically. Original installer files were retained."
+echo "[setup] Delete them yourself after confirming the game launches."

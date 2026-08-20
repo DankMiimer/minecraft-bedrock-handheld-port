@@ -152,6 +152,9 @@ def stage_rgds(root: pathlib.Path, version: str, channel: str, client: pathlib.P
         raise SystemExit("RGDS client is not release-stripped (over 20 MiB)")
     payload = root / "ports" / "minecraftbedrock-rgds"
     copytree_filtered(PAYLOAD_SOURCE, payload)
+    # The on-device Google Play downloader is currently an RG34XXSP/Knulli
+    # prototype. Do not ship its ARM64 helpers in the unrelated RGDS build.
+    shutil.rmtree(payload / "downloader", ignore_errors=True)
     shutil.rmtree(payload / "bin32", ignore_errors=True)
     shutil.rmtree(payload / "lib32", ignore_errors=True)
     (payload / "run_bedrock32.sh").unlink(missing_ok=True)
@@ -275,6 +278,8 @@ def source_zip(output: pathlib.Path) -> None:
         ROOT / ".github" / "workflows",
         # GPL-3 corresponding source for the published mcbedrock-get.exe.
         ROOT / "tools" / "mcbedrock-get",
+        # Reproducible ARM64 build helper for the optional on-device downloader.
+        ROOT / "tools" / "ondevice-downloader",
         PACKAGE,
     ]
     compiled_payload_dirs = {"bin", "bin32", "lib32", "libs.aarch64"}

@@ -21,6 +21,25 @@ from apkmeta import compatibility, file_sha256
 VERSION_PATTERN = re.compile(r"(?<!\d)(1\.\d+\.\d+(?:\.\d+)?)(?!\d)")
 
 
+def library_stat(path: Path) -> dict[str, int]:
+    info = path.stat()
+    return {
+        "size": info.st_size,
+        "mtime_ns": info.st_mtime_ns,
+        "ctime_ns": info.st_ctime_ns,
+    }
+
+
+def cached_library_hash(metadata: dict[str, object], game_library: Path,
+                        current_stat: dict[str, int]) -> str:
+    stored_hash = metadata.get("game_library_sha256")
+    stored_stat = metadata.get("game_library_stat")
+    if (isinstance(stored_hash, str) and re.fullmatch(r"[0-9a-f]{64}", stored_hash)
+            and stored_stat == current_stat):
+        return stored_hash
+    return file_sha256(game_library)
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: migrate_version_metadata.py GAMEDIR", file=sys.stderr)
@@ -75,10 +94,12 @@ def main() -> int:
                 "source_directory": version_dir.name,
             }
         game_library = version_dir / "lib" / abi / "libminecraftpe.so"
-        library_sha256 = file_sha256(game_library)
+        current_stat = library_stat(game_library)
+        library_sha256 = cached_library_hash(metadata, game_library, current_stat)
         updated = dict(metadata)
         updated["schema"] = 2
         updated["game_library_sha256"] = library_sha256
+        updated["game_library_stat"] = current_stat
         updated["compatibility"] = compatibility(gamedir, version, abi, library_sha256)
         if existing and updated == metadata:
             continue

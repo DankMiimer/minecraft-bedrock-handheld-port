@@ -584,6 +584,9 @@ index d0e1907..b64d463 100644
 +    const char *disabled = std::getenv("MCPE_PATCH_EDUMODE");
 +    if(disabled != nullptr && std::strcmp(disabled, "0") == 0)
 +        return;
++#if !defined(__aarch64__)
++    return;
++#endif
 +
 +    // 1.16.x: Java_com_mojang_minecraftpe_MainActivity_isEduMode is also
 +    // called internally before its backing global exists and null-derefs on
@@ -625,6 +628,9 @@ index d0e1907..b64d463 100644
 +    const char *disabled = std::getenv("MCPE_PATCH_HTTP_RESOLVE");
 +    if(disabled != nullptr && std::strcmp(disabled, "0") == 0)
 +        return;
++#if !defined(__aarch64__)
++    return;
++#endif
 +
 +    // Only the official arm64 1.16.221.01 binary; other versions differ.
 +    auto gameDir = PathHelper::getGameDir();
@@ -727,7 +733,7 @@ index d0e1907..b64d463 100644
  
      if(!freeOnly.get()) {
          modLoader.loadModsFromDirectory(PathHelper::getPrimaryDataDirectory() + "mods/");
-@@ -502,6 +642,9 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
+@@ -502,6 +650,9 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
      support.registerMinecraftNatives(+[](const char* sym) {
          return linker::dlsym(handle, sym);
      });

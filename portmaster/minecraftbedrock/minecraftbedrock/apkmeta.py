@@ -12,14 +12,21 @@ import json
 import os
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
 import tempfile
 import uuid
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - the port and installer run on Linux
+    fcntl = None
 
 PACKAGE = "com.mojang.minecraftpe"
 MOJANG_CERTS = {
@@ -29,6 +36,13 @@ RES_VERSION_CODE = 0x0101021B
 RES_VERSION_NAME = 0x0101021C
 ABIS = ("arm64-v8a", "armeabi-v7a")
 ABI_LABEL = {"arm64-v8a": "arm64", "armeabi-v7a": "armhf"}
+BUNDLE_SUFFIXES = {".apks", ".apkm", ".xapk", ".zip"}
+INPUT_SUFFIXES = {".apk", *BUNDLE_SUFFIXES}
+MAX_BUNDLE_APKS = 128
+MAX_BUNDLE_MEMBER_BYTES = 2 * 1024 * 1024 * 1024
+MAX_BUNDLE_TOTAL_BYTES = 6 * 1024 * 1024 * 1024
+LOCK_NAME = ".install.lock"
+JOURNAL_NAME = ".install-transaction.json"
 
 
 # Extraction takes minutes and the launcher has no window during it, so the
@@ -65,6 +79,196 @@ def report_progress(message: str | None = None, advance: int = 0) -> None:
 
 class InstallError(RuntimeError):
     pass
+
+
+def input_files(directory: Path) -> list[Path]:
+    """Return supported installer inputs without depending on shell glob rules."""
+    try:
+        return sorted(
+            (path for path in directory.iterdir()
+             if path.is_file() and path.suffix.lower() in INPUT_SUFFIXES),
+            key=lambda path: path.name.casefold(),
+        )
+    except FileNotFoundError:
+        return []
+
+
+def _safe_display_name(value: str) -> str:
+    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def expand_input_paths(paths: list[Path], workspace: Path) -> list[tuple[Path, str, str]]:
+    """Expand outer APK bundles into a private workspace.
+
+    Each result is ``(real_path, display_name, original_input_name)``.  Inner
+    archive names are never used as filesystem paths, which prevents traversal
+    and collisions even when a third-party bundle contains hostile names.
+    """
+    workspace.mkdir(parents=True, exist_ok=True)
+    expanded: list[tuple[Path, str, str]] = []
+    for source_index, source in enumerate(paths):
+        if not source.is_file():
+            raise InstallError(f"installer input not found: {source}")
+        suffix = source.suffix.lower()
+        if suffix not in INPUT_SUFFIXES:
+            raise InstallError(f"unsupported installer input: {source.name}")
+        if suffix == ".apk":
+            expanded.append((source, source.name, source.name))
+            continue
+        try:
+            with zipfile.ZipFile(source) as archive:
+                names = archive.namelist()
+                # An APK renamed to .zip is still an APK, not an outer bundle.
+                if "AndroidManifest.xml" in names:
+                    expanded.append((source, source.name, source.name))
+                    continue
+                members = [entry for entry in archive.infolist()
+                           if not entry.is_dir() and entry.filename.lower().endswith(".apk")]
+                if not members:
+                    raise InstallError(f"{source.name} contains no APK files")
+                if len(members) > MAX_BUNDLE_APKS:
+                    raise InstallError(
+                        f"{source.name} contains too many APK files ({len(members)}; max {MAX_BUNDLE_APKS})"
+                    )
+                total = 0
+                for entry in members:
+                    mode = entry.external_attr >> 16
+                    if entry.flag_bits & 0x1:
+                        raise InstallError(f"encrypted APK bundle member is unsupported: {entry.filename}")
+                    if stat.S_ISLNK(mode):
+                        raise InstallError(f"symlink APK bundle member is unsafe: {entry.filename}")
+                    if entry.file_size > MAX_BUNDLE_MEMBER_BYTES:
+                        raise InstallError(f"APK bundle member is too large: {entry.filename}")
+                    total += entry.file_size
+                    if total > MAX_BUNDLE_TOTAL_BYTES:
+                        raise InstallError(f"expanded APK bundle is too large: {source.name}")
+                free = shutil.disk_usage(workspace).free
+                if free < total + 64 * 1024 * 1024:
+                    raise InstallError(
+                        f"not enough free space to inspect {source.name}; need about "
+                        f"{(total + 64 * 1024 * 1024) // (1024 * 1024)} MiB"
+                    )
+                for member_index, entry in enumerate(members):
+                    token = hashlib.sha256(
+                        f"{source_index}\0{member_index}\0{entry.filename}".encode("utf-8", "replace")
+                    ).hexdigest()[:16]
+                    target = workspace / f"{source_index:03d}-{member_index:03d}-{token}.apk"
+                    copied = 0
+                    with archive.open(entry) as src, target.open("wb") as dst:
+                        while True:
+                            chunk = src.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            copied += len(chunk)
+                            if copied > entry.file_size or copied > MAX_BUNDLE_MEMBER_BYTES:
+                                raise InstallError(f"APK bundle member expanded beyond its declared size: {entry.filename}")
+                            dst.write(chunk)
+                    if copied != entry.file_size:
+                        raise InstallError(f"incomplete APK bundle member: {entry.filename}")
+                    display = f"{source.name}:{_safe_display_name(entry.filename)}"
+                    expanded.append((target, display, source.name))
+        except zipfile.BadZipFile as exc:
+            raise InstallError(f"corrupt or incomplete APK bundle: {source.name}") from exc
+    return expanded
+
+
+def _fsync_directory(path: Path) -> None:
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError:
+        pass
+
+
+def atomic_write_json(path: Path, value: object) -> None:
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("w", encoding="utf-8") as output:
+        json.dump(value, output, indent=2)
+        output.write("\n")
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(temporary, path)
+    _fsync_directory(path.parent)
+
+
+@contextmanager
+def install_lock(versions: Path):
+    """Serialize installers with a kernel-owned lock (no stale lock files)."""
+    if fcntl is None:
+        raise InstallError("safe installation locking requires Linux fcntl support")
+    lock_path = versions / LOCK_NAME
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise InstallError("another Minecraft APK installation is already running") from exc
+        lock.seek(0)
+        lock.truncate()
+        lock.write(f"pid={os.getpid()}\n")
+        lock.flush()
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _transaction_names(journal: dict[str, object]) -> tuple[str, str, list[str]]:
+    transaction_id = journal.get("transaction_id")
+    stage_name = journal.get("stage_name")
+    target_names = journal.get("target_names")
+    if (journal.get("schema") != 1 or not isinstance(transaction_id, str)
+            or not re.fullmatch(r"[0-9a-f]{32}", transaction_id)
+            or not isinstance(stage_name, str) or not stage_name.startswith(".staging-")
+            or Path(stage_name).name != stage_name or not isinstance(target_names, list)
+            ):
+        raise InstallError("installer transaction journal is invalid; refusing unsafe recovery")
+    clean_targets: list[str] = []
+    for name in target_names:
+        if (not isinstance(name, str) or not name or Path(name).name != name
+                or name.startswith(".")):
+            raise InstallError("installer transaction journal contains an unsafe target")
+        clean_targets.append(name)
+    return transaction_id, stage_name, clean_targets
+
+
+def rollback_transaction(versions: Path, journal: dict[str, object]) -> None:
+    """Remove only paths cryptographically tagged as belonging to a transaction."""
+    transaction_id, stage_name, target_names = _transaction_names(journal)
+    for name in target_names:
+        target = versions / name
+        if not target.exists():
+            continue
+        try:
+            metadata = json.loads((target / "version.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError) as exc:
+            raise InstallError(
+                f"cannot safely recover interrupted install: {name} has no valid transaction metadata"
+            ) from exc
+        if metadata.get("transaction_id") != transaction_id:
+            raise InstallError(
+                f"cannot safely recover interrupted install: {name} belongs to another transaction"
+            )
+        shutil.rmtree(target)
+    shutil.rmtree(versions / stage_name, ignore_errors=True)
+
+
+def recover_incomplete_install(versions: Path) -> bool:
+    journal_path = versions / JOURNAL_NAME
+    if not journal_path.exists():
+        return False
+    try:
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as exc:
+        raise InstallError("installer transaction journal is unreadable; refusing unsafe recovery") from exc
+    if not isinstance(journal, dict):
+        raise InstallError("installer transaction journal is invalid; refusing unsafe recovery")
+    rollback_transaction(versions, journal)
+    journal_path.unlink()
+    _fsync_directory(versions)
+    return True
 
 
 def _read_len8(data: bytes, pos: int) -> tuple[int, int]:
@@ -415,6 +619,7 @@ def certificate_digest(path: Path, archive: zipfile.ZipFile) -> tuple[str, bool]
 class ApkInfo:
     path: str
     name: str
+    input_name: str
     package: str | None
     version_code: int | None
     version_name: str | None
@@ -428,7 +633,8 @@ class ApkInfo:
     role: str
 
 
-def inspect_apk(path: Path) -> ApkInfo:
+def inspect_apk(path: Path, display_name: str | None = None,
+                input_name: str | None = None) -> ApkInfo:
     if not path.is_file():
         raise InstallError(f"APK not found: {path}")
     try:
@@ -468,7 +674,8 @@ def inspect_apk(path: Path) -> ApkInfo:
     else:
         role = "optional"
     return ApkInfo(
-        path=str(path.resolve()), name=path.name,
+        path=str(path.resolve()), name=display_name or path.name,
+        input_name=input_name or path.name,
         package=manifest.get("package"), version_code=manifest.get("version_code"),
         version_name=manifest.get("version_name"), split=manifest.get("split"),
         abis=abis, has_assets=has_assets, has_resource_packs=has_resource_packs,
@@ -626,95 +833,144 @@ def extract_prefix(archive_path: str, prefix: str, destination: Path) -> None:
 
 
 def install(gamedir: Path, paths: list[Path]) -> list[Path]:
-    # Reading and sizing the archives takes a noticeable while on a handheld,
-    # so say so before it starts rather than showing an idle bar.
-    report_progress("reading APK files")
-    infos = [inspect_apk(path) for path in paths]
-    package, version_code, version = normalized_group(infos)
-    signer, signer_status = validate_signers(infos)
-    if any(info.has_pairip for info in infos):
-        raise InstallError(
-            "PairIP licensing detected. Bedrock 1.26+ requires legal upstream launcher support; no DRM bypass is attempted."
-        )
-    native_by_abi, assets_source, base_source = choose_sources(infos)
     versions = gamedir / "versions"
     versions.mkdir(parents=True, exist_ok=True)
-    targets: dict[str, Path] = {}
-    for abi in native_by_abi:
-        target = versions / f"{safe_version(version)}-{version_code}-{ABI_LABEL[abi]}"
-        if target.exists():
-            raise InstallError(f"version already installed: {target.name}")
-        targets[abi] = target
+    with install_lock(versions):
+        if recover_incomplete_install(versions):
+            print("RECOVERED=interrupted-install")
+        transaction_id = uuid.uuid4().hex
+        stage_root = versions / f".staging-{os.getpid()}-{transaction_id[:8]}"
+        bundle_workspace = stage_root / "bundle-apks"
+        journal_path = versions / JOURNAL_NAME
+        journal: dict[str, object] = {
+            "schema": 1,
+            "transaction_id": transaction_id,
+            "stage_name": stage_root.name,
+            "target_names": [],
+            "committed": [],
+        }
+        journal_written = False
+        try:
+            stage_root.mkdir()
+            atomic_write_json(journal_path, journal)
+            journal_written = True
+            # Reading and sizing the archives takes a noticeable while on a
+            # handheld, so say so before it starts rather than showing idle UI.
+            report_progress("reading APK files")
+            expanded = expand_input_paths(paths, bundle_workspace)
+            infos = [inspect_apk(path, display, original)
+                     for path, display, original in expanded]
+            package, version_code, version = normalized_group(infos)
+            signer, signer_status = validate_signers(infos)
+            if any(info.has_pairip for info in infos):
+                raise InstallError(
+                    "PairIP licensing detected. Bedrock 1.26+ requires legal upstream launcher support; no DRM bypass is attempted."
+                )
+            native_by_abi, assets_source, base_source = choose_sources(infos)
+            targets: dict[str, Path] = {}
+            for abi in native_by_abi:
+                target = versions / f"{safe_version(version)}-{version_code}-{ABI_LABEL[abi]}"
+                if target.exists():
+                    raise InstallError(f"version already installed: {target.name}")
+                targets[abi] = target
+            journal["target_names"] = [target.name for target in targets.values()]
+            atomic_write_json(journal_path, journal)
 
-    required = sum(selected_size(native_by_abi[abi], assets_source, abi) for abi in native_by_abi)
-    free = shutil.disk_usage(versions).free
-    if free < required + 64 * 1024 * 1024:
-        raise InstallError(f"not enough free space: need about {(required + 64 * 1024 * 1024) // (1024*1024)} MiB")
+            required = sum(
+                selected_size(native_by_abi[abi], assets_source, abi)
+                for abi in native_by_abi
+            )
+            free = shutil.disk_usage(versions).free
+            if free < required + 64 * 1024 * 1024:
+                raise InstallError(
+                    f"not enough free space: need about "
+                    f"{(required + 64 * 1024 * 1024) // (1024 * 1024)} MiB"
+                )
 
-    begin_progress(
-        sum(
-            prefix_bytes(native_by_abi[abi].path, f"lib/{abi}/")
-            + prefix_bytes(assets_source.path, "assets/")
-            for abi in native_by_abi
-        ),
-        "starting",
-    )
+            begin_progress(
+                sum(
+                    prefix_bytes(native_by_abi[abi].path, f"lib/{abi}/")
+                    + prefix_bytes(assets_source.path, "assets/")
+                    for abi in native_by_abi
+                ),
+                "starting",
+            )
 
-    stage_root = versions / f".staging-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    committed: list[Path] = []
-    try:
-        stage_root.mkdir()
-        for abi, native in native_by_abi.items():
-            target_name = targets[abi].name
-            stage = stage_root / target_name
-            stage.mkdir()
-            report_progress(f"game code ({ABI_LABEL[abi]})")
-            extract_prefix(native.path, f"lib/{abi}/", stage)
-            report_progress(f"game assets ({ABI_LABEL[abi]})")
-            extract_prefix(assets_source.path, "assets/", stage)
-            game_lib = stage / "lib" / abi / "libminecraftpe.so"
-            if not game_lib.is_file():
-                raise InstallError(f"{abi} extraction did not produce libminecraftpe.so")
-            if not (stage / "assets").is_dir():
-                raise InstallError("asset extraction produced no assets directory")
-            fmod = stage / "lib" / abi / "libfmod.so"
-            if fmod.is_file():
-                shutil.copy2(fmod, fmod.with_name("libfmod.so.12.0"))
-            if abi == "armeabi-v7a":
-                for shim in ("libc.so", "libm.so"):
-                    candidates = [
-                        gamedir / "bin32" / "lib" / abi / shim,
-                        gamedir / "lib32" / abi / shim,
-                    ]
-                    source = next((candidate for candidate in candidates if candidate.is_file()), None)
-                    if source:
-                        shutil.copy2(source, stage / "lib" / abi / shim)
-            report_progress(f"checking files ({ABI_LABEL[abi]})")
-            library_sha256 = file_sha256(game_lib)
-            compat = compatibility(gamedir, version, abi, library_sha256)
-            metadata = {
-                "schema": 2, "package": package, "version_name": version,
-                "version_code": version_code, "abi": abi, "abi_label": ABI_LABEL[abi],
-                "game_library_sha256": library_sha256,
-                "signer": signer, "signer_status": signer_status,
-                "sources": sorted({info.name for info in infos}),
-                "compatibility": compat,
-            }
-            (stage / "version.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-            if compat.get("status") == "unsupported":
-                raise InstallError(f"{version}/{ABI_LABEL[abi]} is unsupported: {compat.get('reason', 'registry policy')}")
+            for abi, native in native_by_abi.items():
+                target_name = targets[abi].name
+                stage = stage_root / target_name
+                stage.mkdir()
+                report_progress(f"game code ({ABI_LABEL[abi]})")
+                extract_prefix(native.path, f"lib/{abi}/", stage)
+                report_progress(f"game assets ({ABI_LABEL[abi]})")
+                extract_prefix(assets_source.path, "assets/", stage)
+                game_lib = stage / "lib" / abi / "libminecraftpe.so"
+                if not game_lib.is_file():
+                    raise InstallError(f"{abi} extraction did not produce libminecraftpe.so")
+                if not (stage / "assets").is_dir():
+                    raise InstallError("asset extraction produced no assets directory")
+                fmod = stage / "lib" / abi / "libfmod.so"
+                if fmod.is_file():
+                    shutil.copy2(fmod, fmod.with_name("libfmod.so.12.0"))
+                if abi == "armeabi-v7a":
+                    for shim in ("libc.so", "libm.so"):
+                        candidates = [
+                            gamedir / "bin32" / "lib" / abi / shim,
+                            gamedir / "lib32" / abi / shim,
+                        ]
+                        source = next((candidate for candidate in candidates if candidate.is_file()), None)
+                        if source:
+                            shutil.copy2(source, stage / "lib" / abi / shim)
+                report_progress(f"checking files ({ABI_LABEL[abi]})")
+                library_sha256 = file_sha256(game_lib)
+                compat = compatibility(gamedir, version, abi, library_sha256)
+                metadata = {
+                    "schema": 2, "package": package, "version_name": version,
+                    "version_code": version_code, "abi": abi, "abi_label": ABI_LABEL[abi],
+                    "game_library_sha256": library_sha256,
+                    "game_library_stat": {
+                        "size": game_lib.stat().st_size,
+                        "mtime_ns": game_lib.stat().st_mtime_ns,
+                        "ctime_ns": game_lib.stat().st_ctime_ns,
+                    },
+                    "signer": signer, "signer_status": signer_status,
+                    "sources": sorted({info.input_name for info in infos}),
+                    "source_members": sorted({info.name for info in infos}),
+                    "transaction_id": transaction_id,
+                    "compatibility": compat,
+                }
+                atomic_write_json(stage / "version.json", metadata)
+                if compat.get("status") == "unsupported":
+                    raise InstallError(
+                        f"{version}/{ABI_LABEL[abi]} is unsupported: "
+                        f"{compat.get('reason', 'registry policy')}"
+                    )
 
-        report_progress("finishing")
-        for abi, target in targets.items():
-            os.replace(stage_root / target.name, target)
-            committed.append(target)
-        stage_root.rmdir()
-        return committed
-    except Exception:
-        for target in committed:
-            shutil.rmtree(target, ignore_errors=True)
-        shutil.rmtree(stage_root, ignore_errors=True)
-        raise
+            # Make extracted content durable before making version directories
+            # visible. This is intentionally an install-time cost, not a launch
+            # cost, and can be disabled only for controlled test environments.
+            if hasattr(os, "sync") and os.getenv("MCPE_INSTALL_SYNC", "1") != "0":
+                os.sync()
+            report_progress("finishing")
+            committed: list[Path] = []
+            for abi, target in targets.items():
+                os.replace(stage_root / target.name, target)
+                committed.append(target)
+                journal["committed"] = [path.name for path in committed]
+                atomic_write_json(journal_path, journal)
+            _fsync_directory(versions)
+            shutil.rmtree(stage_root)
+            journal_path.unlink()
+            _fsync_directory(versions)
+            return committed
+        except Exception:
+            if journal_written and journal_path.exists():
+                rollback_transaction(versions, journal)
+                journal_path.unlink()
+                _fsync_directory(versions)
+            else:
+                shutil.rmtree(stage_root, ignore_errors=True)
+            raise
 
 
 def main() -> int:
@@ -726,7 +982,12 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.inspect:
-            print(json.dumps([asdict(inspect_apk(path)) for path in args.apks], indent=2))
+            with tempfile.TemporaryDirectory(prefix="mcpe-apk-inspect-") as temporary:
+                expanded = expand_input_paths(args.apks, Path(temporary))
+                print(json.dumps([
+                    asdict(inspect_apk(path, display, original))
+                    for path, display, original in expanded
+                ], indent=2))
             return 0
         if args.install:
             if not args.gamedir:

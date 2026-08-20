@@ -1,11 +1,81 @@
 #!/bin/bash
 # Transactional migration of user-owned data into the edition-neutral root.
 
+mcpe_migration_privileged() {
+  if [ -n "${ESUDO:-}" ]; then
+    # ESUDO is supplied by PortMaster as a command plus scoped options.
+    # shellcheck disable=SC2086
+    $ESUDO "$@"
+  else
+    "$@"
+  fi
+}
+
+mcpe_paths_same_directory() {
+  local left right
+  [ -d "$1" ] && [ -d "$2" ] || return 1
+  left="$(stat -Lc '%d:%i' "$1" 2>/dev/null || true)"
+  right="$(stat -Lc '%d:%i' "$2" 2>/dev/null || true)"
+  [ -n "$left" ] && [ "$left" = "$right" ]
+}
+
+mcpe_path_is_mountpoint() {
+  local src="$1"
+  # ROCKNIX's mountpoint applet compares device IDs and misses same-device
+  # bind mounts on exFAT. The kernel table remains authoritative.
+  if [ -r /proc/self/mountinfo ] &&
+     awk -v target="$src" '$5 == target { found=1 } END { exit !found }' \
+       /proc/self/mountinfo 2>/dev/null; then
+    return 0
+  fi
+  command -v mountpoint >/dev/null 2>&1 && mountpoint -q "$src" 2>/dev/null
+}
+
+mcpe_detach_shared_path() {
+  local src="$1"
+  if mcpe_path_is_mountpoint "$src"; then
+    mcpe_migration_privileged umount "$src" 2>/dev/null || return 1
+  fi
+  mcpe_is_empty_dir "$src" && rmdir "$src" 2>/dev/null || true
+}
+
+mcpe_attach_shared_path() { # source_path shared_path manifest new_transaction
+  local src="$1" dst="$2" pending="$3" new_transaction="$4"
+  if [ "$new_transaction" = 1 ]; then
+    printf 'link=%s|%s\n' "$src" "$dst" >>"$pending" || return 1
+  fi
+  if ln -s "$dst" "$src" 2>/dev/null; then
+    MCPE_MIGRATION_ACTIONS+=("link|$src|")
+    return 0
+  fi
+
+  # exFAT and some network-backed ROM filesystems cannot create symlinks.
+  # A bind mount gives the payload its compatibility path while keeping the
+  # edition-neutral data root. Empty mountpoint directories survive a reboot;
+  # the next launch simply reattaches them.
+  command -v mount >/dev/null 2>&1 || {
+    echo "shared-data migration: symlinks are unavailable and mount is missing: $src" >&2
+    return 1
+  }
+  mkdir -p "$src" || return 1
+  if [ "$new_transaction" = 1 ]; then
+    printf 'bind=%s|%s\n' "$src" "$dst" >>"$pending" || return 1
+  fi
+  if ! mcpe_migration_privileged mount --bind "$dst" "$src"; then
+    mcpe_is_empty_dir "$src" && rmdir "$src" 2>/dev/null || true
+    echo "shared-data migration: could not bind $dst at $src" >&2
+    return 1
+  fi
+  MCPE_MIGRATION_ACTIONS+=("bind|$src|$dst")
+  echo "shared-data migration: using a bind mount for symlink-incompatible storage: $src"
+}
+
 mcpe_migration_rollback_actions() {
   local i action src dst
   for ((i=${#MCPE_MIGRATION_ACTIONS[@]}-1; i>=0; i--)); do
     IFS='|' read -r action src dst <<<"${MCPE_MIGRATION_ACTIONS[$i]}"
     case "$action" in
+      bind) mcpe_detach_shared_path "$src" || true ;;
       link) [ -L "$src" ] && rm -f "$src" ;;
       move) [ -e "$dst" ] && [ ! -e "$src" ] && mv "$dst" "$src" ;;
       mkdir) mcpe_is_empty_dir "$src" && rmdir "$src" 2>/dev/null || true ;;
@@ -18,12 +88,13 @@ mcpe_recover_incomplete_migration() {
   [ -f "$manifest" ] || return 0
   state="$(sed -n 's/^state=//p' "$manifest" | tail -1)"
   [ "$state" = migrating ] || return 0
-  mapfile -t recovery_lines < <(grep -E '^(move|link|mkdir)=' "$manifest" 2>/dev/null || true)
+  mapfile -t recovery_lines < <(grep -E '^(move|link|bind|mkdir)=' "$manifest" 2>/dev/null || true)
   for ((i=${#recovery_lines[@]}-1; i>=0; i--)); do
     line="${recovery_lines[$i]}"
     action="${line%%=*}"
     IFS='|' read -r src dst <<<"${line#*=}"
     case "$action" in
+      bind) mcpe_detach_shared_path "$src" || true ;;
       link) [ -L "$src" ] && rm -f "$src" ;;
       move) [ -e "$dst" ] && [ ! -e "$src" ] && mv "$dst" "$src" ;;
       mkdir) mcpe_is_empty_dir "$src" && rmdir "$src" 2>/dev/null || true ;;
@@ -34,10 +105,146 @@ mcpe_recover_incomplete_migration() {
   mv "$manifest" "${manifest%.pending}.recovered"
 }
 
+mcpe_is_knulli() {
+  local cfw_lower
+  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
+  case "$cfw_lower" in *knulli*) return 0 ;; esac
+  return 1
+}
+
+# Knulli's EmulationStation recursively inventories every visible directory in
+# roms/ports. An extracted Bedrock version contains tens of thousands of files,
+# so keeping shared data in minecraftbedrock-data makes merely opening Ports
+# take seconds. Knulli skips dot-directories, so adopt the historical hidden
+# root used by this port on that CFW. The merge is preflighted and idempotent:
+# disjoint files move, byte-identical duplicates collapse, and every other
+# collision aborts before anything changes.
+mcpe_knulli_merge_shared_roots() { # visible_root hidden_root
+  local visible="$1" hidden="$2" src dst rel target_link source_link
+  [ -d "$visible" ] || return 0
+  mkdir -p "$hidden" || return 1
+
+  while IFS= read -r -d '' src; do
+    rel="${src#"$visible"/}"
+    dst="$hidden/$rel"
+    if [ -d "$src" ] && [ ! -L "$src" ]; then
+      if { [ -e "$dst" ] || [ -L "$dst" ]; } &&
+         { [ ! -d "$dst" ] || [ -L "$dst" ]; }; then
+        echo "Knulli shared-data collision: directory $src conflicts with $dst" >&2
+        return 1
+      fi
+    elif [ -f "$src" ] && [ ! -L "$src" ]; then
+      if [ -e "$dst" ] || [ -L "$dst" ]; then
+        if [ ! -f "$dst" ] || [ -L "$dst" ] || ! cmp -s "$src" "$dst"; then
+          echo "Knulli shared-data collision: file $src differs from $dst" >&2
+          return 1
+        fi
+      fi
+    elif [ -L "$src" ]; then
+      if [ -e "$dst" ] || [ -L "$dst" ]; then
+        source_link="$(readlink "$src" 2>/dev/null || true)"
+        target_link="$(readlink "$dst" 2>/dev/null || true)"
+        if [ ! -L "$dst" ] || [ "$source_link" != "$target_link" ]; then
+          echo "Knulli shared-data collision: link $src differs from $dst" >&2
+          return 1
+        fi
+      fi
+    elif [ -S "$src" ]; then
+      case "$src" in
+        */mcpelauncher/file_handler) ;;
+        *)
+          echo "Knulli shared-data migration does not support socket: $src" >&2
+          return 1
+          ;;
+      esac
+    else
+      echo "Knulli shared-data migration does not support special file: $src" >&2
+      return 1
+    fi
+  done < <(find "$visible" -mindepth 1 -print0 2>/dev/null)
+
+  # Build directories first, then atomically move each non-duplicate node.
+  while IFS= read -r -d '' src; do
+    rel="${src#"$visible"/}"
+    mkdir -p "$hidden/$rel" || return 1
+  done < <(find "$visible" -mindepth 1 -type d ! -type l -print0 2>/dev/null)
+  while IFS= read -r -d '' src; do
+    rel="${src#"$visible"/}"
+    dst="$hidden/$rel"
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+      rm -f "$src" || return 1
+    else
+      mkdir -p "$(dirname "$dst")" || return 1
+      mv "$src" "$dst" || return 1
+    fi
+  done < <(find "$visible" -mindepth 1 \( -type f -o -type l \) -print0 2>/dev/null)
+  # mcpelauncher creates this local IPC socket for each running session. It is
+  # stale by the next entry-script invocation and must never be treated as
+  # persistent profile data or copied into the relocated tree.
+  while IFS= read -r -d '' src; do
+    case "$src" in
+      */mcpelauncher/file_handler) rm -f "$src" || return 1 ;;
+    esac
+  done < <(find "$visible" -mindepth 1 -type s -print0 2>/dev/null)
+  while IFS= read -r -d '' src; do
+    rmdir "$src" 2>/dev/null || true
+  done < <(find "$visible" -depth -type d -print0 2>/dev/null)
+  [ ! -e "$visible" ] || {
+    echo "Knulli shared-data migration left unexpected entries in $visible" >&2
+    return 1
+  }
+}
+
+mcpe_prepare_knulli_shared_root() {
+  local ports_root visible hidden item src temp target_link
+  mcpe_is_knulli || return 0
+  ports_root="$(dirname "$GAMEDIR")"
+  visible="$ports_root/minecraftbedrock-data"
+  hidden="$ports_root/.minecraftbedrock-data"
+  # Knulli's long-lived ES process can retain the old manifest-derived visible
+  # root in its environment after the one-time relocation. Treat precisely
+  # that obsolete default as unset; a genuinely custom root still wins.
+  if [ -n "${MCPE_SHARED_ROOT:-}" ]; then
+    if [ "$MCPE_SHARED_ROOT" = "$visible" ]; then
+      unset MCPE_SHARED_ROOT
+    else
+      return 0
+    fi
+  fi
+  # mcpe_load_edition exports the manifest's ordinary visible dirname before
+  # this helper runs; that value is a default, not a caller override.
+  case "${MCPE_SHARED_DIRNAME:-}" in
+    ""|minecraftbedrock-data) ;;
+    *) return 0 ;;
+  esac
+  if [ -d "$visible" ] && [ ! -e "$hidden" ]; then
+    mv "$visible" "$hidden" || return 1
+  elif [ -d "$visible" ]; then
+    mcpe_knulli_merge_shared_roots "$visible" "$hidden" || return 1
+  fi
+
+  # Retarget only links created by the previous visible-root migration. Any
+  # unrelated link is left for the normal collision guard below to reject.
+  for item in apk versions profiles backups; do
+    src="$GAMEDIR/$item"
+    [ -L "$src" ] || continue
+    target_link="$(readlink "$src" 2>/dev/null || true)"
+    [ "$target_link" = "$visible/$item" ] || continue
+    temp="$src.knulli-new-$$"
+    rm -f "$temp"
+    ln -s "$hidden/$item" "$temp" || return 1
+    rm -f "$src" || { rm -f "$temp"; return 1; }
+    mv "$temp" "$src" || return 1
+  done
+  MCPE_SHARED_DIRNAME=.minecraftbedrock-data
+  export MCPE_SHARED_DIRNAME
+}
+
 mcpe_migrate_shared_data() {
   local ports_root item src dst pending target_link total_kb free_kb source_dev target_dev
   local migration_source_root legacy_standard current_has_data=0 legacy_has_data=0
   local new_transaction=0 cross_device_kb=0
+  mcpe_prepare_knulli_shared_root || return 1
   ports_root="$(dirname "$GAMEDIR")"
   MCPE_SHARED_ROOT="${MCPE_SHARED_ROOT:-$ports_root/${MCPE_SHARED_DIRNAME:-minecraftbedrock-data}}"
   export MCPE_SHARED_ROOT
@@ -80,6 +287,7 @@ mcpe_migrate_shared_data() {
   target_dev="$(df -P "$MCPE_SHARED_ROOT" 2>/dev/null | awk 'NR==2 {print $1}')"
   for item in apk versions profiles backups; do
     src="$migration_source_root/$item"; dst="$MCPE_SHARED_ROOT/$item"
+    mcpe_paths_same_directory "$src" "$dst" && continue
     if [ -e "$src" ] && [ ! -d "$src" ] && [ ! -L "$src" ]; then
       echo "shared-data migration: expected directory, found file: $src" >&2
       return 1
@@ -124,6 +332,8 @@ mcpe_migrate_shared_data() {
       mkdir -p "$dst" || return 1
       continue
     fi
+    # A bind mount from a previous launch is already the desired path.
+    mcpe_paths_same_directory "$src" "$dst" && continue
     if [ -e "$src" ] && [ ! -d "$src" ]; then
       echo "shared-data migration: expected directory, found file: $src" >&2
       [ "$new_transaction" = 1 ] && printf 'state=rollback\n' >>"$pending"
@@ -151,9 +361,11 @@ mcpe_migrate_shared_data() {
       fi
       [ -d "$src" ] && rmdir "$src" 2>/dev/null || true
     fi
-    [ "$new_transaction" = 1 ] && printf 'link=%s|%s\n' "$src" "$dst" >>"$pending"
-    ln -s "$dst" "$src" || { mcpe_migration_rollback_actions; [ "$new_transaction" = 1 ] && mv "$pending" "$GAMEDIR/config/migration.failed"; return 1; }
-    MCPE_MIGRATION_ACTIONS+=("link|$src|")
+    mcpe_attach_shared_path "$src" "$dst" "$pending" "$new_transaction" || {
+      mcpe_migration_rollback_actions
+      [ "$new_transaction" = 1 ] && mv "$pending" "$GAMEDIR/config/migration.failed"
+      return 1
+    }
   done
 
   if [ "$migration_source_root" != "$GAMEDIR" ]; then
@@ -169,6 +381,7 @@ mcpe_migrate_shared_data() {
         }
         continue
       fi
+      mcpe_paths_same_directory "$src" "$dst" && continue
       [ -d "$src" ] && mcpe_is_empty_dir "$src" && rmdir "$src" 2>/dev/null || true
       if [ -e "$src" ]; then
         echo "shared-data migration: RGDS compatibility path is not empty: $src" >&2
@@ -176,13 +389,11 @@ mcpe_migrate_shared_data() {
         [ "$new_transaction" = 1 ] && mv "$pending" "$GAMEDIR/config/migration.failed"
         return 1
       fi
-      [ "$new_transaction" = 1 ] && printf 'link=%s|%s\n' "$src" "$dst" >>"$pending"
-      ln -s "$dst" "$src" || {
+      mcpe_attach_shared_path "$src" "$dst" "$pending" "$new_transaction" || {
         mcpe_migration_rollback_actions
         [ "$new_transaction" = 1 ] && mv "$pending" "$GAMEDIR/config/migration.failed"
         return 1
       }
-      MCPE_MIGRATION_ACTIONS+=("link|$src|")
     done
   fi
 

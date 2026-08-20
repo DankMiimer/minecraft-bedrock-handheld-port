@@ -1,0 +1,20 @@
+[config]
+repeat_delay = 350
+repeat_interval = 120
+
+[controls]
+overlay = clear
+# RG34XXSP/Knulli reports the printed A button as SDL B and printed B as SDL
+# A. Keep this UI completely focus-driven: no invisible pointer is required.
+b = space
+a = escape
+x = enter
+y = backtab
+dpad_up = backtab repeat
+dpad_down = tab repeat
+dpad_left = backtab repeat
+dpad_right = tab repeat
+l1 = pageup repeat
+r1 = pagedown repeat
+start = enter
+select = escape

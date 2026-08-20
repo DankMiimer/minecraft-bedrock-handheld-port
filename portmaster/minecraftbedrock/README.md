@@ -7,8 +7,8 @@ the open-source minecraft-linux launcher.
 This is a testing release. Final R36S and revised RGDS physical acceptance
 checks remain pending; rc.6 adds no stable or newly Validated claims.
 
-**No game files are included.** Supply your own official full APK or complete
-split-APK set.
+**No game files are included.** Supply your own official full APK, APKM/APKS/
+XAPK bundle, or complete split-APK set.
 
 **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 MOJANG OR MICROSOFT.**
@@ -30,14 +30,22 @@ Refresh the Ports list and launch **Minecraft Bedrock** once. This creates:
 ports/minecraftbedrock-data/apk/
 ```
 
-Copy your official APK files there, launch again, choose **Install APK**, and
-select the complete detected set. Keep all files from one split download
-together. Installation may take several minutes; wait for the progress screen
-to finish.
+Copy your official APK files or one untouched APKM/APKS/XAPK bundle there,
+launch again, choose **Install APK**, and select the complete detected set.
+Keep all files from one split download together. Installation may take several
+minutes; wait for the progress screen to finish.
+
+On RG34XXSP/H700 with Knulli Scarab, **Get APK from Google Play** is an
+experimental optional alternative. It opens Google's own sign-in page with a
+controller-operated on-screen keyboard, downloads the selected owned ARM64
+split set into the same `apk/` folder, validates it, and installs it. First use
+may add about 700 MB for the browser runtime. The feature does nothing unless
+selected, and the menu can remove both its saved session and optional runtime.
 
 The installer validates Android package metadata, signing data, dependencies,
-and ABI before publishing the new version. A failed or mixed set does not
-overwrite an existing install.
+and ABI before publishing the new version. Installs are locked and journaled;
+the next attempt safely rolls back a power-interrupted commit. A failed or
+mixed set does not overwrite an existing install.
 
 ## Pick the correct APK
 
@@ -68,12 +76,19 @@ https://github.com/DankMiimer/minecraft-bedrock-handheld-port/blob/main/GETTING-
 
 - **Play** starts the selected installed version.
 - **Versions** selects or removes game versions without deleting worlds.
-- **Install APK** installs one validated full APK or split set.
+- **Get APK from Google Play** optionally downloads and installs an owned copy
+  on the RG34XXSP/Knulli prototype.
+- **Install APK** installs one validated full APK, APK bundle, or split set.
 - **Settings** controls FPS, render distance, ABI, UI scale, VSync, and tuning.
 - **Backup** saves and restores profiles, worlds, and launcher settings.
 - **Update port** updates only this edition while preserving shared data.
 - **Support bundle** creates a local redacted diagnostic archive.
 - **Controller test** records local input detection for device reports.
+
+The 32-bit R36S path defaults to 10 FPS, requests 2 chunks, and disables
+expensive visual effects. Some Bedrock builds enforce a higher render-distance
+minimum. Change FPS or distance in **Settings**; turn off **Auto-tune options**
+to opt out of the remaining visual preset.
 
 Controls: D-pad navigates, **A** selects, **B** returns, **X** deletes, and
 Left/Right changes settings.
@@ -94,9 +109,10 @@ ports/minecraftbedrock-data/
   versions/  extracted game versions
   profiles/  worlds and player data
   backups/   backup archives
+  downloader/ private Google Play session and optional browser (only if used)
 ```
 
-Code, logs, runtime, cache, and update state remain separate. The first 2.x
+Port code, game runtime, logs, and update state remain separate. The first 2.x
 launch safely migrates a 1.x layout and refuses ambiguous collisions instead
 of overwriting either copy.
 

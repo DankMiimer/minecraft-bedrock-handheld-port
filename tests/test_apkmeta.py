@@ -8,7 +8,10 @@ HELPER = ROOT / "portmaster" / "minecraftbedrock" / "minecraftbedrock" / "apkmet
 VERSION_HELPER = ROOT / "portmaster" / "minecraftbedrock" / "minecraftbedrock" / "version_env.py"
 GROUP_HELPER = ROOT / "portmaster" / "minecraftbedrock" / "minecraftbedrock" / "apk_groups.py"
 sys.path.insert(0, str(HELPER.parent))
-from apkmeta import _apk_signing_certificate  # noqa: E402
+from apkmeta import (InstallError, JOURNAL_NAME, _apk_signing_certificate,
+                     recover_incomplete_install)  # noqa: E402
+from migrate_version_metadata import (cached_library_hash,
+                                      library_stat)  # noqa: E402
 
 
 def string_pool(strings: list[str]) -> bytes:
@@ -87,7 +90,9 @@ def add_fake_v2_signer(path: Path, certificate: bytes) -> None:
 
 
 def invoke(game: Path, *paths: Path, ok: bool = True):
-    env = os.environ.copy(); env["MCPE_ALLOW_UNVERIFIED_APK"] = "1"
+    env = os.environ.copy()
+    env["MCPE_ALLOW_UNVERIFIED_APK"] = "1"
+    env["MCPE_INSTALL_SYNC"] = "0"
     result = subprocess.run([sys.executable, str(HELPER), "--install", "--gamedir", str(game), *map(str, paths)], text=True, capture_output=True, env=env)
     if ok and result.returncode:
         raise AssertionError(result.stderr + result.stdout)
@@ -135,6 +140,24 @@ def main() -> int:
         assert (target / "assets/assets/resource_packs/vanilla/manifest.json").is_file()
         assert json.loads((target / "version.json").read_text())["version_name"] == "1.20.62.02"
         assert json.loads((target / "version.json").read_text())["schema"] == 2
+        target_metadata = json.loads((target / "version.json").read_text())
+        target_library = target / "lib/arm64-v8a/libminecraftpe.so"
+        assert target_metadata["game_library_stat"] == library_stat(target_library)
+
+        cached = "a" * 64
+        assert cached_library_hash(
+            {"game_library_sha256": cached,
+             "game_library_stat": library_stat(target_library)},
+            target_library, library_stat(target_library),
+        ) == cached
+        target_library.write_bytes(b"changed-game-lib")
+        assert cached_library_hash(
+            {"game_library_sha256": cached,
+             "game_library_stat": target_metadata["game_library_stat"]},
+            target_library, library_stat(target_library),
+        ) == hashlib.sha256(b"changed-game-lib").hexdigest()
+        # Restore the fixture used by the following compatibility assertions.
+        target_library.write_bytes(b"fixture-game-lib")
         env_result = subprocess.run(
             [sys.executable, str(VERSION_HELPER), str(game), str(target)],
             text=True, capture_output=True, check=True,
@@ -158,7 +181,77 @@ def main() -> int:
         time.sleep(0.02)
         subprocess.run([sys.executable, str(GROUP_HELPER), str(tmp), str(groups)], check=True, env=env)
         assert (groups / "index.tsv").stat().st_mtime_ns == first_index_mtime
-        assert json.loads((groups / ".input-state.json").read_text())["schema"] == 1
+        assert json.loads((groups / ".input-state.json").read_text())["schema"] == 2
+
+        # APKMirror/APKPure/Split APK Installer containers are outer ZIPs of
+        # ordinary APKs. They must be expanded privately while metadata keeps
+        # the original user-supplied filename for provenance.
+        bundle_parts = tmp / "bundle-parts"
+        bundle_parts.mkdir()
+        bundle_base = bundle_parts / "base.apk"
+        bundle_native = bundle_parts / "config.arm64_v8a.apk"
+        bundle_assets = bundle_parts / "install_pack.apk"
+        apk(bundle_base, "1.16.221.01", 971622101, "base")
+        apk(bundle_native, None, 971622101, "native")
+        apk(bundle_assets, None, 971622101, "assets")
+        bundle = tmp / "minecraft.apkm"
+        with zipfile.ZipFile(bundle, "w") as archive:
+            archive.write(bundle_base, "splits/base.apk")
+            archive.write(bundle_native, "splits/config.arm64_v8a.apk")
+            archive.write(bundle_assets, "install_pack.apk")
+        invoke(game, bundle)
+        bundle_target = game / "versions/1.16.221.01-971622101-arm64"
+        bundle_metadata = json.loads((bundle_target / "version.json").read_text(encoding="utf-8"))
+        assert bundle_metadata["sources"] == ["minecraft.apkm"]
+        assert len(bundle_metadata["source_members"]) == 3
+        assert not any(path.name == "bundle-apks" for path in (game / "versions").iterdir())
+
+        empty_bundle = tmp / "not-an-apk-set.xapk"
+        with zipfile.ZipFile(empty_bundle, "w") as archive:
+            archive.writestr("manifest.json", "{}")
+        rejected_bundle = invoke(game, empty_bundle, ok=False)
+        assert "contains no APK files" in rejected_bundle.stderr
+
+        # Simulate a power cut after one target rename. Recovery may delete
+        # only a target tagged with the journal's transaction ID.
+        interrupted_id = "a" * 32
+        interrupted = game / "versions/interrupted-arm64"
+        interrupted.mkdir()
+        (interrupted / "version.json").write_text(
+            json.dumps({"transaction_id": interrupted_id}), encoding="utf-8"
+        )
+        stage = game / "versions/.staging-test-interrupted"
+        stage.mkdir()
+        (game / "versions" / JOURNAL_NAME).write_text(json.dumps({
+            "schema": 1,
+            "transaction_id": interrupted_id,
+            "stage_name": stage.name,
+            "target_names": [interrupted.name],
+            "committed": [interrupted.name],
+        }), encoding="utf-8")
+        assert recover_incomplete_install(game / "versions")
+        assert not interrupted.exists() and not stage.exists()
+        assert not (game / "versions" / JOURNAL_NAME).exists()
+
+        foreign = game / "versions/foreign-arm64"
+        foreign.mkdir()
+        (foreign / "version.json").write_text(
+            json.dumps({"transaction_id": "b" * 32}), encoding="utf-8"
+        )
+        (game / "versions" / JOURNAL_NAME).write_text(json.dumps({
+            "schema": 1,
+            "transaction_id": interrupted_id,
+            "stage_name": ".staging-test-foreign",
+            "target_names": [foreign.name],
+            "committed": [],
+        }), encoding="utf-8")
+        try:
+            recover_incomplete_install(game / "versions")
+            raise AssertionError("foreign transaction target was accepted")
+        except InstallError as exc:
+            assert "belongs to another transaction" in str(exc)
+        assert foreign.is_dir()
+        (game / "versions" / JOURNAL_NAME).unlink()
 
         fingerprinted = tmp / "fingerprinted.apk"
         apk(fingerprinted, "1.21.51.01", 972105101, "full")

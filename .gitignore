@@ -34,6 +34,7 @@ __pycache__/
 !/build/companions/
 /build/clients/*
 !/build/clients/Dockerfile
+!/build/clients/Dockerfile.armhf-buster
 !/build/clients/build-in-container.sh
 /build/companions/*
 !/build/companions/Dockerfile

@@ -103,6 +103,7 @@ mcpe_probe_platform() { # output env file
   case "$(printf '%s %s' "$model" "$compatible" | tr '[:upper:]' '[:lower:]')" in
     *"rg ds"*|*anbernic*rgds*) is_rgds=1; profile=rgds ;;
     *h700*|*sun50iw9*) profile=h700 ;;
+    *r36s*|*rk3326*) profile=rk3326 ;;
   esac
   # RGDS fallback: RK3568 plus two connected DSI panels.
   if [ "$is_rgds" = 0 ] && printf '%s' "$compatible" | grep -qi rk3568; then

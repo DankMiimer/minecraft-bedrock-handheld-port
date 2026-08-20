@@ -57,3 +57,31 @@ mcpe_archive_is_safe() {
     END { exit bad }
   '
 }
+
+mcpe_select_utf8_locale() {
+  # Minimal CFW images often export an en_US locale they did not actually
+  # install. C/C++ filesystem conversion then fails on non-ASCII world names.
+  # Keep a working UTF-8 locale when provided; otherwise select the first one
+  # the host can instantiate without requiring locale generation or writes.
+  local candidate charmap
+  for candidate in "${LC_ALL:-}" "${LC_CTYPE:-}" "${LANG:-}" \
+                   C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+    [ -n "$candidate" ] || continue
+    if command -v locale >/dev/null 2>&1; then
+      charmap="$(LC_ALL="$candidate" locale charmap 2>/dev/null || true)"
+      case "$(printf '%s' "$charmap" | tr '[:lower:]' '[:upper:]')" in
+        UTF-8|UTF8) ;;
+        *) continue ;;
+      esac
+    else
+      case "$candidate" in C.UTF-8|C.utf8) ;; *) continue ;; esac
+    fi
+    export LANG="$candidate" LC_CTYPE="$candidate" LC_ALL="$candidate"
+    MCPE_LOCALE_RESOLVED="$candidate"
+    export MCPE_LOCALE_RESOLVED
+    return 0
+  done
+  # Do not invent an unsupported locale. Byte-oriented C is safer than a
+  # broken locale name and is recorded in diagnostics for the device report.
+  export LANG=C LC_CTYPE=C LC_ALL=C MCPE_LOCALE_RESOLVED=C
+}
