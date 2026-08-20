@@ -436,16 +436,19 @@ def main() -> int:
         json.dumps({"schema": 2, "releases": releases}, indent=2) + "\n",
     )
     status = (
-        "Testing prerelease. Final R36S and revised RGDS physical acceptance "
+        "Testing channel release. Final R36S and revised RGDS physical acceptance "
         "checks remain pending; this release adds no stable or newly Validated claims."
         if args.channel == "testing"
         else "Stable channel release."
     )
     helper_note = (
-        "\n- The Windows WSL helper fixes rc.3's five-minute authentication loop "
-        "with a private, non-interactive session transfer for entitled arm64 "
-        "Google Play downloads; verify its SHA-256 before allowing an antivirus "
-        "exception."
+        "\n- The Windows helper sets itself up from one button, installing the "
+        "Windows Subsystem for Linux and Ubuntu itself and asking first; it needs "
+        "no administrator terminal, no Linux account and no typed commands. It now "
+        "offers every Bedrock version Google Play still serves, marking each as "
+        "Bedrock or Pocket Edition, naming its update, and flagging the "
+        "RenderDragon builds that stutter on this hardware. Verify its SHA-256 "
+        "before allowing an antivirus exception."
         if any(path.name.startswith("mcbedrock-get-windows-") for _, path in extras)
         else ""
     )
