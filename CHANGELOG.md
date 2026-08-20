@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.0.0-rc.7 (testing)
+
+- Restored the shared-data migration that understands a hidden
+  `.minecraftbedrock-data` directory. rc.5 and rc.6 shipped a version that knew
+  only the visible name, so on a device whose data directory is hidden -- which
+  is how Knulli keeps the shared tree out of its recursive Ports inventory --
+  the port refused to start, reporting the symlinks as pointing at an
+  "unexpected target". It refused rather than damage anything, but it refused.
+  Found by installing rc.6 on a real RG34XXSP that rc.4 ran on. The working
+  version, and the test covering it, had both been sitting uncommitted, so the
+  releases cut from main silently went backwards and CI had nothing to catch it
+  with.
+
 ## v2.0.0-rc.6 (testing)
 
 - Reduced the Windows helper's first run to one button. Step 1 now installs the
