@@ -189,7 +189,8 @@ jobs:
             --bottomd build/release-inputs/bottomd \
             --bedrockmap build/release-inputs/bedrockmap \
             --context-bridge build/release-inputs/crusty-context-v1.so \
-            --extra-asset build/release-inputs/mcbedrock-get-windows-v$VERSION.zip"
+            --extra-asset build/release-inputs/mcbedrock-get-windows-v$VERSION.zip \
+            --extra-asset build/release-inputs/mcbedrock-get-linux-x86_64-v$VERSION.AppImage"
           python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release
           python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release-repeat
           diff -qr dist/release dist/release-repeat
