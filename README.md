@@ -1,6 +1,12 @@
 # Minecraft Bedrock for ARM Linux handhelds
 
-![Minecraft Bedrock running on a handheld](screenshot.png)
+![An RG34XX SP and an RG DS side by side, both running Minecraft Bedrock in the
+same LAN world. The RG DS lower screen shows the companion: a live minimap with
+waypoints, health and hunger, and tabs for HUD, chat, items, input and
+settings.](docs/rg34xxsp-and-rgds-lan.jpg)
+
+*Standard edition on an RG34XX SP (left) and the RGDS edition on an RG DS
+(right), sharing a LAN world. The RG DS lower screen is the companion.*
 
 Run a legally owned Android copy of Minecraft Bedrock natively on supported
 ARM Linux handhelds through PortMaster and the open-source minecraft-linux
@@ -109,6 +115,9 @@ and ABI before publishing anything. Mixed or incomplete sets are rejected, and
 a failed install leaves the original APKs and previous versions intact.
 
 ### 4. Play
+
+![The Minecraft world-selection screen as it appears on the handheld](screenshot.png)
+
 
 Open **Versions**, select the installed build, then choose **Play**. The
 launcher remembers the selection. After a successful install you may keep the
