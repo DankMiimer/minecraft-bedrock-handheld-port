@@ -61,21 +61,27 @@ versioned names such as `Ubuntu-24.04`. If you deliberately use another Ubuntu
 name, set `MCBEDROCK_WSL_DISTRO` before starting
 the helper.
 
-### 2. Download and verify the helper
+### 2. Download the helper
 
-Download and extract:
+Get the newest `mcbedrock-get-windows-*.zip` from the helper's own releases
+page:
 
-[mcbedrock-get-windows-v2.0.0-rc.4.zip](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip)
+**https://github.com/DankMiimer/mcbedrock-get/releases/latest**
 
-Compare its SHA-256 with the release's
-[SHA256SUMS.txt](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/SHA256SUMS.txt):
+Unzip it and keep all the files together in one folder — the program needs the
+others beside it. (A copy is also attached to this port's own releases, but it
+is only refreshed when the port is released, so it can be older.)
+
+Windows will warn that the file comes from an unknown publisher, because it is
+not code-signed, and antivirus software sometimes flags this kind of executable.
+If you would rather check before allowing it, compare the download against the
+`SHA256SUMS.txt` published beside it:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-v2.0.0-rc.4.zip
+Get-FileHash -Algorithm SHA256 .\mcbedrock-get-windows-<version>.zip
 ```
 
-PyInstaller executables are sometimes flagged by antivirus heuristics. Do not
-allow a blocked file unless its hash matches the published release checksum.
+Do not allow a blocked file unless that hash matches.
 
 ### 3. Set it up and sign in
 

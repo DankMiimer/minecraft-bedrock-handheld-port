@@ -38,18 +38,18 @@ to the separate RGDS package instead of silently installing experimental code.
 
 - A supported ARM Linux handheld with a working PortMaster installation.
 - About 2 GB of free space for the port, runtime, and extracted game.
-- Your own Minecraft Bedrock Android purchase. The Windows helper requires the
-  Google account that owns Minecraft on Google Play; purchases from other
-  storefronts are separate entitlements.
-- A matching Android ABI:
+- Your own copy of Minecraft Bedrock for **Android**, bought from Google Play.
+  You will sign in with the Google account that owns it. A copy bought anywhere
+  else — a console store, or the PC edition — will not work here.
+- The right build for your device:
 
-| Device class | APK split |
+| Your device | Build to download |
 |---|---|
-| Most 64-bit handhelds, including H700 devices and RGDS | `arm64-v8a` |
-| 32-bit R36S/RK3326-class firmware | `armeabi-v7a` |
+| Most 64-bit handhelds, including H700 devices and RGDS | **64-bit** (`arm64-v8a`) |
+| 32-bit R36S/RK3326-class firmware | **32-bit** (`armeabi-v7a`) |
 
-If you are unsure, launch the installed port once. Its host probe and Support
-bundle report the detected architecture without needing a Minecraft APK.
+If you are not sure which you have, install the port and launch it once. It
+reports what it detected, and it does not need a Minecraft file to tell you.
 
 ## Quick start
 
@@ -71,22 +71,26 @@ then launch **Minecraft Bedrock** once. This creates the shared data folders.
 
 ### 2. Download your owned Bedrock APKs on Windows
 
-The easiest supported arm64 route is the Windows helper, [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get):
+On a Windows PC, use the helper —
+[mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get):
 
-1. Open PowerShell as administrator, run `wsl --install -d Ubuntu`, and reboot
-   if Windows asks.
-2. Extract `mcbedrock-get-windows-v2.0.0-rc.4.zip` to a normal folder.
-3. Run `mcbedrock-get.exe`, enter the Google email that owns Minecraft, and
-   complete Google's sign-in page. The helper never asks for your password.
-4. Accept the one-time WSL setup. An Ubuntu terminal opens and asks for your
-   Ubuntu password while it builds the current minecraft-linux downloader.
-5. Press **Download 1.16.221.01**. Keep every APK created in the selected
-   output folder together.
+1. Download the newest `mcbedrock-get-windows-*.zip` from
+   [its releases page](https://github.com/DankMiimer/mcbedrock-get/releases/latest)
+   and unzip it, keeping all the files together in one folder.
+2. Run `mcbedrock-get.exe`. Windows will warn about an unknown publisher
+   because the file is not code-signed; check it against the published
+   `SHA256SUMS.txt` if you would rather be sure.
+3. Press the button in **step 1** of the window. It installs everything it
+   needs by itself, including a copy of Ubuntu Linux — it explains what that
+   involves and asks first. Expect one Windows administrator prompt, possibly a
+   restart, and a few minutes of waiting.
+4. Press the button again to **sign in** with the Google account that owns
+   Minecraft, on Google's own page. The helper never sees your password.
+5. Choose your device type, pick **1.16.221.01**, and press **Download**. Keep
+   every file it produces together.
 
-PyInstaller executables can trigger antivirus heuristics. Verify the bundle
-against the published SHA-256 before allowing it. See
-[the complete Windows guide](GETTING-BEDROCK-APKS.md) for sign-out, manual
-armhf instructions, and troubleshooting.
+See [the complete Windows guide](GETTING-BEDROCK-APKS.md) for signing out,
+32-bit instructions, and troubleshooting.
 
 ### 3. Copy and install the complete set
 
@@ -112,12 +116,12 @@ APKs for recovery or delete them from the launcher with **X**.
 
 ## Recommended Bedrock versions
 
-| Version | ABI | Recommendation | Notes |
-|---|---|---|---|
-| **1.16.221.01** | arm64 / armhf | **Recommended** | Best handheld UI scaling and the smoothest tested everyday experience |
-| **1.21.51.01** | arm64 | Newest tested no-RenderDragon build | Only the registered original native-library fingerprint receives this label; later reuploads may stutter badly |
-| 1.17–1.21 RenderDragon-era builds | arm64 | Optional compatibility tests | Generally have tiny UI and severe stutter on the reference handhelds |
-| 1.26+ | arm64 | **Unsupported** | Uses PairIP/new Android ABI behavior not supported by the legal upstream launcher path |
+| Version | Verdict | Why |
+|---|---|---|
+| **1.16.221.01** | **Recommended** | Menus and text are the right size on a small screen, and it runs the most smoothly of anything tested |
+| **1.21.51.01** | Usable | The newest version without the slow graphics engine, but its menus are much smaller. Only the original release qualifies — the 1.21.51.02 re-upload switched that engine back on |
+| 1.18.30 and newer | Not worth trying | These use RenderDragon, a graphics engine handhelds are far too slow for. Expect severe stuttering, and small menus |
+| 1.26 and newer | **Will not work** | Google now protects these in a way the launcher cannot open |
 
 The launcher identifies installed versions from Android metadata and the game
 library hash, not from filenames. Exact status and evidence are in
@@ -196,7 +200,7 @@ launch again; it will not choose one destructively.
 
 | Symptom | What to do |
 |---|---|
-| Installer says the set is incomplete | Copy every APK from one download, including the base and ABI split; do not mix download dates or versions |
+| Installer says the set is incomplete | Copy every file from one single download. Do not mix files from downloads made on different days, or of different versions |
 | Game installs but does not start | Confirm `arm64-v8a` for most 64-bit systems or `armeabi-v7a` for armhf firmware |
 | Installation appears frozen | Wait for the progress stage to complete; large asset extraction can take several minutes |
 | Tiny UI or heavy stutter | Select 1.16.221.01 and start with 30–40 FPS and 3–4 chunks |

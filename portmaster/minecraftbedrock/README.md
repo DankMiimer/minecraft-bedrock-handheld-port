@@ -41,15 +41,18 @@ overwrite an existing install.
 
 ## Pick the correct APK
 
-| Device class | Required APK split |
+| Your device | Build to download |
 |---|---|
-| Most 64-bit handhelds, H700 devices, and RGDS | `arm64-v8a` |
-| 32-bit R36S/RK3326-class firmware | `armeabi-v7a` |
+| Most 64-bit handhelds, H700 devices, and RGDS | **64-bit** (`arm64-v8a`) |
+| 32-bit R36S/RK3326-class firmware | **32-bit** (`armeabi-v7a`) |
 
-Bedrock **1.16.221.01** is recommended for its usable handheld UI scaling and
-smooth performance. The fingerprinted original **1.21.51.01** is the newest
-tested no-RenderDragon arm64 build, but its UI is smaller. Versions 1.26 and
-newer are unsupported.
+Pick **1.16.221.01**. Its menus and text are the right size on a small screen
+and it runs the most smoothly of anything tested. The original **1.21.51.01**
+also works and is newer, but its menus are much smaller.
+
+Avoid 1.18.30 and newer: those use RenderDragon, a graphics engine handhelds
+are far too slow for, and they stutter badly. Versions 1.26 and newer will not
+run at all.
 
 Windows arm64 users can download their own Google Play purchase with:
 
@@ -103,7 +106,7 @@ of overwriting either copy.
   is marked Validated.
 - Xbox/Marketplace behavior is not a supported release gate; local worlds and
   LAN are the primary supported play paths.
-- Newer RenderDragon-era versions can have severe stutter and very small UI.
+- Versions from 1.18.30 onward stutter badly and have very small menus.
 - RGDS terrain mapping is available for local worlds only. Remote/LAN worlds
   retain live status but show `REMOTE WORLD / MAP UNAVAILABLE`.
 - Never share APKs, extracted libraries/assets, worlds, profiles, account data,
