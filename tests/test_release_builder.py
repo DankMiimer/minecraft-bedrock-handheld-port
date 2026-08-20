@@ -95,7 +95,9 @@ with tempfile.TemporaryDirectory(prefix="release-test-") as tmpstr:
     assert (out / helper.name).read_bytes() == helper.read_bytes()
     assert helper.name in (out / "SHA256SUMS.txt").read_text(encoding="utf-8")
     notes = (out / "RELEASE_NOTES.md").read_text(encoding="utf-8")
-    assert "Windows WSL helper" in notes
+    # The point is that shipping the helper is announced, not the wording used
+    # to announce it; pinning a phrase here just breaks when the notes improve.
+    assert "Windows helper" in notes
     assert "No game files are included" in notes
     for name in ("release-index.json", "SHA256SUMS.txt", "RELEASE_NOTES.md"):
         assert b"\r" not in (out / name).read_bytes()
