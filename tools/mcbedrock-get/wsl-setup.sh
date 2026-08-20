@@ -4,33 +4,42 @@
 # This builds gplaydl from minecraft-linux/google-play-api, the only Play client
 # still able to download Minecraft. Nothing here touches the game itself.
 #
-# Run inside Ubuntu:
+# The helper pipes this in as root and reads the output itself, so there is no
+# terminal, no password prompt and nothing to press. It still runs by hand:
 #     bash wsl-setup.sh
 
 SRC="$HOME/gplaydl-src"
 PREFIX="$HOME/.local/share/mcbedrock-get"
 
-# Never let the window vanish with an error scrolled off screen.
+# Root when the helper drives this; sudo when a person runs it in a terminal.
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
+
+# Never let a terminal window vanish with an error scrolled off screen -- but
+# never block the helper, which has no keyboard to offer.
 pause_and_exit() {
     echo
     echo "$1"
     echo
-    read -r -p "Press Enter to close this window. " _
+    if [ -t 0 ] && [ -z "${MCBEDROCK_NONINTERACTIVE:-}" ]; then
+        read -r -p "Press Enter to close this window. " _
+    fi
     exit "$2"
 }
 
 fail() { pause_and_exit "SETUP FAILED: $1" 1; }
 
 echo "==> Installing build dependencies"
-echo "    sudo will ask for your Ubuntu password."
+[ -n "$SUDO" ] && echo "    sudo will ask for your Ubuntu password."
 echo
+
+export DEBIAN_FRONTEND=noninteractive
 
 # 'apt-get update' is allowed to fail. A broken third-party repository must not
 # stop the install, and the packages below come from Ubuntu's own archive, which
 # is already indexed.
-sudo apt-get update || echo "(apt-get update reported a problem - continuing)"
+$SUDO apt-get update || echo "(apt-get update reported a problem - continuing)"
 
-sudo apt-get install -y --no-install-recommends \
+$SUDO apt-get install -y --no-install-recommends \
     build-essential cmake git \
     protobuf-compiler libprotobuf-dev \
     libcurl4-openssl-dev zlib1g-dev \
@@ -69,8 +78,10 @@ config.native_platforms = [
 ]
 EOF
 
-# The Windows helper intentionally offers only the physically tested arm64
-# route. Remove a stale armhf profile left by an older development build.
-rm -f "$PREFIX/device-armhf.conf"
+cat > "$PREFIX/device-armhf.conf" <<'EOF'
+config.native_platforms = [
+    armeabi-v7a
+]
+EOF
 
-pause_and_exit "Setup finished. Close this window and press Download again." 0
+pause_and_exit "Setup finished." 0

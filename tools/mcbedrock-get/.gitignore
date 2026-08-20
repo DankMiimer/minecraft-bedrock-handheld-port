@@ -1,5 +1,6 @@
 .venv/
 build/
+build_pyi/
 dist/
 *.spec
 __pycache__/

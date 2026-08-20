@@ -12,6 +12,22 @@ ROOT = TOOL_DIR.parents[1]
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 
 
+def project_version() -> str:
+    """The version this bundle is named after.
+
+    Read when it is needed rather than when the parser is built: as an argparse
+    default it was read on every run, so the tool could not be packaged from a
+    checkout of its own repository -- where the port's VERSION file two levels
+    up does not exist -- even when --version was supplied.
+    """
+    for candidate in (TOOL_DIR / "VERSION", ROOT / "VERSION"):
+        try:
+            return candidate.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+    raise SystemExit("no VERSION file beside the tool or at the repository root")
+
+
 def add_file(archive: zipfile.ZipFile, source: pathlib.Path, name: str) -> None:
     if not source.is_file():
         raise SystemExit(f"required Windows bundle input is missing: {source}")
@@ -24,13 +40,14 @@ def add_file(archive: zipfile.ZipFile, source: pathlib.Path, name: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", default=(ROOT / "VERSION").read_text(encoding="utf-8").strip())
+    parser.add_argument("--version", default=None)
     parser.add_argument("--dist", type=pathlib.Path, default=TOOL_DIR / "dist")
     parser.add_argument("--out-dir", type=pathlib.Path)
     args = parser.parse_args()
+    version = args.version or project_version()
     out_dir = args.out_dir or args.dist
     out_dir.mkdir(parents=True, exist_ok=True)
-    output = out_dir / f"mcbedrock-get-windows-v{args.version}.zip"
+    output = out_dir / f"mcbedrock-get-windows-v{version}.zip"
     files = [
         (TOOL_DIR / "README.md", "README.md"),
         (args.dist / "mcbedrock-get.exe", "mcbedrock-get.exe"),

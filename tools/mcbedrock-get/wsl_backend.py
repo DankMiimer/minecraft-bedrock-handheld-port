@@ -12,14 +12,27 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import sys
 import subprocess
 import tempfile
 import threading
+import zipfile
 from pathlib import Path
 from typing import Callable
 
+# Everything runs as root inside the distribution. Windows grants that without
+# a password by design, which removes the whole "create a UNIX user, remember a
+# second password, type it into a terminal" detour from first-run setup. $HOME
+# is therefore /root, and an install made by an older helper under a normal
+# user's home is simply rebuilt once.
+WSL_USER = "root"
+DISTRO = "Ubuntu"
 PREFIX = "$HOME/.local/share/mcbedrock-get"
 PACKAGE = "com.mojang.minecraftpe"
+ABI_PROFILES = {
+    "arm64": ("device-arm64.conf", "arm64-v8a", "arm64_v8a"),
+    "armhf": ("device-armhf.conf", "armeabi-v7a", "armeabi_v7a"),
+}
 
 # Suppress the console window that would otherwise flash on every call.
 _NO_WINDOW = 0x08000000
@@ -62,10 +75,14 @@ def selected_distro() -> str:
     )
 
 
+def _wsl_argv(*arguments: str) -> list[str]:
+    return ["wsl.exe", "-d", selected_distro(), "-u", WSL_USER, *arguments]
+
+
 def _run(script: str, stdin: str | None = None, timeout: int = 120) -> subprocess.CompletedProcess:
     try:
         return subprocess.run(
-            ["wsl.exe", "-d", selected_distro(), "--", "bash", "-lc", script],
+            _wsl_argv("--", "bash", "-lc", script),
             input=stdin,
             capture_output=True,
             text=True,
@@ -119,6 +136,52 @@ def _config_value(value: str, label: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def _apk_has_native_lib(apk: Path, native_platform: str) -> bool:
+    """True if a monolithic APK carries lib/<abi>/ itself.
+
+    Old builds predate split APKs, so the ABI check cannot rely on a
+    config.<abi>.apk filename and has to look inside the archive instead.
+    """
+    prefix = f"lib/{native_platform}/"
+    try:
+        with zipfile.ZipFile(apk) as archive:
+            return any(name.startswith(prefix) for name in archive.namelist())
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
+def _abi_profile(abi: str) -> tuple[str, str, str]:
+    try:
+        return ABI_PROFILES[abi]
+    except KeyError as error:
+        choices = ", ".join(ABI_PROFILES)
+        raise WslError(f"Unknown APK architecture {abi!r}; use {choices}.") from error
+
+
+def ensure_device_profile(abi: str) -> None:
+    """Install the fixed upstream device override for one supported ABI.
+
+    Older helper setups only created the arm64 file. Creating the armhf
+    override here makes an updated executable work without asking the user to
+    rebuild gplaydl or rerun the privileged WSL setup.
+    """
+    filename, native_platform, _ = _abi_profile(abi)
+    config = f"config.native_platforms = [\n    {native_platform}\n]\n"
+    script = (
+        f"cd {PREFIX} || exit 1; umask 077; "
+        f"tr -d '\\r' > {filename}.new || exit 1; "
+        f"chmod 600 {filename}.new || exit 1; "
+        f"mv -f {filename}.new {filename}"
+    )
+    result = _run(script, stdin=config, timeout=60)
+    if result.returncode != 0:
+        output = ((result.stdout or "") + (result.stderr or "")).strip()
+        raise WslError(
+            f"Could not prepare the {native_platform} downloader profile.\n\n"
+            + output[-500:]
+        )
+
+
 def sign_in(email: str, master_token: str) -> None:
     """Create gplaydl's private config and establish its cached session.
 
@@ -155,18 +218,203 @@ def sign_in(email: str, master_token: str) -> None:
         raise WslError("gplaydl did not save a session.\n\n" + output.strip()[-500:])
 
 
-def run_setup_in_terminal(script: Path) -> None:
-    """Open a visible console running wsl-setup.sh.
+# --------------------------------------------------------------------------
+# first-run installation
+# --------------------------------------------------------------------------
 
-    It must be visible: the script uses sudo, and the password prompt has to be
-    somewhere the user can actually answer it.
+def _stream(argv: list[str], on_line, timeout: int) -> int:
+    """Run a command, forwarding its output a line at a time. Returns the code.
+
+    wsl.exe writes its OWN messages as UTF-16 while everything running inside
+    the distribution writes UTF-8, so the stream is decoded permissively and
+    stray NULs are dropped rather than shown.
+    """
+    process = subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        creationflags=_NO_WINDOW,
+    )
+    deadline = threading.Timer(timeout, process.kill)
+    deadline.daemon = True
+    deadline.start()
+    try:
+        for raw in process.stdout or []:
+            line = raw.decode("utf-8", "replace").replace("\x00", "").strip()
+            if line and on_line is not None:
+                on_line(line)
+        process.wait()
+    finally:
+        deadline.cancel()
+    return process.returncode
+
+
+def windows_feature_present() -> bool:
+    """True when the Windows Subsystem for Linux itself is installed."""
+    try:
+        result = subprocess.run(
+            ["wsl.exe", "--status"],
+            capture_output=True,
+            timeout=60,
+            creationflags=_NO_WINDOW,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def distro_present() -> bool:
+    return any(name == DISTRO or name.startswith(DISTRO + "-") for name in installed_distros())
+
+
+class RestartNeeded(WslError):
+    """Windows enabled the feature but will not finish until it reboots."""
+
+
+def _asks_for_a_restart(text: str) -> bool:
+    lowered = text.lower()
+    return "restart" in lowered or "reboot" in lowered
+
+
+def install_windows_feature(on_line=None) -> None:
+    """Turn on the Windows feature. Needs administrator, so Windows asks.
+
+    Uses ShellExecute's "runas" verb rather than telling the user to go and find
+    an administrator terminal: the UAC prompt IS the elevation step, and it is
+    one click instead of a paragraph of instructions.
+    """
+    if sys.platform != "win32":
+        raise WslError("This helper only installs WSL on Windows.")
+    import ctypes
+
+    if on_line:
+        on_line("Asking Windows to enable the Subsystem for Linux...")
+        on_line("Approve the administrator prompt that appears.")
+    # SW_SHOWNORMAL=1: the command window it opens is this step's only progress.
+    result = int(ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", "wsl.exe", "--install --no-distribution", None, 1
+    ))
+    # ShellExecuteW returns >32 on success; 5 is ERROR_ACCESS_DENIED (declined).
+    if result == 5:
+        raise WslError("The administrator prompt was declined, so nothing was installed.")
+    if result <= 32:
+        raise WslError("Windows could not start the installer (code %d)." % result)
+    raise RestartNeeded(
+        "Windows is installing the Subsystem for Linux.\n\n"
+        "Let it finish, restart the computer, then open this program again - "
+        "it carries on from here."
+    )
+
+
+def install_distro(on_line=None, timeout: int = 1800) -> None:
+    """Download and register Ubuntu, without launching its first-run wizard.
+
+    --no-launch is the point: that wizard exists only to create a UNIX user and
+    password, and nothing here needs one because every command runs as root.
+    """
+    if on_line:
+        on_line("Downloading " + DISTRO + ". About 500 MB, unpacking to roughly 1.5 GB.")
+    lines: list[str] = []
+
+    def record(line: str) -> None:
+        lines.append(line)
+        del lines[:-30]
+        if on_line:
+            on_line(line)
+
+    code = _stream(["wsl.exe", "--install", "-d", DISTRO, "--no-launch"], record, timeout)
+    if code != 0 and not distro_present():
+        joined = "\n".join(lines[-10:])
+        if _asks_for_a_restart(joined):
+            raise RestartNeeded(
+                "Windows needs to restart before Ubuntu can be installed.\n\n"
+                "Restart the computer, then open this program again."
+            )
+        raise WslError("Ubuntu could not be installed (code %d).\n\n%s" % (code, joined))
+    if on_line:
+        on_line(DISTRO + " is installed.")
+
+
+def _default_user_home() -> str:
+    """The home of UID 1000, which is where an older helper built gplaydl."""
+    try:
+        result = _run("getent passwd 1000 | cut -d: -f6", timeout=60)
+    except (OSError, subprocess.SubprocessError, WslError):
+        return ""
+    home = (result.stdout or "").strip()
+    return home if result.returncode == 0 and home.startswith("/") else ""
+
+
+def adopt_legacy_install() -> bool:
+    """Move a pre-root install into root's home instead of rebuilding it.
+
+    Older helpers built gplaydl under the default user's home. Switching to root
+    would otherwise make a working install invisible and cost the user another
+    five-minute build for nothing. The cached Google session is deliberately
+    left behind: it re-establishes itself on the next download, and a credential
+    file is not worth copying about to save one silent step.
+
+    Written without shell variables on purpose -- an assignment does not survive
+    this `wsl.exe -- bash -lc` invocation, though $HOME and $(...) both do.
+    """
+    home = _default_user_home()
+    if not home:
+        return False
+    legacy = shlex.quote(home + "/.local/share/mcbedrock-get")
+    script = (
+        f"test -x {legacy}/gplaydl || exit 1; "
+        f"test -x {PREFIX}/gplaydl && exit 1; "
+        f"mkdir -p {PREFIX} || exit 1; "
+        f"cp -a {legacy}/gplaydl {legacy}/gplayver {PREFIX}/ || exit 1; "
+        f"cp -a {legacy}/device-arm64.conf {PREFIX}/ 2>/dev/null; "
+        f"cp -a {legacy}/device-armhf.conf {PREFIX}/ 2>/dev/null; "
+        f"test -x {PREFIX}/gplaydl"
+    )
+    try:
+        return _run(script, timeout=180).returncode == 0
+    except (OSError, subprocess.SubprocessError, WslError):
+        return False
+
+
+def build_downloader(script: Path, on_line=None, timeout: int = 3600) -> None:
+    """Run wsl-setup.sh as root, with its output coming back to the window.
+
+    No terminal and no password: the script sees it is root and skips sudo, and
+    MCBEDROCK_NONINTERACTIVE stops it waiting for a keypress at the end.
     """
     if not script.is_file():
-        raise WslError(f"wsl-setup.sh is missing. Expected it at:\n\n{script}")
-    subprocess.Popen(
-        ["wsl.exe", "-d", selected_distro(), "--", "bash", to_wsl_path(script)],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        raise WslError("wsl-setup.sh is missing. Expected it at:\n\n%s" % script)
+    argv = _wsl_argv(
+        "--", "bash", "-lc",
+        "MCBEDROCK_NONINTERACTIVE=1 bash " + shlex.quote(to_wsl_path(script)),
     )
+    lines: list[str] = []
+
+    def record(line: str) -> None:
+        lines.append(line)
+        del lines[:-40]
+        if on_line:
+            on_line(line)
+
+    code = _stream(argv, record, timeout)
+    if code != 0 or not is_installed():
+        raise WslError(
+            "The downloader could not be built inside Ubuntu.\n\n"
+            + "\n".join(lines[-12:])
+        )
+
+
+def remove_distro() -> None:
+    """Delete the distribution and everything in it. Only ever on request."""
+    result = subprocess.run(
+        ["wsl.exe", "--unregister", selected_distro()],
+        capture_output=True,
+        timeout=300,
+        creationflags=_NO_WINDOW,
+    )
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).decode("utf-8", "replace").replace("\x00", "")
+        raise WslError("Ubuntu could not be removed.\n\n%s" % detail.strip()[-400:])
 
 
 def to_wsl_path(path: Path) -> str:
@@ -183,16 +431,19 @@ def _download_into(
     base: Path,
     on_line: Callable[[str], None] | None,
     timeout: int,
+    abi: str,
 ) -> tuple[int, list[str]]:
     """Run gplaydl into an isolated path and return its exit code/log tail."""
+    filename, _, _ = _abi_profile(abi)
+    ensure_device_profile(abi)
     quoted_output = shlex.quote(to_wsl_path(base))
     script = (
-        f"cd {PREFIX} && ./gplaydl --device {PREFIX}/device-arm64.conf --accept-tos "
+        f"cd {PREFIX} && ./gplaydl --device {PREFIX}/{filename} --accept-tos "
         f"--app {PACKAGE} --app-version {version_code} --output {quoted_output} 2>&1"
     )
 
     process = subprocess.Popen(
-        ["wsl.exe", "-d", selected_distro(), "--", "bash", "-lc", script],
+        _wsl_argv("--", "bash", "-lc", script),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -246,14 +497,16 @@ def download(
     target: Path,
     on_line: Callable[[str], None] | None = None,
     timeout: int = 3600,
+    abi: str = "arm64",
 ) -> list[Path]:
-    """Download and atomically publish one complete arm64 split set."""
+    """Download and atomically publish one complete matching ARM split set."""
+    _, native_platform, split_marker = _abi_profile(abi)
     target.mkdir(parents=True, exist_ok=True)
     prefix = f"minecraft-{version_code}"
     with tempfile.TemporaryDirectory(prefix=f".{prefix}-", dir=target) as staging_text:
         staging = Path(staging_text)
         base = staging / f"{prefix}.apk"
-        returncode, tail = _download_into(version_code, base, on_line, timeout)
+        returncode, tail = _download_into(version_code, base, on_line, timeout, abi)
 
         # Judge success by the isolated output, not gplaydl's unreliable exit
         # code and never by files left by an earlier download.
@@ -264,12 +517,23 @@ def download(
                 + "\n".join(tail[-12:])
             )
 
-        if not any("arm64_v8a" in path.name for path in written):
-            names = ", ".join(path.name for path in written)
-            raise WslError(
-                "Play did not return the arm64 part for this build, so it will not "
-                f"run on the device. Got: {names}"
-            )
+        if not any(split_marker in path.name for path in written):
+            # Pre-App-Bundle builds (roughly <= 1.13, e.g. 1.12.1.1) are shipped
+            # as ONE monolithic APK carrying lib/<abi>/ inside it — there are no
+            # config.* split parts to look for, and demanding one rejects every
+            # old version outright. Accept the base APK, but only after proving
+            # the native library for this ABI is genuinely inside it.
+            if not _apk_has_native_lib(base, native_platform):
+                names = ", ".join(path.name for path in written)
+                raise WslError(
+                    f"Play did not return the {native_platform} part for this build, so it will "
+                    f"not run on the device. Got: {names}"
+                )
+            if on_line is not None:
+                on_line(
+                    f"No split parts (pre-bundle build); base APK carries "
+                    f"lib/{native_platform}/ itself."
+                )
 
         backup = staging / "previous"
         backup.mkdir()
