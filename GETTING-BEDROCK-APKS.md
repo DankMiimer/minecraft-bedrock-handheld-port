@@ -56,6 +56,9 @@ it.
 
 ### 3. Sign in and install the downloader
 
+The helper has its own repository — [DankMiimer/mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) —
+where its source, releases and issue tracker live.
+
 Run `mcbedrock-get.exe`:
 
 1. Enter the email of the Google account that owns Minecraft.

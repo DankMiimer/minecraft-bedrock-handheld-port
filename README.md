@@ -23,7 +23,7 @@ assets, not GitHub's automatically generated **Source code** archives.
 |---|---|
 | [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-standard-v2.0.0-rc.4.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
 | [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-rgds-v2.0.0-rc.4.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
-| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip) | Downloads your own Google Play purchase in the correct arm64 format |
+| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/mcbedrock-get-windows-v2.0.0-rc.4.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
 | [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-source-v2.0.0-rc.4.zip) | Maintainers and license compliance; not an install archive |
 | [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-standard-v2.0.0-rc.4.spdx.json) | Machine-readable contents of the standard archive |
 | [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.4/minecraftbedrock-rgds-v2.0.0-rc.4.spdx.json) | Machine-readable contents of the RGDS archive |
@@ -71,7 +71,7 @@ then launch **Minecraft Bedrock** once. This creates the shared data folders.
 
 ### 2. Download your owned Bedrock APKs on Windows
 
-The easiest supported arm64 route is the Windows helper:
+The easiest supported arm64 route is the Windows helper, [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get):
 
 1. Open PowerShell as administrator, run `wsl --install -d Ubuntu`, and reboot
    if Windows asks.
