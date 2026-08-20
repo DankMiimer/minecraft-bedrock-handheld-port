@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased portability checkpoint
+## v2.0.0-rc.5 (testing)
 
 - Reduced the Windows helper's first run to one button. Step 1 now installs the
   Windows Subsystem for Linux (through Windows' own administrator prompt rather
