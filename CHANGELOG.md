@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.0.0-rc.8 (testing)
+
+- Held up/down now repeats in the launcher menu. The version browser lists over
+  a hundred builds and every one of them had to be stepped past with a separate
+  button press. A tap still moves one row; holding starts after a short delay,
+  then moves ten rows a second and accelerates to twenty-five. Left/right is
+  excluded because it toggles ARM64/ARM32.
+- Every row in the version browser now carries the same markings the desktop
+  helper shows in its columns: RenderDragon or not (stated both ways, because
+  "No RenderDragon" is a reason to pick a build), Bedrock or Pocket Edition
+  with touch-only spelled out, the named update, and whether the UI is tiny on
+  a handheld screen. The Play code moved off the row to make space; it was
+  already on the confirmation screen, along with the full warning text.
+- Whether a build has a tiny UI is now its own catalog column instead of
+  something the menu picked out of the notes prose, so there is still exactly
+  one implementation of the classification, shared with the Windows helper.
+- Fixed menu text colliding with the lines around it. The header's port version
+  had a 92px wrap limit for a 135px string, so it wrapped and the second line
+  landed on the accent rule; the subtitle could wrap the same way and did on
+  640px-wide devices; list rows placed a title and description at fixed
+  fractions of a row too short to hold both, so the description ran under the
+  title and through the row's bottom border; and the "1/111" position counter
+  was aligned to the screen rather than the list frame, crossing its border.
+  Text in these places is now sized and placed from the font's own metrics, and
+  trimmed rather than wrapped.
+- Baked the menu backdrop's dot grid and scanlines into a single static
+  SpriteBatch. They never change, but they cost about 1500 draw calls per
+  frame, which a held direction now redraws continuously.
+
 ## v2.0.0-rc.7 (testing)
 
 - Restored the shared-data migration that understands a hidden
