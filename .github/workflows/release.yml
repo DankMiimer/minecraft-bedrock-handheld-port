@@ -91,12 +91,23 @@ jobs:
           APP=$(ls "$GITHUB_WORKSPACE"/dist-linux/*.AppImage)
           chmod +x "$APP"
           # No FUSE on the runner, so run it the way a FUSE-less machine would.
-          out=$("$APP" --appimage-extract-and-run --list --abi arm64 | head -3)
-          echo "$out"
+          # No `| head`: closing the pipe early is a separate thing to test,
+          # and it would mask whether the catalog itself came through.
+          out=$("$APP" --appimage-extract-and-run --list --abi arm64)
+          echo "$out" | head -3
           echo "$out" | grep -q "1.16.221.01" || {
             echo "the bundled catalog did not list the recommended build" >&2
             exit 1
           }
+      - name: A closed pipe must not produce a traceback
+        run: |
+          set -uo pipefail
+          APP=$(ls "$GITHUB_WORKSPACE"/dist-linux/*.AppImage)
+          err=$("$APP" --appimage-extract-and-run --list 2>&1 >/dev/null | head -5 || true)
+          if echo "$err" | grep -q "BrokenPipeError"; then
+            echo "piping --list into head still crashes" >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: linux-helper
@@ -178,7 +189,7 @@ jobs:
             --bottomd build/release-inputs/bottomd \
             --bedrockmap build/release-inputs/bedrockmap \
             --context-bridge build/release-inputs/crusty-context-v1.so \
-            --extra-asset build/release-inputs/mcbedrock-get-windows-v$VERSION.zip \n            --extra-asset build/release-inputs/mcbedrock-get-linux-x86_64-v$VERSION.AppImage"
+            --extra-asset build/release-inputs/mcbedrock-get-windows-v$VERSION.zip"
           python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release
           python3 scripts/build_releases.py $COMMON_ARGS --out-dir dist/release-repeat
           diff -qr dist/release dist/release-repeat

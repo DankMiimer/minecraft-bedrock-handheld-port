@@ -1455,3 +1455,11 @@ if __name__ == "__main__":
     except (signin.SignInError, backend.WslError, catalog.CatalogError) as error:
         print(error, file=sys.stderr)
         sys.exit(1)
+    except BrokenPipeError:
+        # `--list | head` is an ordinary thing to type, and it closes the pipe
+        # under us. Point stdout at nowhere before exiting, or the interpreter
+        # tries to flush it on the way out and reports the same failure again.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(0)
+    except KeyboardInterrupt:
+        sys.exit(130)
