@@ -444,7 +444,8 @@ run_apk_setup() { # [apk paths...]
   : > "$progress" 2>/dev/null || true
   SHOW_MSG_SLEEP=1 show_msg "Found APK - extracting game files." \
                             "This takes a few minutes, please wait..."
-  MCPE_PROGRESS_FILE="$progress" bash "$GAMEDIR/setup_apk.sh" "$@" &
+  MCPE_PROGRESS_FILE="$progress" MCPE_ALLOW_UNTESTED="${MCPE_ALLOW_UNTESTED:-0}" \
+    bash "$GAMEDIR/setup_apk.sh" "$@" &
   setup_pid=$!
   draw_install_progress "$setup_pid" "$progress"
   wait "$setup_pid"
@@ -691,7 +692,7 @@ menu_do_download() { # version-code[:arm64|armhf]
   fi
   if [ "${#names[@]}" -eq 0 ]; then
     MCPE_MENU_STATUS="Download finished but produced no validated APK set"
-  elif run_apk_setup "${names[@]}"; then
+  elif MCPE_ALLOW_UNTESTED=1 run_apk_setup "${names[@]}"; then
     MCPE_MENU_STATUS="Downloaded, validated and installed $abi build from Google Play"
   else
     MCPE_MENU_STATUS="APK downloaded; automatic install failed - see log.txt"
@@ -800,6 +801,10 @@ run_launcher_menu() {
         ;;
       install)
         menu_do_install
+        ;;
+      install_untested)
+        # The menu already put the risk to the user and they said yes.
+        MCPE_ALLOW_UNTESTED=1 menu_do_install
         ;;
       download_apk)
         menu_do_download "$arg"

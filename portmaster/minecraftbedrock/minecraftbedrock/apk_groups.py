@@ -8,9 +8,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from apkmeta import (InstallError, MOJANG_CERTS, PACKAGE, choose_sources,
-                     expand_input_paths, input_files, inspect_apk,
-                     normalized_group, validate_signers)
+from apkmeta import (BLOCKED, InstallError, MOJANG_CERTS, PACKAGE, UNTESTED,
+                     choose_sources, expand_input_paths, input_files,
+                     inspect_apk, normalized_group, support_verdict,
+                     validate_signers)
 
 
 def clean_text(value: object) -> str:
@@ -18,10 +19,18 @@ def clean_text(value: object) -> str:
 
 
 def add_choice(output: Path, rows: list[str], title: str, description: str,
-               files: list[str], ready: bool) -> None:
+               files: list[str], ready: bool, untested: str = "") -> None:
+    """One row of the menu's install list.
+
+    `untested` carries why a build sits outside the range this port has evidence
+    for, or "" when it does not. It travels to the menu so the confirmation can
+    be put to the user before anything is unpacked, instead of the installer
+    refusing once the work is already done.
+    """
     digest = hashlib.sha256("\0".join(files + [title]).encode()).hexdigest()[:16]
     (output / f"{digest}.txt").write_text("".join(name + "\n" for name in files), encoding="utf-8")
-    rows.append("\t".join((digest, clean_text(title), clean_text(description), "1" if ready else "0")))
+    rows.append("\t".join((digest, clean_text(title), clean_text(description),
+                          "1" if ready else "0", clean_text(untested))))
 
 
 def input_state(apkdir: Path) -> dict[str, object]:
@@ -117,8 +126,14 @@ def main() -> int:
                     raise InstallError("unsupported PairIP/new ABI")
                 if signer_status == "verified_mojang" and signer not in MOJANG_CERTS:
                     raise InstallError("signer is not Mojang")
+                kind, reason = support_verdict(version_name)
+                if kind == BLOCKED:
+                    raise InstallError(reason)
                 desc = f"Complete {len(candidate)}-file set; {signer_status}; version code {_version_code}"
-                add_choice(output, rows, f"Bedrock {version_name} ({abi_label})", desc, names, True)
+                if kind == UNTESTED:
+                    desc = f"UNTESTED - {reason}; {desc}"
+                add_choice(output, rows, f"Bedrock {version_name} ({abi_label})", desc, names, True,
+                           untested=reason if kind == UNTESTED else "")
             except InstallError as exc:
                 add_choice(output, rows, title, f"Not installable: {exc}", names, False)
 

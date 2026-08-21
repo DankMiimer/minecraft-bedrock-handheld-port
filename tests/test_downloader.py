@@ -239,6 +239,12 @@ class DownloaderTests(unittest.TestCase):
         # A hundred-row list is unusable if a held direction does not repeat.
         self.assertIn("tickRepeat", menu)
         self.assertIn("heldDirection", menu)
+        # A build outside the tested range is offered by the browser, so the
+        # menu must put the risk to the user before anything is unpacked --
+        # the installer used to refuse only after extracting the whole build.
+        self.assertIn("install_untested", menu)
+        self.assertIn("Install it anyway", menu)
+        self.assertIn("MCPE_ALLOW_UNTESTED", outer)
 
         progress_ui = (MODULE / "progress-ui/main.lua").read_text(encoding="utf-8")
         self.assertIn("MCPE_PROGRESS_EXIT_INTERACTIVE", progress_ui)

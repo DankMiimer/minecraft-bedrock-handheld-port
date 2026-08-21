@@ -732,6 +732,31 @@ def file_sha256(path: Path) -> str:
             digest.update(chunk)
     return digest.hexdigest()
 
+# Why a build is outside what this port has evidence for, or "" if it is not.
+#
+# Two different kinds of "no" live here and they are not interchangeable:
+# BLOCKED means the port cannot run it whatever the user wants -- PairIP
+# licensing, or a version string nothing can make sense of. UNTESTED means only
+# that nobody has tried it here, which is the user's risk to take: the version
+# browser offers every build Play still serves precisely so they can.
+BLOCKED, UNTESTED = "blocked", "untested"
+
+
+def support_verdict(version: str) -> tuple[str, str]:
+    """(kind, reason) where kind is "", BLOCKED or UNTESTED."""
+    try:
+        parts = tuple(int(p) for p in re.findall(r"\d+", version)[:2])
+    except ValueError:
+        return BLOCKED, "unparseable Bedrock version"
+    if len(parts) < 2:
+        return BLOCKED, "unparseable Bedrock version"
+    if parts >= (1, 26):
+        return BLOCKED, "PairIP/new Android ABI"
+    if parts < (1, 16) or parts > (1, 21):
+        return UNTESTED, "outside the tested 1.16-1.21 range"
+    return "", ""
+
+
 
 def compatibility(
     gamedir: Path, version: str, abi: str, game_library_sha256: str | None = None
@@ -756,14 +781,9 @@ def compatibility(
             result.update(selected)
     except (OSError, ValueError, KeyError):
         pass
-    try:
-        parts = tuple(int(p) for p in re.findall(r"\d+", version)[:2])
-        if parts >= (1, 26):
-            result.update(status="unsupported", reason="PairIP/new Android ABI")
-        elif parts < (1, 16) or parts > (1, 21):
-            result.update(status="unsupported", reason="outside the evidence-based 1.16-1.21 range")
-    except ValueError:
-        result.update(status="unsupported", reason="unparseable Bedrock version")
+    kind, reason = support_verdict(version)
+    if kind:
+        result.update(status="unsupported", reason=reason, verdict=kind)
     return result
 
 
@@ -832,7 +852,7 @@ def extract_prefix(archive_path: str, prefix: str, destination: Path) -> None:
             report_progress(advance=entry.file_size)
 
 
-def install(gamedir: Path, paths: list[Path]) -> list[Path]:
+def install(gamedir: Path, paths: list[Path], allow_untested: bool = False) -> list[Path]:
     versions = gamedir / "versions"
     versions.mkdir(parents=True, exist_ok=True)
     with install_lock(versions):
@@ -866,13 +886,32 @@ def install(gamedir: Path, paths: list[Path]) -> list[Path]:
                 raise InstallError(
                     "PairIP licensing detected. Bedrock 1.26+ requires legal upstream launcher support; no DRM bypass is attempted."
                 )
+            # Decide whether this build is allowed BEFORE spending a download's
+            # worth of extraction on it. This used to be checked at the very end,
+            # after the game code and assets were unpacked and hashed, so a
+            # refusal arrived minutes late and several hundred MB in.
+            kind, reason = support_verdict(version)
+            if kind == BLOCKED:
+                raise InstallError(f"{version} cannot be installed: {reason}")
+            if kind == UNTESTED and not allow_untested:
+                raise InstallError(
+                    f"UNTESTED:{version}:{reason}"
+                )
             native_by_abi, assets_source, base_source = choose_sources(infos)
             targets: dict[str, Path] = {}
+            present: list[Path] = []
             for abi in native_by_abi:
                 target = versions / f"{safe_version(version)}-{version_code}-{ABI_LABEL[abi]}"
                 if target.exists():
-                    raise InstallError(f"version already installed: {target.name}")
+                    # Not a failure: the user asked for something they already
+                    # have. Say so and leave it alone.
+                    present.append(target)
+                    continue
                 targets[abi] = target
+            if present and not targets:
+                for target in present:
+                    print(f"ALREADY_INSTALLED={target.name}")
+                return []
             journal["target_names"] = [target.name for target in targets.values()]
             atomic_write_json(journal_path, journal)
 
@@ -940,7 +979,11 @@ def install(gamedir: Path, paths: list[Path]) -> list[Path]:
                     "compatibility": compat,
                 }
                 atomic_write_json(stage / "version.json", metadata)
-                if compat.get("status") == "unsupported":
+                # The range verdict was settled up front. What can still
+                # refuse here is the compatibility registry declaring this
+                # exact build broken, which no confirmation overrides.
+                if (compat.get("status") == "unsupported"
+                        and compat.get("verdict") != UNTESTED):
                     raise InstallError(
                         f"{version}/{ABI_LABEL[abi]} is unsupported: "
                         f"{compat.get('reason', 'registry policy')}"
@@ -978,6 +1021,8 @@ def main() -> int:
     parser.add_argument("--inspect", action="store_true")
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--gamedir", type=Path)
+    # Set only after the user confirmed an untested build in the menu.
+    parser.add_argument("--allow-untested", action="store_true")
     parser.add_argument("apks", nargs="+", type=Path)
     args = parser.parse_args()
     try:
@@ -992,7 +1037,8 @@ def main() -> int:
         if args.install:
             if not args.gamedir:
                 raise InstallError("--gamedir is required for installation")
-            installed = install(args.gamedir.resolve(), args.apks)
+            installed = install(args.gamedir.resolve(), args.apks,
+                                allow_untested=args.allow_untested)
             for path in installed:
                 print(f"INSTALLED={path.name}")
             return 0

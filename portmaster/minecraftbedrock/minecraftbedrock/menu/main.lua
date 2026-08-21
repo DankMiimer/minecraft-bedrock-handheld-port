@@ -440,11 +440,13 @@ local function rescan()
   apkGroups = {}
   local groupIndex = readAll(CONFDIR .. "/apk-groups/index.tsv") or ""
   for line in groupIndex:gmatch("[^\r\n]+") do
-    local id, title, desc, ready = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([01])$")
+    local id, title, desc, ready, untested =
+      line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([01])\t?(.*)$")
     if id then
       local files = readAll(CONFDIR .. "/apk-groups/" .. id .. ".txt") or ""
       apkGroups[#apkGroups + 1] = {id=id, title=title, desc=desc,
-                                  ready=(ready == "1"), files=files}
+                                  ready=(ready == "1"), files=files,
+                                  untested=(untested ~= "" and untested or nil)}
     end
   end
   backups = {}
@@ -1504,8 +1506,27 @@ local function activate()
   elseif screen == "install" then
     local group = apkGroups[sel.install]
     if group and group.ready then
+      if group.untested then
+        -- Asked here, before anything is unpacked: the installer used to
+        -- refuse these only after extracting the whole build.
+        confirm = {
+          title = "Untested: " .. group.title, back = "install",
+          yesLabel = "Install it anyway",
+          lines = {group.untested .. ".",
+                   "Nobody has run this build on this port, so it",
+                   "may fail to install, or install and not start.",
+                   "Your other installed versions are not touched."},
+          onYes = function()
+            writeAll(CONFDIR .. "/install_request.txt", group.files)
+            quitWith("install_untested")
+          end,
+        }
+        sel.confirm = 2
+        screen = "confirm"
+      else
         writeAll(CONFDIR .. "/install_request.txt", group.files)
         quitWith("install")
+      end
     end
   elseif screen == "download" then
     local entry = DOWNLOADS[sel.download]

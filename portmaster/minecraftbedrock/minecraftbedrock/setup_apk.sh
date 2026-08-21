@@ -32,13 +32,30 @@ for apk in "${APKS[@]}"; do
 done
 
 echo "[setup] Inspecting manifests, splits, ABIs, and signing identity..."
-OUTPUT="$(python3 "$GAMEDIR/apkmeta.py" --install --gamedir "$GAMEDIR" "${APKS[@]}" 2>&1)"
+# Set only when the user has already been shown the risk and accepted it.
+ALLOW=()
+[ "${MCPE_ALLOW_UNTESTED:-0}" = 1 ] && ALLOW=(--allow-untested)
+OUTPUT="$(python3 "$GAMEDIR/apkmeta.py" --install --gamedir "$GAMEDIR" \
+          "${ALLOW[@]+"${ALLOW[@]}"}" "${APKS[@]}" 2>&1)"
 status=$?
 printf '%s\n' "$OUTPUT"
 if [ "$status" -ne 0 ]; then
   printf '%s\n' "$OUTPUT" | sed -n 's/^ERROR: //p' >"$ERROR_FILE"
   [ -s "$ERROR_FILE" ] || printf '%s\n' "$OUTPUT" >"$ERROR_FILE"
+  # Turn the installer's machine-readable refusal into something a person can
+  # act on. Reaching this means the confirmation was never asked, which is a
+  # bug in the caller rather than something the user did wrong.
+  if grep -q '^UNTESTED:' "$ERROR_FILE" 2>/dev/null; then
+    version="$(sed -n 's/^UNTESTED:\([^:]*\):.*/\1/p' "$ERROR_FILE")"
+    reason="$(sed -n 's/^UNTESTED:[^:]*:\(.*\)/\1/p' "$ERROR_FILE")"
+    printf '%s\n' "$version is $reason." \
+                  "Choose it again to confirm you want to try it." >"$ERROR_FILE"
+  fi
   exit "$status"
+fi
+if printf '%s\n' "$OUTPUT" | grep -q '^ALREADY_INSTALLED='; then
+  echo "[setup] That version is already installed; nothing to do."
+  exit 0
 fi
 
 echo "[setup] Installation committed atomically. Original installer files were retained."

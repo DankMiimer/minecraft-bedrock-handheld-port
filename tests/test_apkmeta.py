@@ -176,7 +176,9 @@ def main() -> int:
         env = os.environ.copy(); env["MCPE_ALLOW_UNVERIFIED_APK"] = "1"
         subprocess.run([sys.executable, str(GROUP_HELPER), str(tmp), str(groups)], check=True, env=env)
         group_rows = (groups / "index.tsv").read_text().splitlines()
-        assert len(group_rows) == 2 and all(row.endswith("\t1") for row in group_rows)
+        # ready flag, then the untested reason (empty for in-range builds)
+        assert len(group_rows) == 2
+        assert all(row.split("\t")[3:] == ["1", ""] for row in group_rows), group_rows
         first_index_mtime = (groups / "index.tsv").stat().st_mtime_ns
         time.sleep(0.02)
         subprocess.run([sys.executable, str(GROUP_HELPER), str(tmp), str(groups)], check=True, env=env)
@@ -292,6 +294,49 @@ def main() -> int:
         assert unsafe.returncode != 0
         assert "refusing unsafe output directory" in unsafe.stderr
         assert sentinel.read_text(encoding="utf-8") == "keep"
+        # A build outside the tested range is offered by the version browser,
+        # so the installer must not simply refuse it -- it must refuse until
+        # the user has said yes, and it must refuse before doing the work.
+        untested = tmp / "untested.apk"; apk(untested, "1.14.60.5", 943146005, "full")
+        refused = invoke(game, untested, ok=False)
+        assert "UNTESTED:1.14.60.5:" in refused.stderr, refused.stderr
+        assert not any("1.14.60.5" in p.name for p in (game / "versions").iterdir())
+        # Refused up front: nothing was unpacked and no staging survived.
+        assert not any(p.name.startswith(".staging-") for p in (game / "versions").iterdir())
+
+        confirmed = subprocess.run(
+            [sys.executable, str(HELPER), "--install", "--allow-untested",
+             "--gamedir", str(game), str(untested)],
+            text=True, capture_output=True, env=env,
+        )
+        assert confirmed.returncode == 0, confirmed.stderr + confirmed.stdout
+        untested_target = game / "versions" / "1.14.60.5-943146005-arm64"
+        assert (untested_target / "lib/arm64-v8a/libminecraftpe.so").is_file()
+        # Installed, but still recorded as untested so a support request can
+        # tell the difference between this and a build we stand behind.
+        recorded = json.loads((untested_target / "version.json").read_text(encoding="utf-8"))
+        assert recorded["compatibility"]["status"] == "unsupported"
+        assert recorded["compatibility"]["verdict"] == "untested"
+
+        # Asking for something already present is not a failure.
+        again = subprocess.run(
+            [sys.executable, str(HELPER), "--install", "--allow-untested",
+             "--gamedir", str(game), str(untested)],
+            text=True, capture_output=True, env=env,
+        )
+        assert again.returncode == 0, again.stderr + again.stdout
+        assert "ALREADY_INSTALLED=1.14.60.5-943146005-arm64" in again.stdout, again.stdout
+
+        # Confirmation does not unlock what genuinely cannot run.
+        blocked = tmp / "blocked.apk"; apk(blocked, "1.26.40.1", 972604001, "full")
+        denied = subprocess.run(
+            [sys.executable, str(HELPER), "--install", "--allow-untested",
+             "--gamedir", str(game), str(blocked)],
+            text=True, capture_output=True, env=env,
+        )
+        assert denied.returncode != 0
+        assert "cannot be installed" in denied.stderr or "PairIP" in denied.stderr, denied.stderr
+
     print("APK metadata/install tests passed")
     return 0
 
