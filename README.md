@@ -80,17 +80,27 @@ The easiest supported arm64 route is the Windows helper:
    complete Google's sign-in page. The helper never asks for your password.
 4. Accept the one-time WSL setup. An Ubuntu terminal opens and asks for your
    Ubuntu password while it builds the current minecraft-linux downloader.
-5. Press **Download 1.16.221.01**. Keep every APK created in the selected
-   output folder together.
+5. Keep **64-bit arm64-v8a** selected for RG34XX SP/RGDS, or select **32-bit
+   armeabi-v7a** for armhf R36S firmware, then press **Download 1.16.221.01**.
+   Keep every APK created in the selected output folder together.
 
 PyInstaller executables can trigger antivirus heuristics. Verify the bundle
 against the published SHA-256 before allowing it. See
-[the complete Windows guide](GETTING-BEDROCK-APKS.md) for sign-out, manual
-armhf instructions, and troubleshooting.
+[the complete Windows guide](GETTING-BEDROCK-APKS.md) for architecture choice,
+sign-out, and troubleshooting.
+
+RG34XXSP users on Knulli Scarab can instead try **Get APK from Google Play**
+inside the port. It is optional and controller-only: Google's page handles the
+password and phone approval, an on-screen keyboard handles text entry, and the
+port validates and installs the downloaded ARM64 split set automatically. No
+browser runtime is downloaded and no account prompt appears unless that menu
+item is selected. See [the APK guide](GETTING-BEDROCK-APKS.md#experimental-on-device-method-rg34xxsp--knulli-scarab)
+for storage, controls, session removal, and prototype limitations.
 
 ### 3. Copy and install the complete set
 
-Copy the full APK or **every file from one split-set download** into:
+Copy the full APK, one `.apkm`/`.apks`/`.xapk` bundle, or **every APK from one
+split-set download** into:
 
 ```text
 ports/minecraftbedrock-data/apk/
@@ -100,9 +110,11 @@ Launch the port, choose **Install APK**, select the detected set, and confirm.
 Installation can take several minutes. The progress screen now stays visible;
 do not power the device off while it is extracting.
 
-The installer validates package identity, version, signing data, dependencies,
-and ABI before publishing anything. Mixed or incomplete sets are rejected, and
-a failed install leaves the original APKs and previous versions intact.
+The installer expands bundles into private temporary storage and validates
+package identity, version, signing data, dependencies, and ABI before publishing
+anything. A kernel lock prevents simultaneous installs. Its recovery journal
+rolls back an interrupted multi-ABI commit on the next attempt; originals and
+previous versions remain intact.
 
 ### 4. Play
 
@@ -123,12 +135,28 @@ The launcher identifies installed versions from Android metadata and the game
 library hash, not from filenames. Exact status and evidence are in
 [the compatibility registry](portmaster/minecraftbedrock/COMPATIBILITY.md).
 
+## Firmware compatibility status
+
+| Firmware path | Client/backend | Current evidence |
+|---|---|---|
+| RG34XXSP / Knulli Scarab | arm64, Mali/Weston | Physical launch, controls, local play, audio, exit cleanup, and on-device downloader checkpoint tested |
+| RG34XXSP / muOS | arm64, Mali/Weston with PipeWire routing | Game/audio path previously verified on muOS 2601; host, ABI, and frontend contracts are regression-tested |
+| ROCKNIX / Sway | arm64, Wayland | RGDS path physically tested; standard single-screen devices use the same capability path but remain Best Effort per model |
+| R36S/RK3326 dArkOS and related ArkOS builds | armhf, SDL3 KMSDRM/Wayland | Host, ABI, display, and cleanup fixtures pass; final physical R36S acceptance is still pending |
+| Other PortMaster CFW/device combinations | capability-selected | Best Effort until a support bundle and physical launch add evidence for that exact combination |
+
+Firmware names annotate known quirks, but capability probes choose graphics,
+audio, display size, ABI, and compositor handoff. This prevents a renamed CFW
+or derivative from being forced onto an unrelated device path.
+
 ## Launcher menu
 
 - **Play** — start the selected version.
 - **Versions** — select or remove installed game versions without deleting
   worlds.
-- **Install APK** — install a validated full APK or complete split set.
+- **Get APK from Google Play** — optional RG34XXSP/Knulli on-device download,
+  sign-in, validation, and install.
+- **Install APK** — install a validated full APK, APK bundle, or split set.
 - **Settings** — configure FPS cap, render distance, client ABI, UI scale,
   VSync, performance tuning, and FPS logging.
 - **Backup** — archive and restore profiles, worlds, and launcher settings.
@@ -143,8 +171,12 @@ button-label differences; `MCPE_MENU_CONFIRM=a|b` remains available as an
 advanced override.
 
 For H700-class systems, start with a 30–40 FPS cap and 3–4 chunk render
-distance. The port restores performance, display, frontend, and input state
-after normal exit or a supervised failure.
+distance. The 32-bit R36S path automatically starts more conservatively at
+10 FPS, requests 2 chunks, and disables expensive visual effects; a Bedrock
+version may enforce a higher internal render-distance minimum. Users can still
+override FPS and distance in **Settings**, or disable the visual preset with
+**Auto-tune options**. The port restores performance, display, frontend, and
+input state after normal exit or a supervised failure.
 
 ## Updates and backups
 
@@ -196,7 +228,7 @@ launch again; it will not choose one destructively.
 
 | Symptom | What to do |
 |---|---|
-| Installer says the set is incomplete | Copy every APK from one download, including the base and ABI split; do not mix download dates or versions |
+| Installer says the set is incomplete | Copy every APK from one download (or its untouched APKM/APKS/XAPK bundle), including the base and ABI split; do not mix versions |
 | Game installs but does not start | Confirm `arm64-v8a` for most 64-bit systems or `armeabi-v7a` for armhf firmware |
 | Installation appears frozen | Wait for the progress stage to complete; large asset extraction can take several minutes |
 | Tiny UI or heavy stutter | Select 1.16.221.01 and start with 30–40 FPS and 3–4 chunks |

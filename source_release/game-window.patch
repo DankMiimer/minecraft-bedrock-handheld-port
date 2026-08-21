@@ -30,6 +30,49 @@ index 0c59a90..993dfa8 100644
      if (focusedWindow != nullptr)
          focusedWindow->onGamepadAxis(gp->getIndex(), mapAxisId(axis), value);
  }
+diff --git a/src/window_sdl3.cpp b/src/window_sdl3.cpp
+--- a/src/window_sdl3.cpp
++++ b/src/window_sdl3.cpp
+@@ -1,2 +1,3 @@
++#include <cstdlib>
+ #include "window_sdl3.h"
+ #include "game_window_manager.h"
+@@ -24,7 +25,11 @@ SDL3GameWindow::SDL3GameWindow(const std::string& title, int width, int height,
+     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+-    window = SDL_CreateWindow(title.data(), width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
++    SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
++    // A compositor-side fullscreen command arrives after the first frame.  Let
++    // handheld launchers request fullscreen as part of initial window creation.
++    if(std::getenv("GAMEWINDOW_SDL_FULLSCREEN"))
++        windowFlags |= SDL_WINDOW_FULLSCREEN;
++    window = SDL_CreateWindow(title.data(), width, height, windowFlags);
+     if(window == nullptr) {
+         // Throw an exception, otherwise it would crash due to a nullptr without any information
+         const char* error = SDL_GetError();
+@@ -247,12 +247,18 @@ void SDL3GameWindow::pollEvents() {
+         case SDL_EVENT_GAMEPAD_BUTTON_UP:
+             onGamepadButton(ev.gbutton.which, getKeyGamePad(ev.gbutton.button), ev.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+             break;
+         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+-            onGamepadAxis(ev.gbutton.which, getAxisGamepad(ev.gbutton.button), ev.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
++            onGamepadAxis(ev.gaxis.which, getAxisGamepad(ev.gaxis.axis),
++                          (float)ev.gaxis.value / 32767.0f);
+             break;
+         case SDL_EVENT_GAMEPAD_ADDED:
+-        case SDL_EVENT_GAMEPAD_REMOVED:
++        case SDL_EVENT_GAMEPAD_REMOVED: {
++            if(ev.type == SDL_EVENT_GAMEPAD_ADDED)
++                SDL_OpenGamepad(ev.gdevice.which);
+             onGamepadState(ev.gdevice.which, ev.type == SDL_EVENT_GAMEPAD_ADDED);
++            if(ev.type == SDL_EVENT_GAMEPAD_REMOVED)
++                SDL_CloseGamepad(SDL_GetGamepadFromID(ev.gdevice.which));
++            break;
++        }
+-            break;
+         case SDL_EVENT_WINDOW_RESIZED:
+             setRelativeScale();
 diff --git a/src/window_eglut.cpp b/src/window_eglut.cpp
 index 138dff1..c68161a 100644
 --- a/src/window_eglut.cpp

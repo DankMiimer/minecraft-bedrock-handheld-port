@@ -1,5 +1,77 @@
+diff --git a/include/gamepad/gamepad_manager.h b/include/gamepad/gamepad_manager.h
+index 86f6577..b7c33fb 100644
+--- a/include/gamepad/gamepad_manager.h
++++ b/include/gamepad/gamepad_manager.h
+@@ -27,7 +27,7 @@ protected:
+     JoystickManager& jsManager;
+     GamepadMapping defaultMapping;
+-    std::unordered_map<std::string, GamepadMapping> mappings;
++    std::unordered_map<std::string, std::vector<GamepadMapping>> mappings;
+     std::set<int> takenGamepadIds;
+     int takenGamepadLowId = 0;
+ 
+diff --git a/include/gamepad/joystick.h b/include/gamepad/joystick.h
+index 309898b..c843bcc 100644
+--- a/include/gamepad/joystick.h
++++ b/include/gamepad/joystick.h
+@@ -12,6 +12,8 @@ private:
+ public:
+     virtual std::string getGUID() const = 0;
+ 
++    virtual std::string getName() const = 0;
++
+     virtual bool getButton(int index) const = 0;
+ 
+     virtual float getAxis(int index) const = 0;
+
+diff --git a/src/gamepad_manager.cpp b/src/gamepad_manager.cpp
+index f53c17e..9a78fc0 100644
+--- a/src/gamepad_manager.cpp
++++ b/src/gamepad_manager.cpp
+@@ -3,6 +3,7 @@
+ #include <gamepad/gamepad.h>
+ #include <gamepad/joystick.h>
+ #include <gamepad/gamepad_mapping.h>
++#include <cstdio>
+ #include <cmath>
+ 
+ using namespace gamepad;
+@@ -17,7 +18,7 @@ GamepadManager::GamepadManager(JoystickManager& jsManager) : jsManager(jsManager
+ }
+ 
+ void GamepadManager::addMapping(GamepadMapping& mapping) {
+-    mappings[mapping.guid] = mapping;
++    mappings[mapping.guid].push_back(mapping);
+ }
+ 
+ void GamepadManager::addMapping(std::string const& mapping) {
+@@ -61,9 +62,22 @@ void GamepadManager::onJoystickDisconnected(Joystick* js) {
+ 
+ GamepadMapping& GamepadManager::getMapping(Joystick* js) {
+     std::string guid = js->getGUID();
+-    auto mapping = mappings.find(guid);
+-    if (mapping != mappings.end())
+-        return mapping->second;
++    std::string name = js->getName();
++    auto candidates = mappings.find(guid);
++    if (candidates != mappings.end()) {
++        for (auto& mapping : candidates->second) {
++            if (mapping.name == name)
++                return mapping;
++        }
++        // Vendor/product IDs of 0001 are reused by several handheld CFWs.
++        // A GUID-only fallback is safe only when it is unambiguous.
++        if (candidates->second.size() == 1)
++            return candidates->second.front();
++        fprintf(stderr,
++                "GAMEPAD_MAPPING ambiguous guid=%s name=%s candidates=%zu; using default\n",
++                guid.c_str(), name.c_str(), candidates->second.size());
++    }
+     return defaultMapping;
+ }
+ 
 diff --git a/src/linux_joystick.cpp b/src/linux_joystick.cpp
-index 8d0b558..eaae406 100644
+index 8d0b558..0f78a16 100644
 --- a/src/linux_joystick.cpp
 +++ b/src/linux_joystick.cpp
 @@ -1,6 +1,7 @@
@@ -10,7 +82,28 @@ index 8d0b558..eaae406 100644
  #include <cstdio>
  #include <cstring>
  #include <sstream>
-@@ -87,6 +88,10 @@ void LinuxJoystick::poll() {
+@@ -32,7 +33,7 @@ LinuxJoystick::LinuxJoystick(LinuxJoystickManager* mgr, std::string const& path,
+     // and then the ones before it (0 - BTN_JOYSTICK)
+     for (size_t i = BTN_JOYSTICK; i < len + BTN_JOYSTICK; i++) {
+         if (TEST_BIT(keys, i % len))
+-            buttons[i] = nextId++;
++            buttons[i % len] = nextId++;
+     }
+ 
+     unsigned long abs[NLONGS(ABS_CNT)];
+@@ -74,6 +75,11 @@ std::string LinuxJoystick::getGUID() const {
+     return ss.str();
+ }
+ 
++std::string LinuxJoystick::getName() const {
++    const char* name = libevdev_get_name(edev);
++    return name ? name : "";
++}
++
+ void LinuxJoystick::poll() {
+     struct input_event e;
+     while (true) {
+@@ -87,6 +93,10 @@ void LinuxJoystick::poll() {
              printf("LinuxJoystick::pool error\n");
              break;
          }
@@ -21,7 +114,7 @@ index 8d0b558..eaae406 100644
          if (e.type == EV_KEY) {
              if (e.code >= KEY_CNT)
                  continue;
-@@ -94,7 +99,7 @@ void LinuxJoystick::poll() {
+@@ -94,7 +104,7 @@ void LinuxJoystick::poll() {
              if (btn == -1)
                  continue;
              bool v = e.value != 0;
@@ -30,3 +123,16 @@ index 8d0b558..eaae406 100644
              if (mgr)
                  mgr->onJoystickButton(this, btn, v);
          } else if (e.type == EV_ABS && isHat(e.code)) {
+diff --git a/src/linux_joystick.h b/src/linux_joystick.h
+index 0c1d2df..fdcf1f5 100644
+--- a/src/linux_joystick.h
++++ b/src/linux_joystick.h
+@@ -47,6 +47,8 @@ public:
+ 
+     std::string getGUID() const override;
+ 
++    std::string getName() const override;
++
+     bool getButton(int index) const override {
+         if (index < 0 || index >= BUTTON_COUNT)
+             return false;

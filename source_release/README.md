@@ -17,10 +17,12 @@ minecraft-linux project with the modifications in these patch files:
 | `mcpelauncher-client.patch` | https://github.com/minecraft-linux/mcpelauncher-client | `4c5f4fd` |
 | `mcpelauncher-manifest-gitlinks.patch` | https://github.com/minecraft-linux/mcpelauncher-manifest | `368e38b` |
 
-Exact base/result commits: `COMMITS.txt`.
+Exact base commits: `COMMITS.txt`. The output binary and every build-input hash
+are recorded in `minecraftbedrock/bin/mcpelauncher-client.buildinfo`.
 
-The same modified source is published as branch `rg34xxsp-port` on these
-forks (a recursive clone of the manifest fork builds the port):
+Earlier revisions are also published as branch `rg34xxsp-port` on these forks.
+For this checkpoint, the pinned commits plus the patch files in this source
+bundle are the authoritative and reproducible source inputs:
 
 - https://github.com/DankMiimer/mcpelauncher-manifest/tree/rg34xxsp-port
 - https://github.com/DankMiimer/mcpelauncher-client/tree/rg34xxsp-port
@@ -30,18 +32,22 @@ forks (a recursive clone of the manifest fork builds the port):
 
 ## Building
 
-Debian bookworm container, clang cross-compiling to aarch64:
+Pinned Debian bookworm container, Clang cross-compiling to aarch64:
 
-1. `eglut_build/Dockerfile.deps` — build the dependency image
-   (`mcpe-build:bookworm`).
-2. Check out `mcpelauncher-manifest` at the base commit above with
-   submodules, apply the patches.
-3. Configure with:
+1. `build/clients/Dockerfile` selects the immutable Debian image and package
+   snapshot.
+2. `build/clients/build-in-container.sh` checks out every commit above,
+   validates/applies the patches, and configures with:
    `-DGAMEWINDOW_SYSTEM=EGLUT -DBUILD_UI=OFF -DENABLE_QT_ERROR_UI=OFF
-   -DUSE_OWN_CURL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo`
+   -DUSE_OWN_CURL=ON -DCMAKE_BUILD_TYPE=Release`
    using `clang/clang++ --target=aarch64-linux-gnu`.
-4. `make mcpelauncher-client` — see `eglut_build/_container_build.sh` /
-   `_container_build_incr.sh` for the exact invocation.
+3. Build/export with:
+
+   ```sh
+   docker buildx build --build-arg TARGET_ARCH=aarch64 \
+     --build-arg EDITION=standard --target export \
+     --output type=local,dest=out -f build/clients/Dockerfile .
+   ```
 
 The EGLUT context hand-off uses the exported
 `crusty_gamewindow_context_v1(1, active)` API supplied by the matching

@@ -9,6 +9,7 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources && printf '%s\n' \
     apt-get -o Acquire::Check-Valid-Until=false update && \
     apt-get install -y --no-install-recommends \
       ca-certificates clang cmake file git lld make patch pkg-config protobuf-compiler python3 \
+      libwayland-bin wayland-protocols \
       binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
       g++-aarch64-linux-gnu g++-arm-linux-gnueabihf \
       libssl-dev:arm64 libpng-dev:arm64 zlib1g-dev:arm64 libx11-dev:arm64 \
@@ -20,7 +21,8 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources && printf '%s\n' \
       libxext-dev:armhf libxi-dev:armhf libxcursor-dev:armhf libxrandr-dev:armhf \
       libxinerama-dev:armhf libegl1-mesa-dev:armhf libgles2-mesa-dev:armhf \
       libudev-dev:armhf libevdev-dev:armhf libuv1-dev:armhf libzip-dev:armhf \
-      libprotobuf-dev:armhf libopenal-dev:armhf libpulse-dev:armhf libasound2-dev:armhf && \
+      libprotobuf-dev:armhf libopenal-dev:armhf libpulse-dev:armhf libasound2-dev:armhf \
+      libwayland-dev:armhf libxkbcommon-dev:armhf libdrm-dev:armhf libgbm-dev:armhf && \
     rm -rf /var/lib/apt/lists/*
 ARG TARGET_ARCH
 ARG EDITION

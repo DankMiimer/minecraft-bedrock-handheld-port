@@ -5,16 +5,33 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
 
 TOOL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL_DIR))
+import catalog  # noqa: E402
 import wsl_backend  # noqa: E402
 sys.modules.setdefault("gpsoauth", mock.Mock())
 import mcbedrock_get  # noqa: E402
 import signin  # noqa: E402
+
+
+def fixed_catalog() -> catalog.Catalog:
+    """A stand-in for versiondb, so no test reaches the network."""
+    return catalog.Catalog(
+        releases=[
+            catalog.Release("1.21.51.01", {"arm64": 972105101}),
+            catalog.Release("1.16.221.01", {"arm64": 971622101, "armhf": 951622101},
+                            note="Recommended"),
+            catalog.Release("1.16.40.02", {"arm64": 943164002, "armhf": 941164002}),
+            catalog.Release("1.12.1.1", {"armhf": 871120101}, beta=True),
+        ],
+        source="test",
+        complete=True,
+    )
 
 
 class DistroTests(unittest.TestCase):
@@ -43,6 +60,7 @@ class DistroTests(unittest.TestCase):
             with self.assertRaises(wsl_backend.WslError):
                 wsl_backend.selected_distro()
 
+    @unittest.skipUnless(sys.platform == "win32", "WSL distro detection is Windows-only")
     def test_setup_state_handles_missing_ubuntu(self):
         with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(
             wsl_backend, "installed_distros", return_value=[]
@@ -125,7 +143,7 @@ class SessionTests(unittest.TestCase):
             self.assertFalse(wsl_backend.sign_out())
 
     def test_cli_logout_clears_windows_and_wsl_sessions(self):
-        with mock.patch.object(wsl_backend, "sign_out", return_value=True) as wsl_logout, \
+        with mock.patch.object(mcbedrock_get.backend, "sign_out", return_value=True) as wsl_logout, \
                 mock.patch.object(signin, "forget") as windows_logout:
             self.assertEqual(mcbedrock_get.main(["--logout"]), 0)
         wsl_logout.assert_called_once_with()
@@ -133,9 +151,10 @@ class SessionTests(unittest.TestCase):
 
 
 class DownloadTests(unittest.TestCase):
-    def fake_complete(self, _code, base, _on_line, _timeout):
+    def fake_complete(self, _code, base, _on_line, _timeout, abi):
         base.write_bytes(b"base")
-        base.with_name(base.stem + ".config.arm64_v8a.apk").write_bytes(b"arm64")
+        marker = "arm64_v8a" if abi == "arm64" else "armeabi_v7a"
+        base.with_name(base.stem + f".config.{marker}.apk").write_bytes(abi.encode())
         return 1, ["complete"]
 
     def test_complete_set_is_published(self):
@@ -147,6 +166,94 @@ class DownloadTests(unittest.TestCase):
                 "minecraft-971622101.apk",
                 "minecraft-971622101.config.arm64_v8a.apk",
             })
+
+    def test_complete_armhf_set_is_published(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            wsl_backend, "_download_into", side_effect=self.fake_complete
+        ):
+            written = wsl_backend.download(971622101, Path(tmp), abi="armhf")
+            self.assertEqual({path.name for path in written}, {
+                "minecraft-971622101.apk",
+                "minecraft-971622101.config.armeabi_v7a.apk",
+            })
+
+    def fake_monolithic(self, _code, base, _on_line, _timeout, abi):
+        """Pre-App-Bundle build: ONE apk carrying lib/<abi>/, no config parts."""
+        lib = "arm64-v8a" if abi == "arm64" else "armeabi-v7a"
+        with zipfile.ZipFile(base, "w") as archive:
+            archive.writestr(f"lib/{lib}/libminecraftpe.so", b"native")
+        return 1, ["complete"]
+
+    def test_monolithic_pre_bundle_apk_is_published(self):
+        # 1.12.1.1 and friends predate split APKs; requiring a config.<abi>.apk
+        # rejected them even though the base APK has the native library inside.
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            wsl_backend, "_download_into", side_effect=self.fake_monolithic
+        ):
+            written = wsl_backend.download(871120101, Path(tmp), abi="armhf")
+            self.assertEqual(
+                {path.name for path in written}, {"minecraft-871120101.apk"}
+            )
+
+    def test_monolithic_apk_missing_the_abi_is_still_rejected(self):
+        def wrong_abi(_code, base, _on_line, _timeout, _abi):
+            with zipfile.ZipFile(base, "w") as archive:
+                archive.writestr("lib/x86/libminecraftpe.so", b"native")
+            return 1, ["complete"]
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            wsl_backend, "_download_into", side_effect=wrong_abi
+        ), self.assertRaisesRegex(wsl_backend.WslError, "did not return"):
+            wsl_backend.download(871120101, Path(tmp), abi="armhf")
+
+    def test_armhf_profile_can_upgrade_an_existing_setup(self):
+        completed = mock.Mock(stdout="", stderr="", returncode=0)
+        with mock.patch.object(wsl_backend, "_run", return_value=completed) as run:
+            wsl_backend.ensure_device_profile("armhf")
+        self.assertIn("device-armhf.conf", run.call_args.args[0])
+        self.assertIn("armeabi-v7a", run.call_args.kwargs["stdin"])
+
+    def test_unknown_abi_is_rejected_before_download(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(
+            wsl_backend.WslError, "Unknown APK architecture"
+        ):
+            wsl_backend.download(971622101, Path(tmp), abi="x86")
+
+    def test_cli_uses_the_armhf_specific_version_code(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            catalog, "load", return_value=fixed_catalog()
+        ), mock.patch.object(mcbedrock_get, "fetch", return_value=[]) as fetch:
+            result = mcbedrock_get.main([
+                "--download", "1.16.221.01", "--abi", "armhf", "--out", tmp
+            ])
+        self.assertEqual(result, 0)
+        self.assertEqual(fetch.call_args.args[0], 951622101)
+        self.assertEqual(fetch.call_args.kwargs["abi"], "armhf")
+
+    def test_cli_rejects_unavailable_armhf_version(self):
+        with mock.patch.object(catalog, "load", return_value=fixed_catalog()),                 mock.patch.object(mcbedrock_get, "fetch") as fetch:
+            result = mcbedrock_get.main([
+                "--download", "1.21.51.01", "--abi", "armhf"
+            ])
+        self.assertEqual(result, 2)
+        fetch.assert_not_called()
+
+    def test_cli_rejects_a_version_nobody_has_heard_of(self):
+        with mock.patch.object(catalog, "load", return_value=fixed_catalog()),                 mock.patch.object(mcbedrock_get, "fetch") as fetch:
+            self.assertEqual(mcbedrock_get.main(["--download", "9.9.9.9"]), 2)
+        fetch.assert_not_called()
+
+    def test_cli_accepts_any_version_the_catalog_lists(self):
+        # The point of reading versiondb: builds that were never in the
+        # hand-written table are downloadable too.
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            catalog, "load", return_value=fixed_catalog()
+        ), mock.patch.object(mcbedrock_get, "fetch", return_value=[]) as fetch:
+            result = mcbedrock_get.main([
+                "--download", "1.16.40.02", "--abi", "armhf", "--out", tmp
+            ])
+        self.assertEqual(result, 0)
+        self.assertEqual(fetch.call_args.args[0], 941164002)
 
     def test_redownload_replaces_old_files(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
@@ -160,7 +267,7 @@ class DownloadTests(unittest.TestCase):
             self.assertEqual((target / "minecraft-971622101.apk").read_bytes(), b"base")
 
     def test_missing_arm64_keeps_previous_files(self):
-        def incomplete(_code, base, _on_line, _timeout):
+        def incomplete(_code, base, _on_line, _timeout, _abi):
             base.write_bytes(b"base")
             return 1, ["no split"]
 
@@ -175,7 +282,7 @@ class DownloadTests(unittest.TestCase):
             self.assertEqual(old.read_bytes(), b"previous")
 
     def test_missing_base_is_rejected(self):
-        def no_base(_code, base, _on_line, _timeout):
+        def no_base(_code, base, _on_line, _timeout, _abi):
             base.with_name(base.stem + ".config.arm64_v8a.apk").write_bytes(b"arm64")
             return 2, ["failed"]
 

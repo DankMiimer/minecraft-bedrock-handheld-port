@@ -28,7 +28,7 @@ REM Licence notices, generated from what is actually installed in this venv.
 
 REM Ship the companion files next to the executable.
 copy /Y "Create desktop shortcut.cmd" "dist\Create desktop shortcut.cmd" >nul
-copy /Y "wsl-setup.sh" "dist\wsl-setup.sh" >nul
+copy /Y "setup-downloader.sh" "dist\setup-downloader.sh" >nul
 
 "%VENV_PY%" package_release.py || goto :fail
 

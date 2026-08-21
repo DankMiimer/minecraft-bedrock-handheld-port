@@ -1,5 +1,85 @@
 # Changelog
 
+## Unreleased portability checkpoint
+
+- Reduced the Windows helper's first run to one button. Step 1 now installs the
+  Windows Subsystem for Linux (through Windows' own administrator prompt rather
+  than instructions to find an elevated PowerShell), installs Ubuntu with
+  `--no-launch`, and builds gplaydl, reporting progress in the window. Every
+  command inside the distribution runs as root, so there is no Linux username or
+  password to create, no `sudo` prompt, and no terminal window; an install made
+  by an earlier helper under a normal user's home is adopted instead of rebuilt.
+  Before anything is installed the helper states plainly that it is putting a
+  complete Ubuntu Linux system inside Windows, with sizes and the
+  `wsl --unregister Ubuntu` way back out.
+
+- Made the Windows helper state, on every row, which edition a build is
+  (Pocket Edition below 1.2, Bedrock above, with Pocket Edition marked touch
+  controls only), the named update it belongs to, and whether it uses
+  RenderDragon. RenderDragon rows are drawn in red and warn before downloading.
+  The Android RenderDragon boundary is 1.18.30, not 1.17 — the renderer shipped
+  per platform and reached Android last, with 1.21.51 shipping it disabled on
+  arm64 only, and the 1.21.51.02 Android re-upload that restored it is a
+  separate build with its own Play code, flagged accordingly. Update names come
+  from the minecraft.wiki release infoboxes;
+  releases that were never named are left blank.
+
+- Rebuilt the Windows helper's window: every version Google Play still serves
+  for the selected architecture is now in one scrollable, searchable list read
+  from mcpelauncher-versiondb, rather than a fixed row of nine buttons. The
+  tested builds keep their notes and are marked; beta and preview builds are
+  behind a checkbox. The list is cached for a day under
+  `%LOCALAPPDATA%\mcbedrock-getersiondb\`, and with no network and no cache
+  it falls back to the tested builds, whose codes ship inside the helper.
+  `--list` prints the same catalog and `--download` accepts anything in it.
+- Made the helper DPI-aware, so its text is drawn rather than bitmap-stretched
+  on a scaled display, and gave it a dark theme, real download percentages, and
+  a matching dark title bar.
+- Dropped the helper's email field. Google's own sign-in page asks for the
+  address moments later, so the helper reads back which account that session
+  belongs to instead of asking twice. The read is made from inside the
+  signed-in page and never by navigating the sign-in window, which would put
+  Google's error page in front of the user; if it comes back empty the helper
+  asks for the address while still holding that sign-in, so no one ever signs
+  in twice.
+
+- Reworked **Get APK from Google Play** so the post-confirmation phase reports
+  real browser/runtime, Google-session, download-percentage and validation
+  milestones instead of leaving the confirmation tile frozen. Added a clearly
+  separated compact catalog containing every Google Play ARM64 and ARM32
+  release/preview in the supported 1.16-1.21 range (685 architecture-specific
+  builds in the current upstream snapshot). Architecture and channel filters,
+  Play code and risk information are shown in the list/confirmation flow;
+  unsupported 1.26+ PairIP builds stay excluded.
+- Removed the multi-second pre-menu delay. The launcher caches validated
+  native-library fingerprints by size/mtime/ctime, resolves the selected
+  version once, and avoids starting Python again when the APK inventory has
+  not changed. The measured RG34XXSP/Knulli first frame is now 3.35 seconds,
+  so the temporary loading panel was removed. Startup phase timings are
+  retained in `logs/startup-timing.log`.
+- Corrected the final RG34XXSP native face-button detail by swapping only A/B;
+  the now-verified D-pad, X/Y, shoulders, triggers, sticks, and menu mapping are
+  unchanged.
+- Reworked host selection around device capabilities: H700 stays arm64 on
+  Knulli and muOS regardless of RAM, while RK3326/R36S selects the armhf
+  KMSDRM path. Knulli, muOS, generic ROCKNIX/Sway, RGDS/ROCKNIX, and dArkOS
+  fixtures now guard the backend contracts.
+- Removed normal-path frontend process management from the port. PortMaster's
+  platform helper owns suspension/restoration; explicit menu failures return
+  visibly instead of silently autoplaying Minecraft.
+- Added APKM, APKS, XAPK, and ZIP bundle input with bounded private expansion,
+  non-stale kernel locking, durable transaction journals, and power-interrupt
+  rollback that refuses to delete targets from another transaction.
+- Added exact controller-name aliases for the generic H700 GUID, implemented
+  GUID-plus-name lookup in linux-gamepad, and reproducibly rebuilt/deployed the
+  arm64 client. The patch also fixes an upstream low-key-code button-table
+  out-of-bounds write.
+- Normalized a working UTF-8 locale and private mode-0700 runtime directory,
+  recorded a whitelisted runtime environment, and expanded the redacted
+  support bundle with audio, graphics, storage, controller, and ELF evidence.
+- Ran the complete host suite and deployed the script-level checkpoint to the
+  RG34XXSP/Knulli Scarab reference device with a recoverable code backup.
+
 ## v2.0.0-rc.4 (testing)
 
 - Fixed the Windows helper hanging for five minutes at **Passing your Google

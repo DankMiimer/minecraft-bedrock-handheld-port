@@ -31,9 +31,9 @@ CLIENT_PIDS_BEFORE=""
 # --- Display-session detection --------------------------------------------------
 # sway compositor (ROCKNIX): the game nests under sway as a wayland client;
 # ES keeps running and the game window is fullscreened via the CFW helper.
-# Batocera-family fbdev (Knulli H700): ES keeps /dev/fb0 and the controller
-# evdev node open even while a port runs, so it must be fully stopped (not
-# suspended) and restarted afterwards.
+# Knulli's emulatorlauncher already owns the ES lifecycle while a port runs.
+# The port must not call S31emulationstation stop itself: Scarab's stop action
+# can wait 20 seconds and leave the wrapper alive, producing two input owners.
 SWAY_MODE=0
 SWAY_PID=""
 if pidof sway >/dev/null 2>&1; then
@@ -49,11 +49,18 @@ if pidof sway >/dev/null 2>&1; then
     [ -n "$SWAYSOCK" ] && export SWAYSOCK
   fi
 fi
+if [ "$SWAY_MODE" = 0 ]; then
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/mcpe-runtime-$(id -u 2>/dev/null || echo 0)}"
+  mkdir -p "$XDG_RUNTIME_DIR" || { echo "Cannot create XDG runtime directory: $XDG_RUNTIME_DIR"; exit 1; }
+  chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+elif [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ] && [ -O "$XDG_RUNTIME_DIR" ]; then
+  chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+fi
 
 # --- Frontend handling -----------------------------------------------------------
-# Knulli/Batocera keep ES on the framebuffer/input nodes; muOS keeps its
-# lightweight frontend/mux launcher around. Both must be out of the way while
-# Weston/crusty owns the display.
+# PortMaster and the CFW launcher normally own frontend suspension. Internal
+# process management caused duplicate/frozen frontends on Knulli and muOS, so
+# this legacy path runs only with MCPE_MANAGE_FRONTEND=1 (manual launches).
 ES_INIT=/etc/init.d/S31emulationstation
 ES_WAS_RUNNING=0
 MUOS_FRONTEND_STOPPED=0
@@ -67,7 +74,15 @@ is_muos() {
     [ -e /opt/muos/script/var/global/device.txt ]
 }
 
+is_knulli() {
+  local cfw_lower
+  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
+  case "$cfw_lower" in *knulli*) return 0 ;; esac
+  return 1
+}
+
 stop_emulationstation() {
+  [ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return
   if is_muos; then
     if pidof frontend.sh >/dev/null 2>&1 || pidof muxlaunch >/dev/null 2>&1; then
       MUOS_FRONTEND_STOPPED=1
@@ -75,6 +90,9 @@ stop_emulationstation() {
       $ESUDO killall -q frontend.sh muxlaunch 2>/dev/null || true
       sleep 1
     fi
+    return
+  fi
+  if is_knulli; then
     return
   fi
   [ "$SWAY_MODE" = 0 ] || return
@@ -372,6 +390,24 @@ TIMEOUT_CMD=()
 SDL3_AUDIO_ENV=()
 [ -n "${MCPE_SDL_AUDIODRIVER:-}" ] &&
   SDL3_AUDIO_ENV=(SDL_AUDIO_DRIVER="$MCPE_SDL_AUDIODRIVER")
+
+{
+  printf 'timestamp=%q\n' "$(date -Iseconds 2>/dev/null || date)"
+  printf 'abi=%q\n' arm64
+  printf 'version=%q\n' "$MCVER"
+  printf 'host_profile=%q\n' "${MCPE_HOST_PROFILE:-generic}"
+  printf 'graphics_backend=%q\n' "${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown}"
+  printf 'audio_backend=%q\n' "${MCPE_AUDIO_BACKEND_RESOLVED:-unknown}"
+  printf 'sdl_video=%q\n' "$APP_SDL_DRIVER"
+  printf 'sdl_audio=%q\n' "${MCPE_SDL_AUDIODRIVER:-openal}"
+  printf 'locale=%q\n' "${MCPE_LOCALE_RESOLVED:-${LC_ALL:-unknown}}"
+  printf 'xdg_runtime=%q\n' "${XDG_RUNTIME_DIR:-}"
+  printf 'xdg_runtime_mode=%q\n' "$(stat -c %a "$XDG_RUNTIME_DIR" 2>/dev/null || echo unknown)"
+  printf 'display_size=%qx%q\n' "$DISPLAY_WIDTH" "$DISPLAY_HEIGHT"
+  printf 'sway=%q\n' "$SWAY_MODE"
+  printf 'game_binary=%q\n' "$BIN"
+  printf 'game_library=%q\n' "$GAMEDIR/versions/$MCVER/lib/arm64-v8a/libminecraftpe.so"
+} >"$GAMEDIR/logs/runtime-arm64.env"
 
 # Bedrock 1.21.51 can acknowledge its quit request but deadlock after
 # "Invoking stop activity callbacks" on H700. Waiting forever strands ES and

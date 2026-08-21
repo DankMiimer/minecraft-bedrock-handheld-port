@@ -1,0 +1,20 @@
+diff --git a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -608,4 +608,12 @@
+-    bool (*isAndroidTrial)() = (decltype(isAndroidTrial))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isAndroidTrial");
+-    bool (*isAndroidChromebook)() = (decltype(isAndroidChromebook))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isAndroidChromebook");
+-    bool (*isAndroidAmazon)() = (decltype(isAndroidAmazon))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isAndroidAmazon");
+-    bool (*isEduMode)() = (decltype(isEduMode))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isEduMode");
++#if defined(__arm__)
++    Log::info("Launcher", "Skipping unsafe Android Java entitlement probes on armhf");
++    bool (*isAndroidTrial)() = nullptr;
++    bool (*isAndroidChromebook)() = nullptr;
++    bool (*isAndroidAmazon)() = nullptr;
++    bool (*isEduMode)() = nullptr;
++#else
++    bool (*isAndroidTrial)() = (decltype(isAndroidTrial))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isAndroidTrial");
++    bool (*isAndroidChromebook)() = (decltype(isAndroidChromebook))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isAndroidChromebook");
++    bool (*isAndroidAmazon)() = (decltype(isAndroidAmazon))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isAndroidAmazon");
++    bool (*isEduMode)() = (decltype(isEduMode))linker::dlsym(handle, "Java_com_mojang_minecraftpe_MainActivity_isEduMode");
++#endif

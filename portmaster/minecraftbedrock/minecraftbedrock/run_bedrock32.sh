@@ -7,6 +7,11 @@
 # profile layout, performance mode, and asset prewarm.
 set -u
 GAMEDIR="${GAMEDIR:?run via 'Minecraft Bedrock.sh'}"
+# shellcheck disable=SC1091
+source "$GAMEDIR/lib/performance.sh" || {
+  echo "Missing performance profile helpers."
+  exit 1
+}
 MCVER="${MCVER_OVERRIDE:?no version selected}"
 DATA_ROOT="${MCPE_DATA_ROOT_OVERRIDE:-$GAMEDIR/profiles/default}"
 DATA_DIR="$DATA_ROOT/mcpelauncher"
@@ -14,14 +19,25 @@ BIN="$GAMEDIR/bin32/mcpelauncher-client"
 LOG="$GAMEDIR/weston_launch.log"
 ESUDO="${ESUDO:-}"
 
+# A second client makes sway tile both windows and exhausts the small R36S
+# memory/CPU budget.  Keep the lock descriptor open for this launch's lifetime.
+INSTANCE_LOCK="${MCPE_INSTANCE_LOCK:-/tmp/minecraftbedrock-armhf.lock}"
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$INSTANCE_LOCK"
+  if ! flock -n 9; then
+    echo "Minecraft Bedrock is already running; refusing a duplicate launch."
+    exit 0
+  fi
+fi
+
 [ -f "$GAMEDIR/versions/$MCVER/lib/armeabi-v7a/libminecraftpe.so" ] || {
   echo "version $MCVER has no 32-bit (armeabi-v7a) libraries"
   exit 1
 }
 
 # --- Frontend handling (mirrors weston_launch.sh) ----------------------------
-# ROCKNIX-family launches ports with the display released, nothing to stop.
-# Batocera-family (Knulli) ES and the muOS frontend hold fb/input nodes.
+# PortMaster/CFW launch wrappers normally release the display. Internal
+# frontend management is an explicit fallback for direct/manual launches only.
 ES_INIT=/etc/init.d/S31emulationstation
 ES_WAS_RUNNING=0
 MUOS_FRONTEND_STOPPED=0
@@ -33,6 +49,7 @@ is_muos() {
   [ -d /opt/muos ] || [ -d /mnt/mmc/MUOS ] || [ -d /mnt/sdcard/MUOS ]
 }
 stop_frontend() {
+  [ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return
   if is_muos; then
     if pidof frontend.sh >/dev/null 2>&1 || pidof muxlaunch >/dev/null 2>&1; then
       MUOS_FRONTEND_STOPPED=1
@@ -103,6 +120,9 @@ restore_performance_mode() {
 }
 
 cleanup() {
+  if [ -n "${MCPE_MENU_HANDOFF_PID:-}" ]; then
+    kill "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
+  fi
   restore_performance_mode
   start_frontend
 }
@@ -111,7 +131,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # --- Asset prewarm (page cache; removes first-use microSD stutter) ------------
-if [ "${MCPE_PREWARM_GAMEPLAY_ASSETS:-1}" = 1 ] && [ -d "$GAMEDIR/versions/$MCVER/assets" ]; then
+# Sequentially reading the sound/particle tree can take minutes on the slow
+# exFAT microSD cards used by RK3326 devices.  That makes the port look hung and
+# can be slower than allowing the game to page assets in normally.  Keep this
+# available as an explicit diagnostic opt-in, but do not delay normal launches.
+if [ "${MCPE_PREWARM_GAMEPLAY_ASSETS:-0}" = 1 ] && [ -d "$GAMEDIR/versions/$MCVER/assets" ]; then
   find "$GAMEDIR/versions/$MCVER/assets" -type f \
     \( -path '*/resource_packs/vanilla/sounds/*' \
        -o -path '*/resource_packs/vanilla/particles/*' \) \
@@ -180,12 +204,31 @@ else
     fi
   fi
 fi
+if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+  mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
+  [ -d "$XDG_RUNTIME_DIR" ] && [ -O "$XDG_RUNTIME_DIR" ] &&
+    chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+fi
 
-# Controller: the armhf client is an SDL app and honours the CFW's SDL mapping
-# line, exported by the entry script from get_controls.
-[ -n "${sdl_controllerconfig:-}" ] && export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
+# Controller: prefer the mapping returned by PortMaster's get_controls.  Some
+# CFW releases only populate SDL_GAMECONTROLLERCONFIG_FILE, so also import its
+# non-comment mappings into the environment understood by the bundled SDL.
+if [ -z "${sdl_controllerconfig:-}" ] &&
+   [ -n "${SDL_GAMECONTROLLERCONFIG_FILE:-}" ] &&
+   [ -s "$SDL_GAMECONTROLLERCONFIG_FILE" ]; then
+  sdl_controllerconfig="$(awk 'NF && $1 !~ /^#/' "$SDL_GAMECONTROLLERCONFIG_FILE")"
+fi
+if [ -n "${sdl_controllerconfig:-}" ]; then
+  export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
+  echo "Loaded the PortMaster controller mapping."
+else
+  echo "WARNING: PortMaster supplied no SDL controller mapping; using SDL defaults."
+fi
 
-export LD_LIBRARY_PATH="$GAMEDIR/versions/$MCVER/lib/armeabi-v7a:$GAMEDIR/versions/$MCVER/lib/native/armeabi-v7a:$GAMEDIR/bin32/lib/armeabi-v7a:$GAMEDIR/lib32/armeabi-v7a:$GAMEDIR/lib32/armhf-system:/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf:/usr/lib32:/lib32:/usr/lib:/lib"
+# Prefer the firmware's matching-ABI runtime over optional bundled fallbacks.
+# In particular, a Bookworm libgcc/libm placed before Ubuntu 19.10's glibc
+# makes an otherwise compatible R36S client fail with a GLIBC_2.34 error.
+export LD_LIBRARY_PATH="$GAMEDIR/versions/$MCVER/lib/armeabi-v7a:$GAMEDIR/versions/$MCVER/lib/native/armeabi-v7a:$GAMEDIR/bin32/lib/armeabi-v7a:$GAMEDIR/lib32/armeabi-v7a:/usr/local/lib/arm-linux-gnueabihf:/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf:$GAMEDIR/lib32/armhf-system:/usr/lib32:/lib32:/usr/lib:/lib"
 
 # Data layout: same profile scheme as the 64-bit path, so a version's worlds
 # and settings are identical regardless of which client ran it.
@@ -235,6 +278,9 @@ tune_game_options() {
     [ -n "${MCPE_MAX_FPS:-}" ] && pin_option gfx_max_framerate "$MCPE_MAX_FPS"
     [ -n "${MCPE_VSYNC:-}" ] && pin_option gfx_vsync "$MCPE_VSYNC"
     [ "${MCPE_PERFORMANCE_OPTIONS:-1}" = 1 ] || continue
+    if [ "${MCPE_R36S_PERFORMANCE_PRESET:-0}" = 1 ]; then
+      mcpe_apply_r36s_game_options "$options_file"
+    fi
     set_option gfx_multithreaded_renderer "${MCPE_MULTITHREADED_RENDERER:-1}"
     set_option dev_file_watcher 0
     set_option content_log_file 0
@@ -247,7 +293,10 @@ chmod +x "$BIN" 2>/dev/null
 
 # Optional gptokeyb overlay (hotkeys); the SDL client handles the pad itself.
 if [ -n "${GPTOKEYB:-}" ]; then
-  $GPTOKEYB "mcpelauncher-client" &
+  # Do not let the helper inherit the instance-lock descriptor or the
+  # launcher's log pipe. Otherwise an immediately failing client leaves a
+  # detached gptokeyb process that makes the next launch look like a duplicate.
+  $GPTOKEYB "mcpelauncher-client" </dev/null >/dev/null 2>&1 9>&- &
 fi
 
 # --- Panel mode detection (kmsdrm) --------------------------------------------
@@ -271,6 +320,33 @@ detect_native_mode() {
   return 1
 }
 
+# Prefer the dimensions provided by PortMaster's active display helper.  On
+# sway, sysfs may advertise 720x480 even though the compositor output is
+# 640x480; requesting the active dimensions prevents a cropped/windowed game.
+NATIVE_MODE="${MCPE_WINDOW_SIZE:-}"
+if [ -z "$NATIVE_MODE" ] &&
+   [ -n "${MCPE_DISPLAY_WIDTH:-}" ] && [ -n "${MCPE_DISPLAY_HEIGHT:-}" ]; then
+  NATIVE_MODE="${MCPE_DISPLAY_WIDTH}x${MCPE_DISPLAY_HEIGHT}"
+elif [ -z "$NATIVE_MODE" ] &&
+     [ -n "${MCPE_ACTIVE_WIDTH:-}" ] && [ -n "${MCPE_ACTIVE_HEIGHT:-}" ]; then
+  NATIVE_MODE="${MCPE_ACTIVE_WIDTH}x${MCPE_ACTIVE_HEIGHT}"
+fi
+[ -n "$NATIVE_MODE" ] || NATIVE_MODE="$(detect_native_mode || true)"
+NATIVE_WIDTH="${NATIVE_MODE%%x*}"
+NATIVE_HEIGHT="${NATIVE_MODE##*x}"
+case "$NATIVE_WIDTH:$NATIVE_HEIGHT" in
+  *[!0-9:]*|:|:*|*:) NATIVE_MODE="" ;;
+esac
+
+if [ "$SDL_VIDEODRIVER" = wayland ] && [ -n "$NATIVE_MODE" ]; then
+  echo "Using Wayland surface size: $NATIVE_MODE"
+  # Keep the bootstrap surface windowed and unfocused behind the launcher's
+  # fullscreen handoff. It is promoted only after the client reaches its first
+  # presentation point; an empty SDL surface can otherwise expose the desktop.
+  unset GAMEWINDOW_SDL_FULLSCREEN
+  ARGS="${ARGS:-} -ww $NATIVE_WIDTH -wh $NATIVE_HEIGHT"
+fi
+
 if [ "$SDL_VIDEODRIVER" = kmsdrm ]; then
   echo "--- DRM diagnostics ---"
   ls -1 /dev/dri 2>/dev/null | sed 's/^/  dev: /'
@@ -282,10 +358,9 @@ if [ "$SDL_VIDEODRIVER" = kmsdrm ]; then
     echo "  NOTE: emulationstation still running (may hold DRM master)"
   echo "-----------------------"
 
-  NATIVE_MODE="${MCPE_WINDOW_SIZE:-$(detect_native_mode || true)}"
   if [ -n "$NATIVE_MODE" ]; then
     echo "Using panel mode: $NATIVE_MODE"
-    ARGS="${ARGS:-} -ww ${NATIVE_MODE%%x*} -wh ${NATIVE_MODE##*x}"
+    ARGS="${ARGS:-} -ww $NATIVE_WIDTH -wh $NATIVE_HEIGHT"
   else
     if [ -n "${WAYLAND_DISPLAY:-}" ]; then
       echo "No connected DRM mode; falling back to the active Wayland session."
@@ -388,18 +463,94 @@ NEEDS_PRIVILEGE=0
 [ -e /dev/mali0 ] && [ ! -r /dev/mali0 ] && NEEDS_PRIVILEGE=1
 RUN_AS_ROOT="${MCPE_RUN_AS_ROOT:-auto}"
 if { [ "$RUN_AS_ROOT" = 1 ] || { [ "$RUN_AS_ROOT" = auto ] && [ "$NEEDS_PRIVILEGE" = 1 ]; }; } && [ -n "${ESUDO:-}" ]; then
-  RUN_PREFIX="$ESUDO env LD_LIBRARY_PATH=$LD_LIBRARY_PATH XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/kmsdrm_runtime} XDG_DATA_HOME=$XDG_DATA_HOME MCPELAUNCHER_DATA_DIR=$MCPELAUNCHER_DATA_DIR SDL_VIDEODRIVER=$SDL_VIDEODRIVER SDL_VIDEO_KMSDRM_CARD_INDEX=${SDL_VIDEO_KMSDRM_CARD_INDEX:-0} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} SDL_VIDEO_KMSDRM_DOUBLE_BUFFER=${SDL_VIDEO_KMSDRM_DOUBLE_BUFFER:-1}"
+  RUN_PREFIX="$ESUDO env LD_LIBRARY_PATH=$LD_LIBRARY_PATH XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/kmsdrm_runtime} XDG_DATA_HOME=$XDG_DATA_HOME MCPELAUNCHER_DATA_DIR=$MCPELAUNCHER_DATA_DIR LANG=${LANG:-C} LC_ALL=${LC_ALL:-C} SDL_VIDEODRIVER=$SDL_VIDEODRIVER SDL_VIDEO_KMSDRM_CARD_INDEX=${SDL_VIDEO_KMSDRM_CARD_INDEX:-0} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} SDL_VIDEO_KMSDRM_DOUBLE_BUFFER=${SDL_VIDEO_KMSDRM_DOUBLE_BUFFER:-1}"
   echo "Running client through scoped ESUDO (device permissions were not changed)"
 else
   echo "Running client unprivileged"
 fi
 
+{
+  printf 'timestamp=%q\n' "$(date -Iseconds 2>/dev/null || date)"
+  printf 'abi=%q\n' armhf
+  printf 'version=%q\n' "$MCVER"
+  printf 'host_profile=%q\n' "${MCPE_HOST_PROFILE:-generic}"
+  printf 'graphics_backend=%q\n' "${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown}"
+  printf 'audio_backend=%q\n' "${MCPE_AUDIO_BACKEND_RESOLVED:-unknown}"
+  printf 'sdl_video=%q\n' "$SDL_VIDEODRIVER"
+  printf 'sdl_audio=%q\n' "${SDL_AUDIODRIVER:-alsa}"
+  printf 'locale=%q\n' "${MCPE_LOCALE_RESOLVED:-${LC_ALL:-unknown}}"
+  printf 'xdg_runtime=%q\n' "${XDG_RUNTIME_DIR:-}"
+  printf 'xdg_runtime_mode=%q\n' "$(stat -c %a "${XDG_RUNTIME_DIR:-/nonexistent}" 2>/dev/null || echo unknown)"
+  printf 'display_mode=%q\n' "${NATIVE_MODE:-unknown}"
+  printf 'sway=%q\n' "$SWAY_MODE"
+  printf 'needs_privilege=%q\n' "$NEEDS_PRIVILEGE"
+  printf 'game_binary=%q\n' "$BIN"
+  printf 'game_library=%q\n' "$GAMEDIR/versions/$MCVER/lib/armeabi-v7a/libminecraftpe.so"
+} >"$GAMEDIR/logs/runtime-armhf.env"
+
 echo "=== launching 32-bit: version=$MCVER sdl=$SDL_VIDEODRIVER ==="
+# Start with an empty log so a readiness marker from the previous launch can
+# never end a handoff early. The client appends to it below on every backend.
+: >"$LOG"
+if [ "$SWAY_MODE" = 1 ] && command -v swaymsg >/dev/null 2>&1; then
+  # Keep Minecraft's empty bootstrap surface behind the fullscreen launcher.
+  # Both commands affect future windows and are registered before the surface
+  # exists. A sway-PID stamp avoids accumulating rules across game launches.
+  SWAY_RULE_STAMP="/tmp/mcbedrock-sway-handoff-rule-v2.${SWAY_PID:-unknown}"
+  if [ ! -e "$SWAY_RULE_STAMP" ]; then
+    if swaymsg 'no_focus [app_id="mcpelauncher-client"]' >/dev/null 2>&1 &&
+       swaymsg 'for_window [app_id="mcpelauncher-client"] border none, fullscreen disable' >/dev/null 2>&1; then
+      : >"$SWAY_RULE_STAMP"
+    fi
+  fi
+
+  sway_game_is_fullscreen() {
+    if command -v jq >/dev/null 2>&1; then
+      swaymsg -t get_tree -r 2>/dev/null |
+        jq -e 'any(.. | objects; .app_id? == "mcpelauncher-client" and .fullscreen_mode == 1)' \
+          >/dev/null 2>&1
+    else
+      # Older minimal Sway images may lack jq. A successful targeted command
+      # plus a compositor round trip is the best available confirmation.
+      swaymsg '[app_id="mcpelauncher-client"] fullscreen enable' >/dev/null 2>&1 || return 1
+      sleep 0.2
+    fi
+  }
+
+  # Keep polling after the surface maps. The first swap-interval request occurs
+  # at Minecraft's initial presentation point on the pinned 1.16 client. Only
+  # then focus/fullscreen the game and remove the Launching overlay.
+  (
+    attempts=0
+    while [ "$attempts" -lt 1200 ]; do
+      if swaymsg -t get_tree -r 2>/dev/null |
+         grep -q '"app_id"[[:space:]]*:[[:space:]]*"mcpelauncher-client"'; then
+        handoff_ready=0
+        [ -z "${MCPE_MENU_HANDOFF_PID:-}" ] && handoff_ready=1
+        grep -q 'Swap interval requested=' "$LOG" 2>/dev/null && handoff_ready=1
+        if [ "$handoff_ready" = 1 ]; then
+          swaymsg '[app_id="mcpelauncher-client"] focus, border none, fullscreen enable' >/dev/null 2>&1
+        fi
+        if [ "$handoff_ready" = 1 ] && sway_game_is_fullscreen; then
+          if [ -n "${MCPE_MENU_HANDOFF_PID:-}" ]; then
+            kill "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
+          fi
+          exit 0
+        fi
+      fi
+      attempts=$((attempts + 1))
+      sleep 0.1
+    done
+  ) &
+elif [ -n "${MCPE_MENU_HANDOFF_PID:-}" ]; then
+  # Direct KMS needs the display itself, so it cannot overlap the menu surface.
+  kill "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
+fi
 if [ "${MCPE_32BIT_TEE_LOG:-0}" = 1 ]; then
-  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} 2>&1 | tee "$LOG"
+  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} 2>&1 | tee -a "$LOG"
   status="${PIPESTATUS[0]}"
 else
-  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} >"$LOG" 2>&1
+  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} >>"$LOG" 2>&1
   status="$?"
 fi
 

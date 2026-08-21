@@ -8,18 +8,19 @@
 -- Screens:
 --   * Play (with remembered version selection)
 --   * Versions: pick the active version, delete installed versions
+--   * Download: optional Google Play sign-in/download on supported devices
 --   * Install: extract new versions from APKs dropped in apk/
 --   * Settings: FPS cap, render distance (below the in-game minimum),
 --     client ABI, UI scale, vsync, performance toggles
 --
 -- Protocol with "Minecraft Bedrock.sh" (all under $MCPE_GAMEDIR/config/):
 --   settings.cfg        key=value, persisted here, parsed by the shell
---   menu_action.txt     line 1 = action (play/install/delete/delete_apk/exit),
+--   menu_action.txt     line 1 = action (play/download_apk/install/delete/exit),
 --                       line 2 = argument (version name / apk file name)
 --   install_request.txt apk file names (one per line) for action=install
 --   menu_error.txt      lua traceback if the menu itself crashed
--- The shell treats an empty/missing action file as "menu crashed" and falls
--- back to launching the newest installed version.
+-- The shell treats an empty/missing action file as a visible menu failure and
+-- does not launch Minecraft with hidden defaults.
 --
 -- Buttons: which SDL button means "confirm" depends on the pad's mapping
 -- style. PortMaster's H700-family mappings are POSITIONAL (SDL "a" = SOUTH =
@@ -33,10 +34,22 @@ local CONFDIR = GAMEDIR .. "/config"
 local VERDIR  = GAMEDIR .. "/versions"
 local APKDIR  = GAMEDIR .. "/apk"
 local STATUS  = os.getenv("MCPE_MENU_STATUS") or ""
+local DOWNLOADER_SUPPORTED = os.getenv("MCPE_DOWNLOADER_SUPPORTED") == "1"
+local DOWNLOADER_SESSION = os.getenv("MCPE_DOWNLOADER_SESSION") == "1"
+local DOWNLOADER_RUNTIME = os.getenv("MCPE_DOWNLOADER_RUNTIME") == "1"
+local EXIT_ON_PLAY = os.getenv("MCPE_MENU_EXIT_ON_PLAY") == "1"
 -- Test hook: exit cleanly (as if the user chose Exit) after N seconds. Used
 -- by remote display tests so the GL context is never hard-killed mid-frame,
 -- which corrupts the display state on fbdev-mali devices. Unset in normal use.
 local AUTOQUIT = tonumber(os.getenv("MCPE_MENU_AUTOQUIT") or "")
+-- Test hook: write a PNG of the Nth drawn frame to this absolute path. LOVE
+-- renders through DRM on fbdev-mali devices, where framebuffer grabbers only
+-- ever see the frontend's last frame, so the UI can only be inspected from
+-- inside the process. Unset in normal use.
+local SHOT_PATH = os.getenv("MCPE_MENU_SHOT")
+local SHOT_AT = tonumber(os.getenv("MCPE_MENU_SHOT_FRAME") or "") or 45
+local shotFrames, shotDone = 0, false
+local firstFrameReported = false
 
 -- ---------------------------------------------------------------- palette --
 local COL = {
@@ -150,14 +163,14 @@ local SCHEMA = {
     key = "fps_cap", label = "FPS cap", widget = "slider",
     values = fpsValues,
     names  = fpsNames,
-    help   = "Frame cap. 30-40 is the H700 sweet spot.",
+    help   = "Auto uses 10 on low-memory R36S; 30-40 suits H700.",
   },
   {
     key = "render_distance", label = "Render distance", widget = "slider",
     values = {"0", "2", "3", "4", "5", "6", "8", "10", "12", "16"},
     names  = {"Auto", "2 chunks", "3 chunks", "4 chunks", "5 chunks",
               "6 chunks", "8 chunks", "10 chunks", "12 chunks", "16 chunks"},
-    help   = "Each launch. Can go below the in-game min.",
+    help   = "Auto requests 2 chunks on R36S; game versions may clamp it.",
   },
   {
     key = "abi", label = "Client",
@@ -251,9 +264,11 @@ end
 -- Short troubleshooting; each entry is one list row (title + one-liner).
 local HELP = {
   {t = "Install the game",
-   d = "Copy your own legally bought APK into apk/, then use Install APK."},
+   d = "Use optional Google Play download, or copy your own APK into apk/."},
+  {t = "Google Play downloader",
+   d = "RG34XXSP/Knulli prototype. Optional; session and APKs stay on device."},
   {t = "Which APK",
-   d = "arm64-v8a for most devices; armeabi-v7a for R36S-class. 1.16-1.21."},
+   d = "arm64-v8a for most devices; armeabi-v7a for R36S-class."},
   {t = "Game will not start",
    d = "Check log.txt in ports/minecraftbedrock. 1.26+ Play APKs cannot work."},
   {t = "Stutters or low FPS",
@@ -282,6 +297,80 @@ local apks = {}       -- {name, size}
 local apkGroups = {}  -- {id, title, desc, ready, files}
 local backups = {}    -- {name, size}
 local portVersion = ""
+local DOWNLOADS = {
+  {code = "971622101", abi = "arm64", title = "Minecraft 1.16.221.01 [ARM64]",
+   desc = "RECOMMENDED | Best small-screen UI and smoothest RG34XXSP build.",
+   warning = "Recommended everyday build for this ARM64 device."},
+  {code = "972105101", abi = "arm64", title = "Minecraft 1.21.51.01 [ARM64]",
+   desc = "TESTED ORIGINAL | Newest verified no-RenderDragon artifact; smaller UI.",
+   warning = "A later Play reupload may use RenderDragon and stutter badly."},
+}
+
+-- Every build Google Play still serves, except 1.26+ which the launcher cannot
+-- open, comes from downloader/version_catalog.tsv. That file carries the
+-- edition, named update, renderer and warnings for each row, generated by
+-- scripts/update_gplay_version_catalog.py from the same classification the
+-- Windows helper uses -- so this menu describes a build exactly as the desktop
+-- downloader does, and neither can drift. Nothing here is auto-selected; the
+-- two tiles above remain the proven shortcuts.
+local OTHER_DOWNLOADS = {
+  arm64 = {release = {}, preview = {}},
+  armhf = {release = {}, preview = {}},
+}
+
+local function loadDownloadCatalog()
+  local f = io.open(GAMEDIR .. "/downloader/version_catalog.tsv", "r")
+  if not f then return end
+  for line in f:lines() do
+    local code, abi, channel, version, edition, update, renderer, notes =
+      line:match("^(%d+)	([^	]*)	([^	]*)	([^	]*)	([^	]*)	([^	]*)	([^	]*)	(.*)$")
+    if code and OTHER_DOWNLOADS[abi] and OTHER_DOWNLOADS[abi][channel] then
+      local architecture = abi == "armhf" and "ARM32" or "ARM64"
+      local isPreview = channel == "preview"
+      local avoid = renderer == "RenderDragon"
+      local summary = {}
+      if avoid then summary[#summary + 1] = "AVOID" end
+      if edition == "Pocket Edition" then summary[#summary + 1] = "POCKET EDITION" end
+      if update ~= "" then summary[#summary + 1] = update end
+      summary[#summary + 1] = "Play code " .. code
+      table.insert(OTHER_DOWNLOADS[abi][channel], {
+        code = code,
+        abi = abi,
+        avoid = avoid,
+        title = version .. (isPreview and " PREVIEW" or "") .. " [" .. architecture .. "]",
+        desc = table.concat(summary, " | "),
+        warning = (notes ~= "" and notes) or
+          (isPreview
+            and "Untested preview/beta build. It may fail, and worlds may not safely downgrade."
+            or "Untested Google Play release. It may crash, stutter or fail to install."),
+      })
+    end
+  end
+  f:close()
+end
+
+loadDownloadCatalog()
+local downloadOtherAbi = "arm64"
+local downloadOtherChannel = "release"
+
+local function currentOtherDownloads()
+  return OTHER_DOWNLOADS[downloadOtherAbi][downloadOtherChannel]
+end
+
+local DOWNLOAD_INFO = {
+  {t = "Google handles credentials",
+   d = "Password and phone approval stay on Google's own page."},
+  {t = "What the port saves",
+   d = "Private Play session + APKs stay in minecraftbedrock-data."},
+  {t = "First-use storage",
+   d = "Optional browser uses about 700 MB once, then is reused."},
+  {t = "Sign out",
+   d = "Clears the Google session; keeps APKs and installed games."},
+  {t = "Remove downloader",
+   d = "Frees about 700 MB; keeps APKs, versions and worlds."},
+  {t = "Experimental versions",
+    d = "Every build Play still serves for this device; never auto-selected."},
+}
 
 local function abiTag(name)
   local has64 = fileExists(VERDIR .. "/" .. name .. "/lib/arm64-v8a/libminecraftpe.so")
@@ -325,8 +414,13 @@ local function rescan()
                               recommendation = recommendation, renderer = renderer}
   end
   apks = {}
-  for _, name in ipairs(listFiles(APKDIR, "%.apk")) do
-    apks[#apks + 1] = {name = name, size = fileSize(APKDIR .. "/" .. name)}
+  for _, name in ipairs(listFiles(APKDIR, ".*")) do
+    local lower = name:lower()
+    if lower:match("%.apk$") or lower:match("%.apks$") or
+       lower:match("%.apkm$") or lower:match("%.xapk$") or
+       lower:match("%.zip$") then
+      apks[#apks + 1] = {name = name, size = fileSize(APKDIR .. "/" .. name)}
+    end
   end
   apkGroups = {}
   local groupIndex = readAll(CONFDIR .. "/apk-groups/index.tsv") or ""
@@ -379,11 +473,11 @@ local function quitWith(action, arg)
   love.event.quit(0)
 end
 
--- Play shows a LAUNCHING pop-up for a few frames BEFORE quitting: after the
--- menu exits, the shell spends seconds preparing Weston and booting the game
--- while the screen keeps showing the menu's final frame — so that final
--- frame is made to be the loading screen. Input is ignored meanwhile.
-local launching = nil   -- {name=, t=, frames=}
+-- Play keeps the fullscreen LAUNCHING screen alive while the shell prepares
+-- the selected version and boots the client.  The shell closes this process
+-- only after Minecraft's window exists, preventing the desktop/menu bar from
+-- being exposed during the handoff. Input is ignored meanwhile.
+local launching = nil   -- {name=, t=, frames=, signaled=}
 
 local function beginLaunch(name)
   if not launching then
@@ -392,9 +486,10 @@ local function beginLaunch(name)
 end
 
 -- ------------------------------------------------------------- UI state --
-local screen = "main"  -- main|versions|install|settings|backup|help|confirm
-local sel = {main = 1, versions = 1, install = 1, settings = 1,
-             backup = 1, help = 1, confirm = 2}
+local screen = "main"  -- main|versions|download|download_other|download_info|install|settings|backup|help|confirm
+local sel = {main = 1, versions = 1, download = 1, download_other = 1,
+             download_info = 1, install = 1, settings = 1, backup = 1,
+             help = 1, confirm = 2}
 local confirm = nil          -- {title, lines, danger, onYes, back, yesLabel}
 local W, H, S                -- S = pixel scale unit
 local fonts = {}
@@ -416,6 +511,15 @@ local function mainItems()
     id = "versions", title = "Versions", icon = "versions",
     desc = #versions .. " installed",
     disabled = (#versions == 0),
+  }
+  items[#items + 1] = {
+    id = "download", title = "Get APK from Google Play", icon = "download",
+    desc = DOWNLOADER_SUPPORTED
+      and ((DOWNLOADER_SESSION and "saved session | " or "Google sign-in required | ") ..
+           (DOWNLOADER_RUNTIME and "browser ready | " or "one-time browser setup | ") ..
+           "tested + experimental ARM builds")
+      or "RG34XXSP/H700 + Knulli prototype only",
+    disabled = not DOWNLOADER_SUPPORTED,
   }
   items[#items + 1] = {
     id = "install", title = "Install APK", icon = "install",
@@ -514,6 +618,16 @@ local ICONS = {
     "X......X",
     "X......X",
     "XXXXXXXX",
+  },
+  download = {   -- cloud and downward arrow
+    ".XXXXXX.",
+    "XX....XX",
+    "X......X",
+    "XXXXXXXX",
+    "...XX...",
+    ".XXXXXX.",
+    "..XXXX..",
+    "...XX...",
   },
   settings = {   -- gear
     "..X..X..",
@@ -661,6 +775,17 @@ local function shadowText(font, color, str, x, y, limit, align)
   text(font, color, str, x, y, limit, align)
 end
 
+-- Trim a string until it fits on one line. Header text that wraps drops its
+-- tail onto the accent rule below, where it is unreadable; a shortened line
+-- is always better than a second one. Narrow panels need this even when the
+-- 720px screens have room.
+local function fitText(font, str, maxw)
+  if font:getWidth(str) <= maxw then return str end
+  local s = str
+  while #s > 1 and font:getWidth(s .. "...") > maxw do s = s:sub(1, #s - 1) end
+  return s .. "..."
+end
+
 local function lerp(a, b, t) return a + (b - a) * t end
 
 -- Posterized gradient sky drawn as plain batched rectangles every frame —
@@ -751,6 +876,7 @@ local blinkOn = true          -- chunky two-state blink, no smooth fades
 -- printed A (user-verified per device).
 local confirmBtn, backBtn = "b", "a"
 local LABEL_SEMANTIC_GUIDS = {
+  ["19000000010000000100000000010000"] = true,  -- RG34XXSP Scarab SDL override
   ["19009b4d4b4800000111000000010000"] = true,  -- RG DS retrogame_joypad
 }
 
@@ -831,9 +957,13 @@ function love.update(dt)
   if launching then
     launching.t = launching.t + dt
     launching.frames = launching.frames + 1
-    -- a few presented frames guarantee the pop-up reached the front buffer
-    if launching.frames >= 4 and launching.t >= 0.25 then
-      quitWith("play", launching.name)
+    -- Signal the background shell only after the overlay reached the front
+    -- buffer, then continue drawing it until the game window is ready.
+    if not launching.signaled and launching.frames >= 4 and launching.t >= 0.25 then
+      saveSettings()
+      writeAll(CONFDIR .. "/menu_action.txt", "play\n" .. launching.name .. "\n")
+      launching.signaled = true
+      if EXIT_ON_PLAY then love.event.quit(0) end
     end
   elseif AUTOQUIT and clock >= AUTOQUIT then
     quitWith("exit")
@@ -850,10 +980,21 @@ local function drawChrome(subtitle)
   px(COL.panel, 0, 0, W, hh)
   px(COL.bevel_lt, 0, 0, W, S)
   shadowText(fonts.title, COL.accent_hi, "MINECRAFT BEDROCK", 8 * S, hh * 0.14)
-  text(fonts.small, COL.dim, subtitle, 9 * S, hh * 0.62)
+  -- Version tag: always one line. Wrapped, its tail lands on the accent rule
+  -- below and is unreadable, so shed the "PORT " prefix before the version
+  -- itself and reserve its width from the subtitle beside it.
+  local fsm, vw, vlabel = fonts.small, 0, nil
   if portVersion ~= "" then
-    text(fonts.small, COL.faint, "PORT " .. portVersion:upper(),
-         W - 100 * S, hh * 0.62, 92 * S, "right")
+    vlabel = "PORT " .. portVersion:upper()
+    if fsm:getWidth(vlabel) > W * 0.42 then vlabel = portVersion:upper() end
+    vlabel = fitText(fsm, vlabel, W * 0.42)
+    vw = fsm:getWidth(vlabel)
+  end
+  text(fsm, COL.dim, fitText(fsm, subtitle, W - 26 * S - vw),
+       9 * S, hh * 0.62, W - 26 * S - vw)
+  if vlabel then
+    text(fsm, COL.faint, vlabel, W - 8 * S - vw,
+         math.min(hh * 0.62, hh - fsm:getHeight() - 2 * S), vw + 2 * S)
   end
   px(COL.accent, 0, hh, W, 2 * S)
   px(COL.accent_dk, 0, hh + 2 * S, W, S)
@@ -896,13 +1037,25 @@ end
 --          slider={pos=0..1, label=}, toggle=true/false}
 local function drawList(top, items, selected, opts)
   opts = opts or {}
-  local rowH = floor(H * (opts.rowH or 0.115))
+  local ih, sh = fonts.item:getHeight(), fonts.small:getHeight()
+  local hasDesc = false
+  for _, it in ipairs(items) do
+    if it.desc and it.desc ~= "" then hasDesc = true break end
+  end
+  -- A row is never shorter than the text it holds. Fractions of the screen
+  -- height alone gave 33px rows for two lines needing 37, so the second line
+  -- ran through the row's own border and under the first one.
+  local minRow = (hasDesc and (ih + sh) or ih) + 8 * S
+  local rowH = math.max(floor(H * (opts.rowH or 0.115)), minRow)
   local x, w = floor(W * 0.05), floor(W * 0.90)
-  local listH = H - top - floor(H * 0.08)
+  -- Strip above the list for the position counter, always reserved so the
+  -- row geometry does not shift when a list grows past one screen.
+  local gap = math.max(floor(H * 0.022), sh + 3 * S)
+  local listH = H - top - gap - floor(H * 0.08)
   local visible = math.max(1, floor(listH / rowH))
   local first = math.max(1, math.min(selected - floor(visible / 2),
                                      #items - visible + 1))
-  local y = top + floor(H * 0.022)
+  local y = top + gap
   for i = first, math.min(#items, first + visible - 1) do
     local it = items[i]
     local isSel = (i == selected)
@@ -910,6 +1063,10 @@ local function drawList(top, items, selected, opts)
     local by = isSel and (y - S) or y   -- the selected button lifts slightly
     local st = isSel and (it.danger and BTN.dangerSel or BTN.selected)
                       or BTN.normal
+    -- Title and description are stacked by font metrics and centred as one
+    -- block, so neither line can overlap the other or cross the row border.
+    local blockH = (it.desc and it.desc ~= "") and (ih + sh) or ih
+    local ty0 = by + floor((bh - blockH) / 2)
     button3d(x, by, w, bh, st, isSel and 3 or 2)
     local tx = x + 18 * S
     if it.icon then
@@ -920,7 +1077,7 @@ local function drawList(top, items, selected, opts)
       tx = x + 31 * S
     elseif isSel and blinkOn then
       text(fonts.item, it.danger and COL.danger or COL.accent,
-           ">", x + 5 * S, by + rowH * 0.13)
+           ">", x + 5 * S, ty0)
     end
     -- right-hand widget first, so the row's text can stop short of it
     local wleft = x + w - 12 * S
@@ -929,7 +1086,7 @@ local function drawList(top, items, selected, opts)
       local sx = x + w - sw - 12 * S
       drawSlider(sx, by + floor(bh / 2) - 4 * S, sw, it.slider.pos, isSel)
       text(fonts.small, isSel and COL.accent_hi or COL.dim, it.slider.label,
-           tx, by + rowH * 0.18, sx - tx - 14 * S, "right")
+           tx, ty0 + floor((ih - sh) / 2), sx - tx - 14 * S, "right")
       wleft = sx - 14 * S
     elseif it.toggle ~= nil then
       local wx = x + w - 56 * S
@@ -938,22 +1095,82 @@ local function drawList(top, items, selected, opts)
     elseif it.value then
       local vcol = isSel and COL.accent_hi or COL.dim
       text(fonts.item, vcol, "< " .. it.value .. " >",
-           tx, by + rowH * 0.13, x + w - tx - 12 * S, "right")
+           tx, ty0, x + w - tx - 12 * S, "right")
     end
     local mainCol = it.disabled and COL.faint
         or (it.danger and (isSel and COL.danger or COL.danger_dk)
         or (isSel and COL.fg or COL.dim))
-    text(fonts.item, mainCol, it.title, tx, by + rowH * 0.13, wleft - tx)
+    text(fonts.item, mainCol, it.title, tx, ty0, wleft - tx)
     if it.desc and it.desc ~= "" then
       text(fonts.small, isSel and COL.dim or COL.faint, it.desc,
-           tx, by + rowH * 0.56, wleft - tx)
+           tx, ty0 + ih, wleft - tx)
     end
     y = y + rowH
   end
   if #items > visible then
+    -- Right-aligned to the list frame, not the screen edge, and lifted clear
+    -- of the first row: it used to be drawn straight through the border.
     text(fonts.small, COL.faint,
          string.format("%d/%d", selected, #items),
-         W - 60 * S, top + 2 * S, 54 * S, "right")
+         x + w - 80 * S, top + S, 80 * S, "right")
+  end
+end
+
+-- Downloader actions are intentionally a fixed two-column tile surface. On a
+-- handheld this makes focus location obvious and gives every action a large
+-- target; the Google web view uses the same D-pad/A focus model afterward.
+local function drawTileGrid(top, items, selected)
+  local cols, perPage = 2, 4
+  local page = floor((selected - 1) / perPage)
+  local first = page * perPage + 1
+  local last = math.min(#items, first + perPage - 1)
+  local gap = 12 * S
+  local x0 = floor(W * 0.05)
+  local gridW = floor(W * 0.90)
+  local tileW = floor((gridW - gap) / cols)
+  local y0 = top + 12 * S
+  local bottom = H - floor(H * 0.08) - 8 * S
+  -- Keep tile geometry stable across pages; a two-item final page should not
+  -- suddenly turn into two full-height slabs.
+  local rows = 2
+  local tileH = floor((bottom - y0 - gap * (rows - 1)) / rows)
+
+  for i = first, last do
+    local it = items[i]
+    local slot = i - first
+    local col = slot % cols
+    local row = floor(slot / cols)
+    local x = x0 + col * (tileW + gap)
+    local y = y0 + row * (tileH + gap)
+    local isSel = (i == selected)
+    local st = isSel and (it.danger and BTN.dangerSel or BTN.selected)
+                      or BTN.normal
+    button3d(x, isSel and (y - S) or y, tileW, tileH - 3 * S,
+             st, isSel and 4 or 2)
+    local faceY = isSel and (y - S) or y
+    local mainCol = it.disabled and COL.faint
+        or (it.danger and (isSel and COL.danger or COL.danger_dk)
+        or (isSel and COL.fg or COL.dim))
+    local iconCol = it.disabled and COL.faint
+        or (isSel and (it.danger and COL.danger or COL.accent_hi) or COL.dim)
+    drawIcon(it.icon or "download", x + 12 * S, faceY + 14 * S,
+             3 * S, iconCol)
+    text(fonts.item, mainCol, it.title,
+         x + 43 * S, faceY + 13 * S, tileW - 54 * S)
+    if it.desc and it.desc ~= "" then
+      text(fonts.small, isSel and COL.dim or COL.faint, it.desc,
+           x + 12 * S, faceY + 58 * S, tileW - 24 * S)
+    end
+    if isSel then
+      text(fonts.small, it.danger and COL.danger or COL.accent_hi,
+           "SELECTED", x + 12 * S, faceY + tileH - 29 * S,
+           tileW - 24 * S, "right")
+    end
+  end
+  if #items > perPage then
+    text(fonts.small, COL.faint,
+         string.format("PAGE %d/%d", page + 1, math.ceil(#items / perPage)),
+         W - 118 * S, H - 27 * S, 100 * S, "right")
   end
 end
 
@@ -979,6 +1196,10 @@ local function drawLaunchOverlay()
 end
 
 function love.draw()
+  if not firstFrameReported then
+    firstFrameReported = true
+    writeAll(CONFDIR .. "/menu_first_frame.txt", "ready\n")
+  end
   if screen == "confirm" and confirm then
     drawChrome(confirm.title)
     local bw, bh = floor(W * 0.74), floor(H * 0.46)
@@ -987,10 +1208,13 @@ function love.draw()
     px(edge, bx - S, by - S, bw + 2 * S, bh + 2 * S)
     bevelBox(bx, by, bw, bh, COL.panel, true)
     px(confirm.danger and COL.danger_dk or COL.accent_dk, bx, by, bw, 3 * S)
+    local bodyFont = (#confirm.lines > 3) and fonts.small or fonts.item
     local y = by + 8 * S
     for _, line in ipairs(confirm.lines) do
-      text(fonts.item, COL.fg, line, bx + 8 * S, y, bw - 16 * S)
-      y = y + fonts.item:getHeight() * 1.5
+      local bodyWidth = bw - 16 * S
+      local _, wrapped = bodyFont:getWrap(line, bodyWidth)
+      text(bodyFont, COL.fg, line, bx + 8 * S, y, bodyWidth)
+      y = y + bodyFont:getHeight() * math.max(1, #wrapped) * 1.15 + 2 * S
     end
     local options = {
       {title = "No, go back"},
@@ -1042,6 +1266,60 @@ function love.draw()
     end
     drawList(top, items, sel.install)
     drawHints({{"A", "install"}, {"X", "delete file"}, {"B", "back"}})
+  elseif screen == "download" then
+    local top = drawChrome("Google Play - purchased copy, private session, APKs stay local")
+    local items = {}
+    for _, entry in ipairs(DOWNLOADS) do
+      items[#items + 1] = {title = entry.title, desc = entry.desc, icon = "download"}
+    end
+    items[#items + 1] = {
+      title = "Other versions [EXPERIMENTAL]",
+      desc = "EVERY VERSION | ARM64 + ARM32 releases/previews; untested.",
+      icon = "versions",
+    }
+    items[#items + 1] = {
+      title = "How sign-in and storage work",
+      desc = "PRIVATE + OPTIONAL | Google owns the form; first use needs ~700 MB.",
+      icon = "help",
+    }
+    items[#items + 1] = {
+      title = "Sign out of Google Play",
+      desc = DOWNLOADER_SESSION
+        and "PRIVACY | Remove only the saved account session; keep APKs and game."
+        or "NO SAVED SESSION | Google will ask you to sign in before downloading.",
+      disabled = not DOWNLOADER_SESSION,
+      icon = "exit",
+    }
+    items[#items + 1] = {
+      title = "Remove optional downloader",
+      desc = "FREE ~700 MB | Remove browser, keyboard and session; keep APKs/game.",
+      danger = true,
+      icon = "exit",
+    }
+    drawTileGrid(top, items, sel.download)
+    drawHints({{"A", "choose"}, {"D-PAD", "move"}, {"B", "back"}})
+  elseif screen == "download_other" then
+    local builds = currentOtherDownloads()
+    local architecture = downloadOtherAbi == "armhf" and "ARM32" or "ARM64"
+    local channel = downloadOtherChannel == "preview" and "PREVIEWS/BETAS" or "RELEASES"
+    local top = drawChrome(string.format(
+      "All %s %s - %d builds - experimental", architecture, channel, #builds))
+    local items = {}
+    for _, entry in ipairs(builds) do
+      items[#items + 1] = {title = entry.title, desc = entry.desc, icon = "download"}
+    end
+    drawList(top, items, sel.download_other, {rowH = 0.082})
+    drawHints({{"A", "download"}, {"<>", "ARM64/32"}, {"X", "release/beta"}, {"B", "back"}})
+  elseif screen == "download_info" then
+    local top = drawChrome("How Google sign-in, private storage and removal work")
+    local items = {}
+    for _, entry in ipairs(DOWNLOAD_INFO) do
+      items[#items + 1] = {title = entry.t, desc = entry.d}
+    end
+    -- This is a readable reference page, not a menu: all six rows fit on the
+    -- 720x480 reference panel, so do not imply that its text is selectable.
+    drawList(top, items, 0, {rowH = 0.105})
+    drawHints({{"B", "back to downloads"}})
   elseif screen == "settings" then
     local top = drawChrome("Settings - saved instantly, applied on every launch")
     local items = {}
@@ -1082,6 +1360,17 @@ function love.draw()
   end
 
   if launching then drawLaunchOverlay() end
+
+  if SHOT_PATH and not shotDone then
+    shotFrames = shotFrames + 1
+    if shotFrames >= SHOT_AT then
+      shotDone = true
+      love.graphics.captureScreenshot(function(img)
+        local fh = io.open(SHOT_PATH, "wb")
+        if fh then fh:write(img:encode("png"):getString()); fh:close() end
+      end)
+    end
+  end
 end
 
 -- input ----------------------------------------------------------------------
@@ -1093,6 +1382,21 @@ local function adjustSetting(dir)
   if i > #row.values then i = 1 end
   settings[row.key] = row.values[i]
   saveSettings()
+end
+
+local function confirmDownload(entry, backScreen)
+  local architecture = entry.abi == "armhf" and "32-bit armeabi-v7a" or "64-bit arm64-v8a"
+  confirm = {
+    title = "Download " .. entry.title, back = backScreen,
+    yesLabel = "Continue to Google sign-in",
+    lines = {architecture .. " | Play code " .. entry.code,
+             entry.warning,
+             "First use needs about 700 MB for the optional browser.",
+             "Google handles password/approval; session and APKs stay local."},
+    onYes = function() quitWith("download_apk", entry.code .. ":" .. entry.abi) end,
+  }
+  sel.confirm = 1
+  screen = "confirm"
 end
 
 local function activate()
@@ -1170,13 +1474,50 @@ local function activate()
         writeAll(CONFDIR .. "/install_request.txt", group.files)
         quitWith("install")
     end
+  elseif screen == "download" then
+    local entry = DOWNLOADS[sel.download]
+    if entry then
+      confirmDownload(entry, "download")
+    elseif sel.download == #DOWNLOADS + 1 then
+      screen = "download_other"
+      clampSel("download_other", #currentOtherDownloads())
+    elseif sel.download == #DOWNLOADS + 2 then
+      screen = "download_info"
+      clampSel("download_info", #DOWNLOAD_INFO)
+    elseif sel.download == #DOWNLOADS + 3 and DOWNLOADER_SESSION then
+      confirm = {
+        title = "Sign out", danger = true, back = "download",
+        yesLabel = "Yes, remove saved session",
+        lines = {"Remove the saved Google Play session?",
+                 "Downloaded APKs and installed game stay."},
+        onYes = function() quitWith("downloader_signout") end,
+      }
+      sel.confirm = 1
+      screen = "confirm"
+    elseif sel.download == #DOWNLOADS + 4 then
+      confirm = {
+        title = "Remove downloader", danger = true, back = "download",
+        yesLabel = "Yes, remove optional files",
+        lines = {"Remove browser, keyboard and session?",
+                 "Downloaded APKs and installed game stay."},
+        onYes = function() quitWith("downloader_remove") end,
+      }
+      sel.confirm = 1
+      screen = "confirm"
+    end
+  elseif screen == "download_other" then
+    local entry = currentOtherDownloads()[sel.download_other]
+    if entry then confirmDownload(entry, "download_other") end
   elseif screen == "settings" then
     adjustSetting(1)
   end
 end
 
 local function contextDelete()
-  if screen == "backup" then
+  if screen == "download_other" then
+    downloadOtherChannel = downloadOtherChannel == "release" and "preview" or "release"
+    sel.download_other = 1
+  elseif screen == "backup" then
     local b = backups[sel.backup - 1]
     if not b then return end
     confirm = {
@@ -1222,6 +1563,8 @@ local function goBack()
     confirm = nil
   elseif screen == "main" then
     quitWith("exit")
+  elseif screen == "download_other" or screen == "download_info" then
+    screen = "download"
   else
     screen = "main"
   end
@@ -1230,6 +1573,9 @@ end
 local function move(dir)
   local counts = {
     main = #mainItems(), versions = #versions,
+    download = #DOWNLOADS + 4,
+    download_other = #currentOtherDownloads(),
+    download_info = 1,
     install = #apkGroups,
     settings = #SCHEMA, confirm = 2,
     backup = #backups + 1, help = #HELP,
@@ -1241,14 +1587,51 @@ local function move(dir)
   if sel[screen] > n then sel[screen] = 1 end
 end
 
+local function moveDownloadTile(which, n, dx, dy)
+  local cols = 2
+  local current = sel[which]
+  local row = floor((current - 1) / cols)
+  local col = (current - 1) % cols
+  if dx ~= 0 then
+    local rowLength = math.min(cols, n - row * cols)
+    col = (col + dx + rowLength) % rowLength
+    sel[which] = row * cols + col + 1
+    return
+  end
+  local rows = math.ceil(n / cols)
+  repeat
+    row = (row + dy + rows) % rows
+    current = row * cols + col + 1
+  until current <= n
+  sel[which] = current
+end
+
+local function moveDirectional(direction)
+  local tiled = screen == "download"
+  local tileCount = #DOWNLOADS + 4
+  if direction == "up" then
+    if tiled then moveDownloadTile(screen, tileCount, 0, -1) else move(-1) end
+  elseif direction == "down" then
+    if tiled then moveDownloadTile(screen, tileCount, 0, 1) else move(1) end
+  elseif direction == "left" then
+    if tiled then moveDownloadTile(screen, tileCount, -1, 0)
+    elseif screen == "download_other" then
+      downloadOtherAbi = downloadOtherAbi == "arm64" and "armhf" or "arm64"
+      sel.download_other = 1
+    elseif screen == "settings" then adjustSetting(-1) end
+  elseif direction == "right" then
+    if tiled then moveDownloadTile(screen, tileCount, 1, 0)
+    elseif screen == "download_other" then
+      downloadOtherAbi = downloadOtherAbi == "arm64" and "armhf" or "arm64"
+      sel.download_other = 1
+    elseif screen == "settings" then adjustSetting(1) end
+  end
+end
+
 function love.keypressed(key)
   if launching then return end
-  if key == "up" then move(-1)
-  elseif key == "down" then move(1)
-  elseif key == "left" then
-    if screen == "settings" then adjustSetting(-1) end
-  elseif key == "right" then
-    if screen == "settings" then adjustSetting(1) end
+  if key == "up" or key == "down" or key == "left" or key == "right" then
+    moveDirectional(key)
   elseif key == "return" or key == "space" then activate()
   elseif key == "x" then contextDelete()
   elseif key == "escape" or key == "backspace" then goBack()
@@ -1258,16 +1641,39 @@ end
 -- confirmBtn/backBtn are resolved per pad GUID in detectButtons().
 function love.gamepadpressed(_, button)
   if launching then return end
-  if button == "dpup" then move(-1)
-  elseif button == "dpdown" then move(1)
-  elseif button == "dpleft" then
-    if screen == "settings" then adjustSetting(-1) end
-  elseif button == "dpright" then
-    if screen == "settings" then adjustSetting(1) end
+  if button == "dpup" then moveDirectional("up")
+  elseif button == "dpdown" then moveDirectional("down")
+  elseif button == "dpleft" then moveDirectional("left")
+  elseif button == "dpright" then moveDirectional("right")
   elseif button == confirmBtn or button == "start" then activate()
   elseif button == "y" or button == "x" then contextDelete()
   elseif button == backBtn or button == "back" then goBack()
   end
+end
+
+-- Safety net for firmware SDL builds that expose the pad as a Joystick but do
+-- not apply its GameController mapping. LOVE numbers raw buttons from 1; the
+-- verified RG34XXSP mapping is printed A=b0, printed B=b1, X=b2, Y=b3,
+-- Start=b7 and D-pad=hat 1. Ignore this path once SDL recognizes the gamepad,
+-- otherwise one press would generate both raw and mapped callbacks.
+local function needsRawPadFallback(joystick)
+  local ok, mapped = pcall(function() return joystick:isGamepad() end)
+  return not ok or not mapped
+end
+
+function love.joystickpressed(joystick, button)
+  if launching or not needsRawPadFallback(joystick) then return end
+  if button == 1 or button == 8 then activate()
+  elseif button == 2 then goBack()
+  elseif button == 3 or button == 4 then contextDelete() end
+end
+
+function love.joystickhat(joystick, hat, direction)
+  if launching or not needsRawPadFallback(joystick) or hat ~= 1 then return end
+  if direction:find("u", 1, true) then moveDirectional("up")
+  elseif direction:find("d", 1, true) then moveDirectional("down")
+  elseif direction:find("l", 1, true) then moveDirectional("left")
+  elseif direction:find("r", 1, true) then moveDirectional("right") end
 end
 
 -- A lua error must never leave the device on LOVE's blue error screen with no

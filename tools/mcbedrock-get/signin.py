@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -17,7 +18,46 @@ from pathlib import Path
 
 import gpsoauth
 
+import paths
+
 EMBEDDED_SETUP_URL = "https://accounts.google.com/EmbeddedSetup"
+
+# Reading back which account signed in, so the address does not have to be
+# typed as well as entered on Google's own page.
+#
+# This is asked FROM INSIDE the signed-in page, never by navigating the window
+# to it. An earlier version did navigate, and when the request came back 400 the
+# user was left staring at Google's error page inside the sign-in window, with
+# the sign-in already spent. In-page it is invisible: it either answers or it
+# does not, and the window keeps showing what the user expects.
+LIST_ACCOUNTS_PATHS = (
+    "/ListAccounts?gpsia=1&source=ChromiumBrowser&json=standard",
+    "/ListAccounts?json=standard",
+)
+
+# Started once, then polled: pywebview hands back the value of the expression,
+# and a promise is not a value, so the result is parked on window instead.
+READ_ACCOUNT_JS = r"""
+(function () {
+  if (!window.__mcbStarted) {
+    window.__mcbStarted = true;
+    window.__mcbResult = "";
+    var paths = %s;
+    var attempt = function (index) {
+      if (index >= paths.length) { window.__mcbResult = "none"; return; }
+      fetch(paths[index], { credentials: "include" })
+        .then(function (response) { return response.ok ? response.text() : ""; })
+        .then(function (body) {
+          var found = body && body.match(/"([^"\s@]+@[^"\s]+)"/);
+          if (found) { window.__mcbResult = "ok:" + found[1]; } else { attempt(index + 1); }
+        })
+        .catch(function () { attempt(index + 1); });
+    };
+    attempt(0);
+  }
+  return window.__mcbResult;
+})()
+""" % json.dumps(list(LIST_ACCOUNTS_PATHS))
 
 
 class SignInError(RuntimeError):
@@ -31,8 +71,7 @@ class Credentials:
 
 
 def credentials_path() -> Path:
-    root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-    return Path(root) / "mcbedrock-get" / "account.json"
+    return paths.data_dir() / "account.json"
 
 
 def load() -> Credentials | None:
@@ -67,8 +106,50 @@ def forget() -> None:
         raise SignInError(f"Could not remove the Windows account session: {error}") from error
 
 
-def harvest_oauth_token(timeout_seconds: int = 600) -> str:
-    """Show Google's sign-in page and return the cookie it sets on success."""
+def email_from_text(text: str) -> str:
+    """Pull an address out of a ListAccounts response, or out of page text.
+
+    The response is a JSON array of account records, in which the address is
+    the only quoted field that can hold an @.
+    """
+    match = re.search(r'"([^"\s@]+@[^"\s]+)"', text or "")
+    if match:
+        return match.group(1)
+    match = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", text or "")
+    return match.group(0) if match else ""
+
+
+def read_account_email(window, timeout_seconds: int = 12) -> str:
+    """Ask Google which account just signed in, without leaving the page.
+
+    Best effort by design, and silent when it fails: the caller asks the user
+    instead, with the sign-in already in hand.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            result = window.evaluate_js(READ_ACCOUNT_JS)
+        except Exception:  # page still settling, or scripting refused
+            result = None
+        if isinstance(result, str) and result.startswith("ok:"):
+            return result[3:]
+        if result == "none":
+            break
+        time.sleep(0.5)
+
+    # Last resort: whatever the finished sign-in page is showing.
+    try:
+        return email_from_text(window.evaluate_js("document.body ? document.body.innerText : ''"))
+    except Exception:
+        return ""
+
+
+def harvest_session(timeout_seconds: int = 600) -> tuple[str, str]:
+    """Show Google's sign-in page; return (email, the cookie it sets on success).
+
+    The email comes back empty when it could not be read, and the caller then
+    has to supply one.
+    """
     import webview
 
     captured: dict[str, str] = {}
@@ -85,6 +166,7 @@ def harvest_oauth_token(timeout_seconds: int = 600) -> str:
                 for key in cookie.keys():
                     if key == "oauth_token":
                         captured["token"] = cookie[key].value
+                        captured["email"] = read_account_email(window)
                         window.destroy()
                         return
         window.destroy()
@@ -103,7 +185,7 @@ def harvest_oauth_token(timeout_seconds: int = 600) -> str:
             "Sign-in did not complete. Close the window only after Google says "
             "you are signed in."
         )
-    return token
+    return captured.get("email", ""), token
 
 
 def exchange_for_master_token(email: str, oauth_token: str) -> Credentials:
@@ -118,7 +200,20 @@ def exchange_for_master_token(email: str, oauth_token: str) -> Credentials:
     return Credentials(email=email, master_token=master)
 
 
-def run_login(email: str) -> Credentials:
-    creds = exchange_for_master_token(email, harvest_oauth_token())
+def complete_login(email: str, oauth_token: str) -> Credentials:
+    """Turn a finished sign-in into the saved account session."""
+    creds = exchange_for_master_token(email, oauth_token)
     save(creds)
     return creds
+
+
+def run_login(email: str = "") -> Credentials:
+    """Sign in, working out the account address unless one was supplied."""
+    detected, token = harvest_session()
+    address = email.strip() or detected
+    if not address:
+        raise SignInError(
+            "Signed in, but Google did not say which account it was. Run "
+            "mcbedrock-get --login you@example.com to name it."
+        )
+    return complete_login(address, token)

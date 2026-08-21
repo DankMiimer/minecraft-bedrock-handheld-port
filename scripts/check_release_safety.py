@@ -14,6 +14,7 @@ import zipfile
 FORBIDDEN_PATH_PATTERNS = [
     re.compile(r"(^|/|\\)[^/\\]+\.apk$", re.IGNORECASE),
     re.compile(r"(^|/|\\)[^/\\]+\.apks$", re.IGNORECASE),
+    re.compile(r"(^|/|\\)[^/\\]+\.apkm$", re.IGNORECASE),
     re.compile(r"(^|/|\\)[^/\\]+\.xapk$", re.IGNORECASE),
     re.compile(r"(^|/|\\)libminecraftpe\.so$", re.IGNORECASE),
     re.compile(r"(^|/|\\)level\.dat(_old)?$", re.IGNORECASE),

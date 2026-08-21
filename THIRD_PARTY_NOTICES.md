@@ -11,6 +11,14 @@ This repository is a distribution wrapper around several upstream projects.
 | linux-gamepad | https://github.com/MCMrARM/linux-gamepad | MIT |
 | OpenSSL, libpng, libudev, libatomic | bundled in the release zip | license texts are included in `minecraftbedrock/licenses/` inside the release package |
 | Monocraft font (menu) | https://github.com/IdreesInc/Monocraft | SIL OFL 1.1 (`minecraftbedrock/licenses/OFL-1.1-Monocraft.txt`) |
+| Google-Play-API (`gplaydl`, `gplayver`) | https://github.com/minecraft-linux/Google-Play-API | Apache-2.0 (license beside the optional downloader binaries) |
+
+The RG34XXSP on-device downloader fetches its optional Qt browser runtime from
+the official minecraft-linux AppImage release and its Qt virtual-keyboard input
+plugin from Debian only after the user selects that feature. The H700 display
+bridge comes from PortMaster's checksum-verified Weston/GL4ES runtime. Those
+optional runtime files are not redistributed in this repository or its release
+archive.
 
 Release packages also include `source_release/`, which contains the exact patch
 set and base/result commit list used for the distributed launcher binary.

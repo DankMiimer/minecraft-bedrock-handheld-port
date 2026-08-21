@@ -26,6 +26,19 @@ source "$TMP/h700.env"
 [ "$MCPE_HOST_PROFILE" = h700 ] && [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = mali ] &&
   [ "$MCPE_FB_MODE" = 720x480 ] && [ "$MCPE_ACTIVE_HEIGHT" = 480 ]
 
+fixture muOS
+printf 'Anbernic RG34XX-SP H700\0' >"$TMP/root/proc/device-tree/model"
+printf 'allwinner,h700\0' >"$TMP/root/proc/device-tree/compatible"
+mkdir -p "$TMP/root/sys/class/drm/card0-DSI-1"
+echo connected >"$TMP/root/sys/class/drm/card0-DSI-1/status"
+echo 720x480 >"$TMP/root/sys/class/drm/card0-DSI-1/modes"
+touch "$TMP/root/dev/dri/card0" "$TMP/root/dev/mali0"
+MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none \
+  mcpe_probe_platform "$TMP/muos.env"
+source "$TMP/muos.env"
+[ "$MCPE_HOST_PROFILE" = h700 ] &&
+  [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = kmsdrm ] && [ "$MCPE_DRM_MODE" = 720x480 ]
+
 fixture ROCKNIX
 printf 'Anbernic RG DS\0' >"$TMP/root/proc/device-tree/model"
 printf 'rockchip,rk3568\0' >"$TMP/root/proc/device-tree/compatible"
@@ -40,6 +53,19 @@ MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=sway \
 source "$TMP/rgds.env"
 [ "$MCPE_IS_RGDS" = 1 ] && [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = wayland ]
 
+fixture ROCKNIX
+printf 'Anbernic RG503\0' >"$TMP/root/proc/device-tree/model"
+printf 'rockchip,rk3566\0' >"$TMP/root/proc/device-tree/compatible"
+mkdir -p "$TMP/root/sys/class/drm/card0-DSI-1"
+echo connected >"$TMP/root/sys/class/drm/card0-DSI-1/status"
+echo 1280x720 >"$TMP/root/sys/class/drm/card0-DSI-1/modes"
+touch "$TMP/root/dev/dri/card0"
+MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=sway \
+  mcpe_probe_platform "$TMP/rocknix.env"
+source "$TMP/rocknix.env"
+[ "$MCPE_HOST_PROFILE" = generic ] &&
+  [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = wayland ] && [ "$MCPE_DRM_MODE" = 1280x720 ]
+
 fixture dArkOS
 printf 'R36S\0' >"$TMP/root/proc/device-tree/model"
 printf 'rockchip,rk3326\0' >"$TMP/root/proc/device-tree/compatible"
@@ -50,7 +76,8 @@ touch "$TMP/root/dev/dri/card0"
 MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=armv7l MCPE_TEST_COMPOSITOR=none \
   mcpe_probe_platform "$TMP/r36s.env"
 source "$TMP/r36s.env"
-[ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = kmsdrm ] && [ "$MCPE_DRM_MODE" = 640x480 ]
+[ "$MCPE_HOST_PROFILE" = rk3326 ] &&
+  [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = kmsdrm ] && [ "$MCPE_DRM_MODE" = 640x480 ]
 
 # A disconnected Pulse/PipeWire client must not hang host detection.
 fixture Generic

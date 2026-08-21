@@ -5,10 +5,12 @@ import hashlib
 import json
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from apkmeta import (InstallError, MOJANG_CERTS, PACKAGE, choose_sources,
-                     inspect_apk, normalized_group, validate_signers)
+                     expand_input_paths, input_files, inspect_apk,
+                     normalized_group, validate_signers)
 
 
 def clean_text(value: object) -> str:
@@ -24,10 +26,10 @@ def add_choice(output: Path, rows: list[str], title: str, description: str,
 
 def input_state(apkdir: Path) -> dict[str, object]:
     files = []
-    for path in sorted(apkdir.glob("*.apk")):
+    for path in input_files(apkdir):
         stat = path.stat()
         files.append([path.name, stat.st_size, stat.st_mtime_ns])
-    return {"schema": 1, "files": files}
+    return {"schema": 2, "files": files}
 
 
 def cache_is_complete(output: Path, state: dict[str, object]) -> bool:
@@ -69,14 +71,20 @@ def main() -> int:
     output.mkdir(parents=True)
     rows: list[str] = []
     infos = []
-    for path in sorted(apkdir.glob("*.apk")):
-        if any(ch in path.name for ch in "|\t\r\n"):
-            add_choice(output, rows, path.name, "Invalid filename", [], False)
-            continue
-        try:
-            infos.append(inspect_apk(path))
-        except (InstallError, OSError) as exc:
-            add_choice(output, rows, path.name, f"Invalid APK: {exc}", [path.name], False)
+    with tempfile.TemporaryDirectory(prefix="mcpe-apk-groups-") as temporary:
+        workspace = Path(temporary)
+        for index, path in enumerate(input_files(apkdir)):
+            if any(ch in path.name for ch in "|\t\r\n"):
+                add_choice(output, rows, path.name, "Invalid filename", [], False)
+                continue
+            try:
+                expanded = expand_input_paths([path], workspace / str(index))
+                infos.extend(
+                    inspect_apk(real_path, display_name, input_name)
+                    for real_path, display_name, input_name in expanded
+                )
+            except (InstallError, OSError) as exc:
+                add_choice(output, rows, path.name, f"Invalid APK input: {exc}", [path.name], False)
 
     grouped: dict[tuple[object, ...], list] = {}
     for info in infos:
@@ -93,7 +101,7 @@ def main() -> int:
         if split_members:
             candidates.append(split_members)
         for candidate in candidates:
-            names = sorted(info.name for info in candidate)
+            names = sorted({info.input_name for info in candidate})
             abis = sorted({abi for info in candidate for abi in info.abis})
             abi_label = "/".join("arm64" if abi == "arm64-v8a" else "armhf" for abi in abis) or "no ARM ABI"
             versions = sorted({info.version_name for info in candidate if info.version_name})

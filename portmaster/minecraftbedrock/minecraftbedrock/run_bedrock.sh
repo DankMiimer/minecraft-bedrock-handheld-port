@@ -3,6 +3,15 @@
 # stack. Derived from the RG34XX-SP production `_device_run_eglut.sh`.
 GAMEDIR="${GAMEDIR:?run via 'Minecraft Bedrock.sh'}"
 cd "$GAMEDIR" || exit 1
+# shellcheck disable=SC1091
+source "$GAMEDIR/lib/performance.sh" || {
+  echo "Missing performance profile helpers."
+  exit 1
+}
+source "$GAMEDIR/lib/abi.sh" || {
+  echo "Missing architecture policy helpers."
+  exit 1
+}
 
 BIN64="$GAMEDIR/bin/mcpelauncher-client"
 BIN32="$GAMEDIR/bin32/mcpelauncher-client"
@@ -54,22 +63,11 @@ case "$ABI" in
     ;;
 esac
 if [ -z "$ABI" ]; then
-  if [ "$V_HAS64" = 1 ] && [ "$ARM64_USABLE" = 1 ] &&
-     [ "$V_HAS32" = 1 ] && [ "$ARMHF_USABLE" = 1 ]; then
-    if [ "$ARMHF_USABLE" = 1 ] && [ "$MEM_KB" -gt 0 ] && [ "$MEM_KB" -lt 1100000 ]; then
-      ABI=armhf
-    else
-      ABI=arm64
-    fi
-  elif [ "$V_HAS32" = 1 ] && [ "$ARMHF_USABLE" = 1 ]; then
-    ABI=armhf
-  elif [ "$V_HAS64" = 1 ] && [ "$ARM64_USABLE" = 1 ]; then
-    ABI=arm64
-  elif [ "$V_HAS32" = 1 ]; then
-    ABI=armhf
-  else
-    ABI=arm64
-  fi
+  ABI="$(mcpe_choose_default_abi \
+    "$V_HAS64" "$V_HAS32" "$ARM64_USABLE" "$ARMHF_USABLE" \
+    "${MCPE_HOST_PROFILE:-generic}" \
+    "${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown}" \
+    "${MCPE_HOST_ARCH:-$(uname -m 2>/dev/null || echo unknown)}" "$MEM_KB")"
 fi
 if [ "$ABI" = arm64 ] && [ "$V_HAS64" = 0 ]; then
   echo "ERROR: version $MCVER_OVERRIDE has no 64-bit (arm64-v8a) libraries."
@@ -105,7 +103,12 @@ if [ "$ABI" = arm64 ] && [ "$ARM64_USABLE" = 0 ]; then
 fi
 echo "ABI: $ABI (version has: 64=$V_HAS64 32=$V_HAS32, usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE, mem=${MEM_KB}kB)"
 if [ "$ABI" = armhf ]; then
+  mcpe_apply_r36s_defaults "$ABI"
+  echo "R36S performance preset: ${MCPE_MAX_FPS} fps, render request ${MCPE_RENDER_DISTANCE} blocks, VSync ${MCPE_VSYNC}"
   export PORT_32BIT=Y
+else
+  mcpe_apply_arm64_defaults "$ABI"
+  echo "Arm64 handheld preset: ${MCPE_MAX_FPS} fps, render distance ${MCPE_RENDER_DISTANCE} blocks, VSync ${MCPE_VSYNC}, UI scale ${MCPE_UI_DENSITY_SCALE}"
 fi
 if command -v pm_platform_helper >/dev/null 2>&1; then
   if [ "$ABI" = armhf ]; then
@@ -116,6 +119,14 @@ if command -v pm_platform_helper >/dev/null 2>&1; then
 fi
 if [ "$ABI" = armhf ]; then
   exec bash "$GAMEDIR/run_bedrock32.sh"
+fi
+
+# The 32-bit Sway path can keep the launcher's fullscreen handoff surface up
+# until Minecraft maps. Other display stacks must release it before taking
+# over their own compositor/framebuffer.
+if [ -n "${MCPE_MENU_HANDOFF_PID:-}" ]; then
+  kill "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
+  unset MCPE_MENU_HANDOFF_PID
 fi
 
 # --- Weston runtime (weston_pkg_0.2) — 64-bit EGLUT path only -----------------
@@ -300,7 +311,12 @@ touch "$SETTINGS"
 # all known-device lines are concatenated and the right one is picked at
 # runtime. Contribute new lines in controls/ (see controls/README.md).
 GAMEPAD_DB="$(dirname "$SETTINGS")/gamecontrollerdb.txt"
-cat "$GAMEDIR/controls/"*.gamecontrollerdb.txt > "$GAMEPAD_DB" 2>/dev/null
+: > "$GAMEPAD_DB"
+for controller_map in "$GAMEDIR/controls/"*.gamecontrollerdb.txt; do
+  [ -f "$controller_map" ] || continue
+  case "$controller_map" in *.sdl.gamecontrollerdb.txt) continue ;; esac
+  cat "$controller_map" >>"$GAMEPAD_DB"
+done
 
 # Unknown pad? Auto-generate a standard-layout mapping line for any connected
 # gamepad whose GUID is not covered above (genmap.py replicates the backend's
@@ -353,6 +369,13 @@ tune_game_options() {
     [ -n "${MCPE_MAX_FPS:-}" ] && pin_option gfx_max_framerate "$MCPE_MAX_FPS"
     [ -n "${MCPE_VSYNC:-}" ] && pin_option gfx_vsync "$MCPE_VSYNC"
     [ "${MCPE_PERFORMANCE_OPTIONS:-1}" = 1 ] || continue
+    if [ "${MCPE_ARM64_HANDHELD_PRESET:-0}" = 1 ]; then
+      mcpe_apply_arm64_game_options "$options_file" \
+        "$GAMEDIR/defaults/arm64-handheld-options.txt" || {
+          echo "Could not apply arm64 handheld game defaults: $options_file" >&2
+          return 1
+        }
+    fi
     # Multithreaded renderer OFF does not submit static chunk draws on this
     # EGLUT/crusty/libmali stack — keep it ON.
     set_option gfx_multithreaded_renderer "${MCPE_MULTITHREADED_RENDERER:-1}"
