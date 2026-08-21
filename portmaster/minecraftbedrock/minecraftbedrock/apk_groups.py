@@ -38,7 +38,11 @@ def input_state(apkdir: Path) -> dict[str, object]:
     for path in input_files(apkdir):
         stat = path.stat()
         files.append([path.name, stat.st_size, stat.st_mtime_ns])
-    return {"schema": 2, "files": files}
+    # The schema covers the shape of the rows this produces, not just the input
+    # list, so bump it whenever index.tsv gains or loses a column. Upgrading the
+    # port does not touch anyone's APK files, so without a bump the cached index
+    # from the previous version is reused and the new column is simply missing.
+    return {"schema": 3, "files": files}
 
 
 def cache_is_complete(output: Path, state: dict[str, object]) -> bool:

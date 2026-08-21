@@ -183,7 +183,25 @@ def main() -> int:
         time.sleep(0.02)
         subprocess.run([sys.executable, str(GROUP_HELPER), str(tmp), str(groups)], check=True, env=env)
         assert (groups / "index.tsv").stat().st_mtime_ns == first_index_mtime
-        assert json.loads((groups / ".input-state.json").read_text())["schema"] == 2
+        assert json.loads((groups / ".input-state.json").read_text())["schema"] == 3
+
+        # An index cached by an older port version must not survive an upgrade
+        # that changed the row format: nobody's APK files change when the port
+        # is updated, so only the schema can force the rebuild. Found by
+        # upgrading a real RG34XXSP, where the stale index left every build
+        # unmarked and the untested confirmation therefore never appeared.
+        stale = json.loads((groups / ".input-state.json").read_text())
+        stale["schema"] = 2
+        (groups / ".input-state.json").write_text(json.dumps(stale), encoding="utf-8")
+        (groups / "index.tsv").write_text(
+            "\t".join(("deadbeefdeadbeef", "Bedrock 1.17.41.01 (arm64)", "old row", "1")) + "\n",
+            encoding="utf-8",
+        )
+        time.sleep(0.02)
+        subprocess.run([sys.executable, str(GROUP_HELPER), str(tmp), str(groups)], check=True, env=env)
+        rebuilt = (groups / "index.tsv").read_text().splitlines()
+        assert all(len(row.split("\t")) == 5 for row in rebuilt), rebuilt
+        assert json.loads((groups / ".input-state.json").read_text())["schema"] == 3
 
         # APKMirror/APKPure/Split APK Installer containers are outer ZIPs of
         # ordinary APKs. They must be expanded privately while metadata keeps
