@@ -14,3 +14,10 @@ Thanks for helping test the port. Please keep contributions public-safe:
 
 The modified launcher source is published through the forks and patches listed
 in `source_release/README.md`.
+
+Changes to either Google Play downloader -- the on-device one in the port, or
+the `tools/mcbedrock-get/` helper -- must keep it strictly open source, free of
+hardcoded bypasses or cracked licences, and free of any third-party handling of
+user credentials. Read `DOWNLOADER-POLICY.md` first and run
+`python3 scripts/check_downloader_policy.py` before opening a pull request; CI
+runs it too.

@@ -22,7 +22,8 @@ python3 -m py_compile \
   tools/mcbedrock-get/mcbedrock_get.py tools/mcbedrock-get/signin.py \
   tools/mcbedrock-get/wsl_backend.py tests/test_apkmeta.py tests/test_downloader.py \
   tests/test_prepare_resources.py tests/test_release_builder.py tests/test_docs.py \
-  tests/test_portability_contracts.py
+  tests/test_portability_contracts.py tests/test_downloader_policy.py \
+  scripts/check_downloader_policy.py
 for patch in source_release/*.patch; do git apply --recount --numstat "$patch" >/dev/null; done
 bash tests/test_migration.sh
 bash tests/test_performance.sh
@@ -31,6 +32,8 @@ bash tests/test_abi.sh
 bash tests/test_update.sh
 python3 tests/test_apkmeta.py
 python3 tests/test_downloader.py
+python3 tests/test_downloader_policy.py
+python3 scripts/check_downloader_policy.py
 python3 tests/test_version_selection.py
 python3 tests/test_prepare_resources.py
 python3 -m unittest discover -s tools/mcbedrock-get/tests -p 'test_*.py' -v

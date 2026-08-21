@@ -76,7 +76,10 @@ your Google account.
 
 The downloader is still compiled on your machine from
 [Google-Play-API][gpa], because shipping someone else's GPL binary would mean
-shipping its source too. Pressing the step 1 button installs the build tools
+shipping its source too. It is built from one pinned revision, recorded in
+`PROVENANCE.json` beside the executable, so the source that produced your copy
+can be named afterwards rather than being whatever the default branch held that
+day. Pressing the step 1 button installs the build tools
 with your package manager — **apt, dnf and pacman** are handled — and asks for
 authorisation once, graphically, through `pkexec`. Only that package install is
 privileged; the build itself runs as you, so what it produces lands in your own
@@ -147,7 +150,8 @@ armhf firmware. The command-line equivalent is `--abi arm64` (the default) or
 ## Account data
 
 The Windows token is stored at
-`%LOCALAPPDATA%\mcbedrock-get\account.json`. The cached version list sits
+`%LOCALAPPDATA%\mcbedrock-get\account.json`, created owner-only — mode `0600`
+inside a `0700` directory — from the first byte it is written. The cached version list sits
 beside it in `versiondb\` and holds no account data. gplaydl keeps a second session
 cache under `/root/.local/share/mcbedrock-get/` inside Ubuntu. **Sign out** removes
 both. If Ubuntu is unavailable, it clears Windows first and tells you to run

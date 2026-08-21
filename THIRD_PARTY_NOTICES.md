@@ -12,6 +12,15 @@ This repository is a distribution wrapper around several upstream projects.
 | OpenSSL, libpng, libudev, libatomic | bundled in the release zip | license texts are included in `minecraftbedrock/licenses/` inside the release package |
 | Monocraft font (menu) | https://github.com/IdreesInc/Monocraft | SIL OFL 1.1 (`minecraftbedrock/licenses/OFL-1.1-Monocraft.txt`) |
 | Google-Play-API (`gplaydl`, `gplayver`) | https://github.com/minecraft-linux/Google-Play-API | Apache-2.0 (license beside the optional downloader binaries) |
+| `mcpe-signin` (downloader sign-in window) | `tools/ondevice-downloader/google-signin-quick/main.cpp` in this repository | GPL-3.0-or-later |
+| `libqt-xcb-glx-compat.so` (downloader Qt GLX probe shim) | `tools/ondevice-downloader/qt-xcb-glx-compat.c` in this repository | GPL-3.0-or-later |
+
+Every executable shipped with the on-device downloader is recorded in
+`portmaster/minecraftbedrock/minecraftbedrock/downloader/PROVENANCE.json` with
+its SHA-256, size, upstream commit or in-repo source, licence text, and build
+script. `scripts/check_downloader_policy.py` fails the build if a shipped binary
+is missing from that manifest or no longer matches it. See
+`DOWNLOADER-POLICY.md`.
 
 The RG34XXSP on-device downloader fetches its optional Qt browser runtime from
 the official minecraft-linux AppImage release and its Qt virtual-keyboard input
@@ -28,7 +37,12 @@ set and base/result commit list used for the distributed launcher binary.
 The helper is published as a separate Windows bundle and is licensed GPL-3.0
 like the rest of this repository. Its corresponding source ships in the source
 archive. It delegates entitled downloads to minecraft-linux/Google-Play-API's
-gplaydl inside the user's WSL installation.
+gplaydl inside the user's WSL installation, built by `setup-downloader.sh` from
+the pinned upstream commit recorded in `tools/mcbedrock-get/PROVENANCE.json` --
+the same revision as the port's own ARM64 build. That manifest also records the
+helper's pinned requirement files, its credential artifacts, and every host it
+may contact; `scripts/check_downloader_policy.py` enforces all of it. See
+`DOWNLOADER-POLICY.md`.
 
 | Component | License |
 |---|---|

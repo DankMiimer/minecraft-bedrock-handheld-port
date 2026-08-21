@@ -85,15 +85,39 @@ def load() -> Credentials | None:
         return None
 
 
+def _restrict(path: Path, mode: int) -> None:
+    """Make a path owner-only where the platform has POSIX modes.
+
+    Windows ignores most of a mode, but %LOCALAPPDATA% is already per-user
+    there and the call is harmless, so it is not special-cased. On Linux it is
+    the difference between a live account token at 0644 and one at 0600.
+    """
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
+
+
 def save(creds: Credentials) -> None:
+    """Write the account session privately: this file holds a live token."""
     path = credentials_path()
+    payload = json.dumps({"email": creds.email, "master_token": creds.master_token}, indent=2)
+    temporary = path.with_name(path.name + ".new")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps({"email": creds.email, "master_token": creds.master_token}, indent=2),
-            encoding="utf-8",
-        )
+        _restrict(path.parent, 0o700)
+        # Created owner-only from the start, so the token is never briefly
+        # readable by anyone else on the machine.
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        os.replace(temporary, path)
+        _restrict(path, 0o600)
     except OSError as error:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise SignInError(f"Could not save the account session: {error}") from error
 
 

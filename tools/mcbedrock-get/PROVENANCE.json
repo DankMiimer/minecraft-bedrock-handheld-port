@@ -1,0 +1,81 @@
+{
+    "schema": 1,
+    "component": "mcbedrock-get Windows/Linux helper",
+    "policy": [
+        "Strictly open source: the helper is GPL-3.0 with its source in the release archive, it ships no committed binary, every dependency it bundles is version-pinned, and the Play client it builds comes from a pinned upstream revision.",
+        "No generic bypass, cracked licence, shared account, or pre-baked credential is hardcoded anywhere in the tool. Google Play enforces ownership.",
+        "Account credentials move only between the user's own machine and Google. Nothing is stored on, proxied through, or transmitted to a third-party server."
+    ],
+    "binaries": [],
+    "binaries_note": "The published mcbedrock-get.exe and AppImage are build output, never committed. Any binary appearing in this tree must be declared here first.",
+    "pinned_requirements": [
+        "tools/mcbedrock-get/requirements.txt",
+        "tools/mcbedrock-get/requirements-linux.txt"
+    ],
+    "built_from_source": {
+        "role": "The Play client the helper builds and drives on the user's own machine.",
+        "upstream": "https://github.com/minecraft-linux/google-play-api.git",
+        "commit": "6ead91313122b1b732854c29edfb40dbad4abac6",
+        "license": "Apache-2.0",
+        "build_script": "tools/mcbedrock-get/setup-downloader.sh",
+        "notes": "Same revision as the port's own ARM64 gplaydl in the on-device downloader's PROVENANCE.json. Bump both together."
+    },
+    "credential_artifacts": [
+        {
+            "name": "account.json",
+            "where": "%LOCALAPPDATA%\\mcbedrock-get on Windows, $XDG_DATA_HOME/mcbedrock-get on Linux",
+            "holds": "the long-lived Google account token",
+            "mode": "0600 in a 0700 directory",
+            "cleared_by": ["signin.py"]
+        },
+        {
+            "name": "playdl.conf",
+            "where": "the gplaydl prefix inside WSL, or under $XDG_DATA_HOME on Linux",
+            "holds": "the account address and token handed to gplaydl",
+            "mode": "0600 under umask 077",
+            "cleared_by": ["wsl_backend.py", "linux_backend.py"]
+        },
+        {
+            "name": "token_cache.conf",
+            "where": "the gplaydl prefix inside WSL, or under $XDG_DATA_HOME on Linux",
+            "holds": "gplaydl's cached Play session",
+            "mode": "written by gplaydl under umask 077",
+            "cleared_by": ["wsl_backend.py", "linux_backend.py"]
+        }
+    ],
+    "network": {
+        "rule": "Every host the helper can reach is listed here. Only hosts owned by Google may see account data; no other host is contacted while credentials exist in memory.",
+        "allowed": [
+            {
+                "host": "accounts.google.com",
+                "party": "google",
+                "credentials": true,
+                "purpose": "Google's own embedded sign-in page, rendered locally in the pywebview window. The password never leaves that page."
+            },
+            {
+                "host": "android.clients.google.com",
+                "party": "google",
+                "credentials": true,
+                "purpose": "Play auth and delivery. Reached by gpsoauth for the token exchange and by gplaydl for the download; neither host name appears in this tree's source."
+            },
+            {
+                "host": "raw.githubusercontent.com",
+                "party": "upstream-artifact",
+                "credentials": false,
+                "purpose": "minecraft-linux/mcpelauncher-versiondb version lists. Public metadata only, fetched with no account context."
+            },
+            {
+                "host": "github.com",
+                "party": "upstream-artifact",
+                "credentials": false,
+                "purpose": "Pinned upstream Play-client source clone, and the project's own repository link in documentation."
+            },
+            {
+                "host": "minecraft.wiki",
+                "party": "documentation",
+                "credentials": false,
+                "purpose": "Cited in documentation as the source of release names. Never contacted by the program."
+            }
+        ]
+    }
+}
