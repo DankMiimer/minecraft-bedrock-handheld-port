@@ -16,6 +16,7 @@ EXPECTED = {
     "mcbedrock-get-NOTICES.txt",
     "Create desktop shortcut.cmd",
     "setup-downloader.sh",
+    "PROVENANCE.json",
 }
 
 

@@ -11,6 +11,12 @@
 SRC="$HOME/gplaydl-src"
 PREFIX="$HOME/.local/share/mcbedrock-get"
 
+# Pinned, so the client a user ends up running comes from source anyone can
+# read at a known revision rather than from whatever the default branch happens
+# to be that day. This is the same commit the port's own ARM64 gplaydl is built
+# from; bump the two together, and keep PROVENANCE.json in step.
+UPSTREAM_URL="https://github.com/minecraft-linux/google-play-api.git"
+UPSTREAM_COMMIT="6ead91313122b1b732854c29edfb40dbad4abac6"
 
 # Only installing packages needs root. The BUILD must not: it installs into
 # $HOME, and running the whole script as root would put gplaydl in root's home,
@@ -90,14 +96,22 @@ fi
 command -v protoc >/dev/null || fail "protoc is still missing after installation"
 
 echo
-echo "==> Fetching source"
-if [ -d "$SRC/.git" ]; then
-    git -C "$SRC" pull --ff-only || echo "(could not update the existing checkout - using it as is)"
-else
+echo "==> Fetching source, pinned to ${UPSTREAM_COMMIT}"
+if [ ! -d "$SRC/.git" ]; then
     rm -rf "$SRC"
-    git clone --depth 1 https://github.com/minecraft-linux/google-play-api.git "$SRC" \
+    git init -q "$SRC" || fail "could not create the source directory"
+    git -C "$SRC" remote add origin "$UPSTREAM_URL" || fail "could not set the source location"
+fi
+git -C "$SRC" remote set-url origin "$UPSTREAM_URL" || fail "could not set the source location"
+if ! git -C "$SRC" cat-file -e "$UPSTREAM_COMMIT^{commit}" 2>/dev/null; then
+    # GitHub serves a single revision; a server that will not falls back to
+    # fetching the branch the pinned commit is on.
+    git -C "$SRC" fetch --depth 1 origin "$UPSTREAM_COMMIT" 2>/dev/null \
+        || git -C "$SRC" fetch origin \
         || fail "could not download the source"
 fi
+git -C "$SRC" checkout -q --detach "$UPSTREAM_COMMIT" \
+    || fail "could not check out the pinned source revision"
 
 echo
 echo "==> Building (this takes a few minutes)"

@@ -150,7 +150,8 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn("headless noop kiosk llvmpipe", run_script)
         self.assertIn("CRUSTY_GL4ES=1", run_script)
         self.assertIn("SYSTEM_XKB_LINK=/usr/share/X11/xkb", run_script)
-        self.assertIn("trap cleanup_system_xkb_link EXIT", run_script)
+        self.assertIn("trap on_exit EXIT", run_script)
+        self.assertIn("cleanup_system_xkb_link", run_script)
         self.assertIn("libqt-xcb-glx-compat.so", run_script)
         shim_source = (
             ROOT / "tools/ondevice-downloader/qt-xcb-glx-compat.c"

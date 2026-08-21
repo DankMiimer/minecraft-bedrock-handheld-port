@@ -249,6 +249,9 @@ extracted game libraries/assets, worlds, account data, private server details,
 - [Release checklist](RELEASE_CHECKLIST.md)
 - [Source build and patch information](source_release/README.md)
 - [Legal notes](LEGAL.md) and [third-party notices](THIRD_PARTY_NOTICES.md)
+- [Downloader safety policy](DOWNLOADER-POLICY.md): open source, no bypasses,
+  no third-party handling of credentials, and the checks that enforce all three
+  across both the on-device downloader and the mcbedrock-get helper
 - [Credits](CREDITS.md) and [contribution guide](CONTRIBUTING.md)
 
 `VERSION` is the release authority. Pinned containers build the standard

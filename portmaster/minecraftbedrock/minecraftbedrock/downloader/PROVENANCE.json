@@ -1,0 +1,127 @@
+{
+    "schema": 1,
+    "component": "on-device Google Play downloader",
+    "policy": [
+        "Strictly open source: every executable shipped with the downloader is built from published source with the recorded build script, and the corresponding licence travels with it.",
+        "No generic bypass, cracked licence, shared account, or pre-baked credential is hardcoded anywhere in the tool. Google Play enforces ownership.",
+        "Account credentials move only between the device and Google. Nothing is stored on, proxied through, or transmitted to a third-party server."
+    ],
+    "credential_manifest": "portmaster/minecraftbedrock/minecraftbedrock/downloader/credential-artifacts.txt",
+    "binaries": [
+        {
+            "path": "portmaster/minecraftbedrock/minecraftbedrock/downloader/bin/gplaydl",
+            "sha256": "76d430c72ee95cf8011229a8505fde22ec387c1214535e4c812038a5b6208779",
+            "size": 1657288,
+            "arch": "aarch64",
+            "role": "Downloads the account holder's own entitled Play package.",
+            "upstream": "https://github.com/minecraft-linux/Google-Play-API",
+            "commit": "6ead91313122b1b732854c29edfb40dbad4abac6",
+            "license": "Apache-2.0",
+            "license_file": "portmaster/minecraftbedrock/minecraftbedrock/downloader/bin/LICENSE.google-play-api",
+            "build_script": "tools/ondevice-downloader/build-gplaydl-arm64.sh",
+            "reproducible": false,
+            "notes": "Cross-built from the pinned upstream commit. Byte-for-byte reproduction needs the same Ubuntu 24.04 protoc and headers the build script documents."
+        },
+        {
+            "path": "portmaster/minecraftbedrock/minecraftbedrock/downloader/bin/gplayver",
+            "sha256": "98cd821045a071afcff3e96cc406e6a79c3d20adc4fb3d5fdea0420773b59f96",
+            "size": 1657288,
+            "arch": "aarch64",
+            "role": "Exchanges Google's one-shot approval for the saved Play session.",
+            "upstream": "https://github.com/minecraft-linux/Google-Play-API",
+            "commit": "6ead91313122b1b732854c29edfb40dbad4abac6",
+            "license": "Apache-2.0",
+            "license_file": "portmaster/minecraftbedrock/minecraftbedrock/downloader/bin/LICENSE.google-play-api",
+            "build_script": "tools/ondevice-downloader/build-gplaydl-arm64.sh",
+            "reproducible": false,
+            "notes": "Built from the same upstream commit and build script as gplaydl."
+        },
+        {
+            "path": "portmaster/minecraftbedrock/minecraftbedrock/downloader/bin/mcpe-signin",
+            "sha256": "c5e6948d93e37e978aaabacee4bf18482795ed462f21dcd659b77f1f3bfc05db",
+            "size": 68888,
+            "arch": "aarch64",
+            "role": "Hosts Google's own embedded sign-in page and adds handheld controller navigation.",
+            "upstream": "this repository",
+            "source": "tools/ondevice-downloader/google-signin-quick/main.cpp",
+            "license": "GPL-3.0-or-later",
+            "license_file": "LICENSE",
+            "build_script": "tools/ondevice-downloader/build-google-signin-arm64.sh",
+            "reproducible": false,
+            "notes": "Built in the container recipe beside the source. The Debian base image is not digest-pinned yet, so rebuilds match functionally rather than byte-for-byte."
+        },
+        {
+            "path": "portmaster/minecraftbedrock/minecraftbedrock/downloader/lib/libqt-xcb-glx-compat.so",
+            "sha256": "313766d1a8b1324d779fd82b0baa2b27410d1a2e534667ebfa4680cd33d76ad3",
+            "size": 67368,
+            "arch": "aarch64",
+            "role": "Answers Qt's two XCB GLX capability probes on PortMaster's headless XWayland. Implements no rendering.",
+            "upstream": "this repository",
+            "source": "tools/ondevice-downloader/qt-xcb-glx-compat.c",
+            "license": "GPL-3.0-or-later",
+            "license_file": "LICENSE",
+            "build_script": "tools/ondevice-downloader/build-qt-xcb-glx-compat-arm64.sh",
+            "reproducible": false,
+            "notes": "Single C file compiled with the aarch64 cross toolchain named in the build script."
+        }
+    ],
+    "pinned_downloads": [
+        {
+            "config_key": "APPIMAGE",
+            "url": "https://github.com/minecraft-linux/mcpelauncher-manifest/releases/download/nightly/Minecraft_Bedrock_Launcher-bookworm-sdl3-arm64-v1.0.0.1080.AppImage",
+            "sha256": "0641722cc4b2df14cee53da6b253955bbdac841626c1affb483f8feaa1b883c5",
+            "size": 147706240,
+            "license": "GPL-3.0-or-later",
+            "role": "Optional Qt 6 WebEngine runtime for the sign-in window. Fetched from the official upstream release only after the user chooses the downloader; never redistributed here."
+        },
+        {
+            "config_key": "KEYBOARD_DEB",
+            "url": "https://deb.debian.org/debian/pool/main/q/qt6-virtualkeyboard/qt6-virtualkeyboard-plugin_6.4.2+dfsg-1_arm64.deb",
+            "sha256": "7692ac96d7a8dc61ea335d115f0d48379f0ab16436fea0a27c587641e710df0a",
+            "size": 7624,
+            "license": "GPL-3.0-with-Qt-exception / LGPL-3.0",
+            "role": "Qt virtual-keyboard input-context plugin for controller text entry. Fetched from Debian; never redistributed here."
+        }
+    ],
+    "network": {
+        "rule": "Every host the downloader can reach is listed here. Only hosts owned by Google may see account data; no other host is contacted while credentials exist in memory.",
+        "allowed": [
+            {
+                "host": "accounts.google.com",
+                "party": "google",
+                "credentials": true,
+                "purpose": "Google's own embedded Android sign-in page, rendered locally in the Qt WebEngine view. The password and phone approval never leave this page."
+            },
+            {
+                "host": "android.clients.google.com",
+                "party": "google",
+                "credentials": true,
+                "purpose": "Play auth, checkin, and delivery endpoints called directly by gplaydl/gplayver on the device."
+            },
+            {
+                "host": "github.com",
+                "party": "upstream-artifact",
+                "credentials": false,
+                "purpose": "Pinned, checksum-verified upstream launcher AppImage download."
+            },
+            {
+                "host": "objects.githubusercontent.com",
+                "party": "upstream-artifact",
+                "credentials": false,
+                "purpose": "Redirect target GitHub uses to serve the pinned AppImage. Never contacted with credentials."
+            },
+            {
+                "host": "deb.debian.org",
+                "party": "upstream-artifact",
+                "credentials": false,
+                "purpose": "Pinned, checksum-verified Qt virtual-keyboard plugin package."
+            },
+            {
+                "host": "www.apache.org",
+                "party": "documentation",
+                "credentials": false,
+                "purpose": "URL that appears inside the bundled Apache-2.0 licence text only."
+            }
+        ]
+    }
+}
