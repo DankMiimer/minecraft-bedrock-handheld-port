@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.0.0-rc.10 (testing)
+
+- Fixed the untested-build confirmation never appearing after upgrading from
+  rc.8. The menu's list of installable APK sets is cached against the state of
+  the APK files, and upgrading the port does not change those, so rc.9's new
+  "untested" column was missing from every index that already existed.
+  Choosing such a build failed with "choose it again to confirm", and choosing
+  it again did the same thing. APK sets downloaded after the upgrade were never
+  affected. Found by upgrading a real RG34XXSP from rc.8.
+
 ## v2.0.0-rc.9 (testing)
 
 - Builds outside the tested 1.16-1.21 range can now be installed after
