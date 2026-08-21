@@ -5,7 +5,7 @@ Android copy of Minecraft Bedrock. It runs the native ARM game library through
 the open-source minecraft-linux launcher.
 
 This is a testing release. Final R36S and revised RGDS physical acceptance
-checks remain pending; rc.8 adds no stable or newly Validated claims.
+checks remain pending; rc.9 adds no stable or newly Validated claims.
 
 **No game files are included.** Supply your own official full APK, APKM/APKS/
 XAPK bundle, or complete split-APK set.

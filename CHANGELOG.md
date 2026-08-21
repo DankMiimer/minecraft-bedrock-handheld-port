@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.0.0-rc.9 (testing)
+
+- Builds outside the tested 1.16-1.21 range can now be installed after
+  confirming, instead of being refused outright. The version browser offers
+  every build Google Play still serves, but the installer rejected roughly 850
+  of them -- and did it at the very end, after the download, after unpacking
+  the game code and assets, and after hashing the game library. Choosing
+  1.14.60.5 cost a 200 MB download and a full extraction before reporting
+  "unsupported".
+- The refusal now distinguishes two cases. Blocked means the port cannot run it
+  whatever anyone wants -- PairIP licensing (1.26+), or an unparseable version
+  -- and no confirmation unlocks it. Untested means only that nobody has run it
+  here, which is the user's risk to take. The check runs before any work, so a
+  refusal is immediate.
+- Picking an untested set from Install APK now says what is wrong with it and
+  offers "Install it anyway". Downloads are already confirmed on the download
+  screen, which carries the same warning, so they are not asked twice. An
+  untested build records itself as such in version.json.
+- Installing a version that is already installed is no longer reported as a
+  failure. It said "APK setup failed: version already installed", which is what
+  reinstalling 1.16.0.2 looked like even though that version was present and
+  working.
+
 ## v2.0.0-rc.8 (testing)
 
 - Held up/down now repeats in the launcher menu. The version browser lists over
