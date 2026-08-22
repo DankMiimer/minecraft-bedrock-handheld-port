@@ -14,6 +14,12 @@ defeats a protection measure or provides any way to obtain Minecraft without
 owning it. APKs a user downloads are their own copy and must not be
 redistributed.
 
+Both downloaders -- the optional on-device one and the `tools/mcbedrock-get/`
+helper -- follow three binding rules: they stay strictly open source, they
+hardcode no bypass or cracked licence, and they never store or transmit account
+credentials through a third-party server. `DOWNLOADER-POLICY.md` states them in
+full and `scripts/check_downloader_policy.py` enforces them on every push.
+
 The optional `tools/mcbedrock-get/` Windows helper is published as a separate
 bundle. It contains no Minecraft code or assets. It uses the account holder's
 Google sign-in token locally to drive minecraft-linux's gplaydl inside WSL;

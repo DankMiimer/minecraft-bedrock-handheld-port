@@ -28,6 +28,27 @@ class AddressExtractionTests(unittest.TestCase):
         self.assertEqual(signin.email_from_text(""), "")
 
 
+class SavedSessionTests(unittest.TestCase):
+    """The saved file holds a live account token, so nobody else may read it."""
+
+    def test_the_token_is_written_owner_only(self):
+        import json
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(os.environ, {"MCBEDROCK_DATA_DIR": directory}):
+                signin.save(signin.Credentials("person@example.com", "TOKEN"))
+                path = signin.credentials_path()
+                self.assertEqual(
+                    json.loads(path.read_text(encoding="utf-8"))["master_token"], "TOKEN"
+                )
+                self.assertFalse(path.with_name(path.name + ".new").exists())
+                if os.name != "nt":  # Windows has no POSIX mode to check.
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                    self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+
+
 class ReadAccountTests(unittest.TestCase):
     def test_the_window_is_never_navigated(self):
         # Navigating it is what put Google's 400 page inside the sign-in window.

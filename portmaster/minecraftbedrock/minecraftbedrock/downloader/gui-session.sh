@@ -41,6 +41,9 @@ rm -f "$GUI_RESULT" "$CAPTURE" "$AUTH_INPUT"
 
 cleanup() {
   rm -f "$CAPTURE"
+  # A cancelled or crashed sign-in must not leave Google's one-shot token
+  # behind; only a completed handoff keeps the exchange input.
+  [ -f "$GUI_RESULT" ] || rm -f "$AUTH_INPUT"
 }
 
 trap cleanup EXIT
@@ -64,6 +67,10 @@ elif [ "${MCPE_DOWNLOADER_GRAPHICS_DIAGNOSTIC:-0}" = 1 ]; then
   LD_PRELOAD="${MCPE_GUI_PRELOAD:-}" QSG_INFO=1 \
     "$UI" "$QML" "$CAPTURE" >"$STATE/graphics-diagnostic.log" 2>&1 &
 else
+  # Qt's diagnostics go to a private, owner-only file inside the state
+  # directory, never to the shared port log the support bundle collects.
+  : >"$STATE/google-signin.log"
+  chmod 600 "$STATE/google-signin.log"
   LD_PRELOAD="${MCPE_GUI_PRELOAD:-}" \
     "$UI" "$QML" "$CAPTURE" >/dev/null 2>"$STATE/google-signin.log" &
 fi

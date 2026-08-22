@@ -54,6 +54,10 @@ def main() -> int:
         (args.dist / "mcbedrock-get-NOTICES.txt", "mcbedrock-get-NOTICES.txt"),
         (TOOL_DIR / "Create desktop shortcut.cmd", "Create desktop shortcut.cmd"),
         (TOOL_DIR / "setup-downloader.sh", "setup-downloader.sh"),
+        # The provenance claim travels with the executable it describes: what
+        # the helper builds from source, from which pinned revision, which
+        # files hold account data, and every host it may contact.
+        (TOOL_DIR / "PROVENANCE.json", "PROVENANCE.json"),
     ]
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for source, name in files:

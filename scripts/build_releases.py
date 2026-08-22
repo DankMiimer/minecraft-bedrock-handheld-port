@@ -260,6 +260,7 @@ def source_zip(output: pathlib.Path) -> None:
         ROOT / "CHANGELOG.md",
         ROOT / "LICENSE",
         ROOT / "LEGAL.md",
+        ROOT / "DOWNLOADER-POLICY.md",
         ROOT / "THIRD_PARTY_NOTICES.md",
         ROOT / "RELEASE_CHECKLIST.md",
         ROOT / "TESTING.md",

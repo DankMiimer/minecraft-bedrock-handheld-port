@@ -18,6 +18,7 @@ WESTON_DIR=/tmp/weston
 MESA_DIR=/tmp/mesa
 SYSTEM_XKB_LINK=/usr/share/X11/xkb
 SYSTEM_XKB_LINK_CREATED=0
+CREDENTIAL_MANIFEST="$SCRIPT_DIR/credential-artifacts.txt"
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/runtime.conf"
@@ -75,7 +76,38 @@ cleanup_system_xkb_link() {
   SYSTEM_XKB_LINK_CREATED=0
 }
 
-trap cleanup_system_xkb_link EXIT
+# Google account data lives only in the private state directory, and only in
+# the paths credential-artifacts.txt declares. Reading that shared manifest
+# here keeps run.sh and scripts/check_downloader_policy.py from ever drifting
+# apart about where a token can land.
+credential_paths() { # transient|session|dir
+  local want="$1" kind path
+  [ -r "$CREDENTIAL_MANIFEST" ] || return 0
+  while read -r kind path _; do
+    case "$kind" in ''|'#'*) continue ;; esac
+    case "$path" in ''|/*|.|..|*/../*|*/..|../*) continue ;; esac
+    case "$want.$kind" in
+      transient.transient|session.transient|session.session|dir.dir)
+        printf '%s\n' "$path" ;;
+    esac
+  done <"$CREDENTIAL_MANIFEST"
+}
+
+# An interrupted sign-in must not leave Google's one-shot token on the card.
+remove_transient_credentials() {
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] && rm -f "$STATE/$name"
+  done < <(credential_paths transient)
+  return 0
+}
+
+on_exit() {
+  remove_transient_credentials
+  cleanup_system_xkb_link
+}
+
+trap on_exit EXIT
 trap 'exit 143' HUP INT TERM
 
 is_supported() {
@@ -506,11 +538,16 @@ download_version() {
 }
 
 sign_out() {
-  rm -f "$STATE/playdl.conf" "$STATE/playdl.conf.new" "$STATE/token_cache.conf" \
-        "$STATE/device-arm64.conf.state" "$STATE/credential-approval.tmp"
-  for private in "$STATE/xdg/config" "$STATE/xdg/cache" "$STATE/xdg/data" "$STATE/home"; do
-    [ -d "$private" ] && [ ! -L "$private" ] && find "$private" -depth -delete
-  done
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] && rm -f "$STATE/$name"
+  done < <(credential_paths session)
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if [ -d "$STATE/$name" ] && [ ! -L "$STATE/$name" ]; then
+      find "$STATE/$name" -depth -delete
+    fi
+  done < <(credential_paths dir)
   log "Saved Google session removed from this device."
 }
 

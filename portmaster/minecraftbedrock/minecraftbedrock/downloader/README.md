@@ -5,6 +5,14 @@ directly from Google Play. It is never started, downloaded, or signed in unless
 the user chooses **Get APK from Google Play** in the port menu. Manual APK
 installation remains fully supported.
 
+Three rules bind this module: it stays strictly open source, it hardcodes no
+credential and no workaround for Google Play's ownership check, and it never
+stores or transmits account credentials through a third-party server.
+`../../../../DOWNLOADER-POLICY.md` states them in full; `PROVENANCE.json`
+(shipped binaries, pinned downloads, network allowlist) and
+`credential-artifacts.txt` (every path that can hold account data) are the
+manifests `scripts/check_downloader_policy.py` enforces them against.
+
 Prototype support is deliberately gated to 64-bit H700 devices running Knulli.
 The first use reuses a compatible launcher runtime already present on the device
 or downloads a pinned 141 MiB upstream AppImage and extracts its Qt WebEngine

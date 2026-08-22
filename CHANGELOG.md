@@ -77,6 +77,57 @@
 
 ## v2.0.0-rc.6 (testing)
 
+- Extended the policy checks to the Windows/Linux helper, so both downloaders
+  are now held to the same three rules by the same script. The helper carries
+  its own `tools/mcbedrock-get/PROVENANCE.json` -- what it builds from source
+  and from which revision, which requirement files must stay pinned, which
+  files hold account data and which module clears each one, and every host it
+  may contact -- and that manifest now ships inside the Windows bundle, beside
+  the executable it describes.
+
+- Pinned the Play client the helper builds. `setup-downloader.sh` cloned
+  whatever the upstream default branch happened to be that day and pulled it
+  forward on every rerun, so nobody -- including the user -- could say
+  afterwards which source produced the binary they ran. It now fetches and
+  checks out the same commit the port's own ARM64 gplaydl is built from, and
+  the checker fails on a `git pull`, a `--branch`, or an unpinned shallow
+  clone. The pinned revision was built end to end on Ubuntu 24.04.3 under WSL2
+  to confirm it still compiles: both tools build, install, and refuse to run
+  without a session, with only upstream's libcurl deprecation warnings.
+
+- Made the helper write the saved Google account token owner-only. It was
+  created at the default mode, which on Linux means a live token readable by
+  every other account on the machine; it is now created `0600` from the first
+  byte inside a `0700` directory, on both platforms.
+
+- Wrote down the three rules the on-device Google Play downloader lives by --
+  strictly open source, no hardcoded workaround for Play's ownership check, and
+  no user credential on or through a third party -- and made them enforceable
+  rather than aspirational. `DOWNLOADER-POLICY.md` states each rule, how the
+  downloader satisfies it, and the two gaps that remain open (build
+  reproducibility and the disabled Qt WebEngine sandbox).
+  `scripts/check_downloader_policy.py` re-checks all three on every push, and
+  `tests/test_downloader_policy.py` breaks a synthetic downloader twenty-odd
+  ways to prove the checker actually catches violations.
+
+- Gave the downloader two manifests the checker holds it to. `PROVENANCE.json`
+  records every shipped binary with its SHA-256, size, upstream commit or
+  in-repo source, licence text and build script, alongside the pinned optional
+  downloads and the complete list of hosts the downloader may contact -- only
+  Google's own endpoints may see account data. An undeclared or rebuilt binary,
+  a drifted runtime pin, or a new hostname now fails the build.
+  `credential-artifacts.txt` names every path that can hold account data, and
+  `run.sh` reads that same file to decide what to delete, so sign-out and the
+  policy check cannot drift apart.
+
+- Closed three credential-hygiene gaps found while writing that policy: a
+  cancelled or interrupted sign-in no longer leaves Google's one-shot token on
+  the card, sign-out now clears the sign-in capture, exchange input and Qt
+  diagnostic logs it previously left behind, and the support bundle's redaction
+  filter now covers spaced `user_token = ...` assignments, `CRED=`/`CREDB64=`
+  lines, Google token prefixes and email addresses before a log can be attached
+  to a public issue.
+
 - Reduced the Windows helper's first run to one button. Step 1 now installs the
   Windows Subsystem for Linux (through Windows' own administrator prompt rather
   than instructions to find an elevated PowerShell), installs Ubuntu with
