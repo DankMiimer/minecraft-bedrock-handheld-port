@@ -8,6 +8,7 @@ HELPER = ROOT / "portmaster" / "minecraftbedrock" / "minecraftbedrock" / "apkmet
 VERSION_HELPER = ROOT / "portmaster" / "minecraftbedrock" / "minecraftbedrock" / "version_env.py"
 GROUP_HELPER = ROOT / "portmaster" / "minecraftbedrock" / "minecraftbedrock" / "apk_groups.py"
 sys.path.insert(0, str(HELPER.parent))
+import apkmeta  # noqa: E402
 from apkmeta import (InstallError, JOURNAL_NAME, _apk_signing_certificate,
                      recover_incomplete_install)  # noqa: E402
 from migrate_version_metadata import (cached_library_hash,
@@ -102,6 +103,17 @@ def invoke(game: Path, *paths: Path, ok: bool = True):
 
 
 def main() -> int:
+    # Nearly every case here drives apkmeta --install, which takes a kernel
+    # install lock through fcntl and refuses to run without one. On a platform
+    # that has no fcntl every case dies inside install_lock, which surfaces as
+    # an assertion about whatever the case was actually checking -- a signing
+    # certificate, a journal, a rollback -- and reads like a real failure in
+    # the code under test. Say what is happening instead.
+    if apkmeta.fcntl is None:
+        print(f"APK metadata/install tests skipped on {sys.platform}: the installer's "
+              "kernel install lock needs Linux fcntl. Run them on the target device, "
+              "in WSL, or in CI.")
+        return 0
     with tempfile.TemporaryDirectory(prefix="apkmeta-test-") as tmpstr:
         tmp = Path(tmpstr); game = tmp / "game"; (game / "versions").mkdir(parents=True)
         (game / "compat").mkdir()
