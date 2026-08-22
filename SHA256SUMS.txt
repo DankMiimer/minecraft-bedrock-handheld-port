@@ -1,7 +1,0 @@
-33f274d8ed76cfaff920460b5478183329c5cd6da45393448b65cc84ef8b8697  minecraftbedrock-standard-v2.0.0-rc.6.zip
-feee12dd4fbbea99ba79580ca3cd2337d664f649beecd549020415a9ec2bbcf6  minecraftbedrock-rgds-v2.0.0-rc.6.zip
-616bc95f4c39c9ddd2189691ac1fad72fdb777cd28d683b5630a341e80692370  minecraftbedrock-source-v2.0.0-rc.6.zip
-e5362a6c4cb47bd9eb403767a1c7aa7743f6fe277f2018f168a94653f7bc97c5  minecraftbedrock-standard-v2.0.0-rc.6.spdx.json
-bcd5699c9c6a28a6327284083e7d00aaa84b261105b0df3968804e94d2aae3a0  minecraftbedrock-rgds-v2.0.0-rc.6.spdx.json
-4b1ae629c3d05edfea0c2091d76739732d85f823be05a13afdd9afc62ccf3d33  mcbedrock-get-windows-v2.0.0-rc.6.zip
-2d2cb82ccce0609cd8f0cef7326846f88fbbdb24846643cb9ae531d3800413ac  mcbedrock-get-linux-x86_64-v2.0.0-rc.6.AppImage
