@@ -155,7 +155,7 @@
   from mcpelauncher-versiondb, rather than a fixed row of nine buttons. The
   tested builds keep their notes and are marked; beta and preview builds are
   behind a checkbox. The list is cached for a day under
-  `%LOCALAPPDATA%\mcbedrock-getersiondb\`, and with no network and no cache
+  `%LOCALAPPDATA%\mcbedrock-get\versiondb\`, and with no network and no cache
   it falls back to the tested builds, whose codes ship inside the helper.
   `--list` prints the same catalog and `--download` accepts anything in it.
 - Made the helper DPI-aware, so its text is drawn rather than bitmap-stretched

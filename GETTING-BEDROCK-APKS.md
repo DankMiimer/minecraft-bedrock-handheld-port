@@ -108,7 +108,7 @@ password there; the helper never reads the password, and takes the address from
 the finished session rather than asking for it twice.
 
 The Windows account token is stored in
-`%LOCALAPPDATA%\mcbedrock-getccount.json`; gplaydl keeps its session inside
+`%LOCALAPPDATA%\mcbedrock-get\account.json`; gplaydl keeps its session inside
 Ubuntu under `/root/.local/share/mcbedrock-get/`. Pressing **Sign out** removes
 both copies. If Ubuntu is unavailable it clears Windows first and tells you to
 run Sign out again after WSL starts. Nothing is uploaded by this project.
@@ -129,7 +129,7 @@ in the output folder so APKs from different architectures cannot be mixed.
 The version list holds **every Bedrock build Google Play still serves** for the
 selected architecture — several hundred of them — read from
 [mcpelauncher-versiondb](https://github.com/minecraft-linux/mcpelauncher-versiondb)
-and cached under `%LOCALAPPDATA%\mcbedrock-getersiondb\`. Scroll it, or type
+and cached under `%LOCALAPPDATA%\mcbedrock-get\versiondb\`. Scroll it, or type
 in the search box. **Include beta & preview builds** adds the rest; **Refresh
 list** re-reads it from GitHub.
 
