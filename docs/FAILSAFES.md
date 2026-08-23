@@ -53,6 +53,35 @@ Every rung above 0 is announced on screen and written to
 | FS-6 | Audio off at rung 2 (`MCPE_ALSOFT_DRIVERS=null`, `MCPE_SDL_AUDIODRIVER=dummy`) | Issue #1 (dArkOS RE): OpenAL Soft picks PipeWire, whose client config is absent, then RTKit fails. Reddit (muOS Jacaranda): raw ALSA returns "Device or resource busy" because PipeWire holds the device. A failing audio open is a credible cause of a start that never completes, and silence localises it. | **Half discharged.** F3 landed: `lib/audio.sh` now runs on both paths and refuses to offer OpenAL a PipeWire with no client config, which is the dArkOS cause. Delete this rung once that triage is confirmed on a physical dArkOS and muOS device; until then it stays as the backstop for audio faults the triage does not predict. |
 | FS-7 | Breadcrumb-inferred escalation | A launch that never returns could only be detected on the *next* launch. | **Mostly discharged.** F2 landed: the startup watchdog terminates a stalled launch, writes `logs/hang-report.txt`, and records `window`/`first-frame`, so the common case now reports itself within the same run. The inference stays for the cases the watchdog cannot see — a client that spins on the CPU forever, and a device that loses power outright. Delete it when a positive in-client progress signal exists that does not depend on opt-in frame metrics. |
 | FS-8 | Rung 3 diagnostic stop | Without it, a device that fails at every rung would keep relaunching into the same failure with no artefact to report. | Never for the mechanism itself; it is the ladder's terminal state. Its *reachability* should drop to zero as the rungs above are deleted. |
+| FS-9 | Frame rate clamped at rung 1+ (`MCPE_MAX_FPS=30`, `MCPE_VSYNC=1`; 20 fps at rung 2) | A launch that fails to start may be failing under its own frame budget: the tuned profile targets 40 fps with VSync off, which on an unknown GPU is a guess about how much work per frame the device can finish. Clamping removes that variable. | A device reaching first frame at the tuned profile makes this unnecessary for it. Remove the clamp once the arm64 and armhf presets each have a physical acceptance pass, since at that point the frame budget is measured rather than assumed. |
+| FS-10 | Optional extras forced off at rung 1+ (`MCPE_PREWARM_GAMEPLAY_ASSETS=0`, `MCPE_DISABLE_AUTO_COMPACTION=0`) | Both are opt-in and already default to off, but a device that cannot start must not also be running an asset prewarm that reads thousands of files off a slow card, or a version-specific binary patch. Pinning them makes the conservative rung mean the same thing regardless of what the user enabled. | Delete when the ladder records the settings it overrode, so a user's opt-in can be restored on the way back down instead of being pinned off. Until then the cost is only that a diagnostic launch ignores two optional features. |
+
+## Status
+
+Reviewed 2026-08-23 against v2.0.0-rc.11 on the two reference devices
+(RG34XX-SP/Knulli, RG DS/ROCKNIX). **Nothing has been removed yet**, and the
+reason is the same for almost every row: the criteria depend on muOS and the
+ArkOS family, and neither has a reference device. That is the single dependency
+holding this register open.
+
+| ID | Status | What is still missing |
+|---|---|---|
+| FS-1 | Not evidenced | Both reference devices run a build the in-client guard covers, so they launch with `offline=0` and never exercise this fallback. It needs a report from an affected build — armhf 1.16.x, or muOS on a version the guard misses. |
+| FS-2 | Partly evidenced | The `h700` and `rgds` affinity profiles ran at rung 0 with pinning active, drawing 2572 and 3101 frames and exiting cleanly. The `rk3326` and `generic` profiles have no device. Full removal also needs affinity chosen by measured capability rather than device-model match. |
+| FS-3 | Partly evidenced | Performance mode was active at rung 0 across a 21-minute ROCKNIX session and repeated Knulli launches, all clean. That is stability evidence for two firmwares, not a thermal pass, and none for muOS or dArkOS. |
+| FS-4 | Partly evidenced | The capability probe picked `mali` on Knulli and `wayland` on ROCKNIX, both confirmed correct on hardware. Two of four firmwares. |
+| FS-5 | Partly evidenced | The Crusty context hand-off worked at rung 0 on both reference devices, on the libmali and the Sway path. Untested on the ArkOS/KMSDRM family. |
+| FS-6 | Half discharged | `lib/audio.sh` runs on both launch paths and refuses PipeWire with no client config, which is the dArkOS cause from issue #1. Both reference devices resolve the Pulse path correctly. Needs confirmation on a physical dArkOS and muOS device. |
+| FS-7 | Mostly discharged | The watchdog now reports a stall within the same run, and `window`/`first-frame` were recorded on both devices under rc.11. A reached-first-frame breadcrumb no longer counts as a startup failure. What remains is a client that spins forever and a device that loses power, neither of which the watchdog can see. |
+| FS-8 | Permanent mechanism | Terminal state of the ladder. Its *reachability* is the thing to drive to zero; it was never reached on either device. |
+| FS-9 | Partly evidenced | Both reference devices reached first frame at the tuned profile under rc.11 (11 s and 8 s), so the clamp was never needed there. Removal still needs a physical acceptance pass for the armhf preset, which has no device. |
+| FS-10 | Not evidenced | Needs the ladder to record and restore overridden settings; nothing has been built for that yet. Low priority: both knobs default to off, so this only affects users who deliberately enabled them. |
+
+### What would move this the most
+
+One volunteer running **Self test** on muOS and one on dArkOS. That single input
+is what FS-1, FS-2, FS-3, FS-4, FS-5 and FS-6 are all waiting on, and the self
+test exists so that contribution costs a reporter about a minute.
 
 ## Startup supervision (Phase 2, F2)
 

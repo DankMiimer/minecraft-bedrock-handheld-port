@@ -187,27 +187,8 @@ def test_boot_report_covers_the_required_device_report_fields():
     assert "mcpe_report_set abi " in (PAYLOAD / "run_bedrock.sh").read_text(encoding="utf-8")
 
 
-def test_every_failsafe_has_a_documented_removal_criterion():
-    """A failsafe with no way out is just a permanent regression.
-
-    docs/FAILSAFES.md is the register; this keeps it honest.
-    """
-    register = (ROOT / "docs/FAILSAFES.md").read_text(encoding="utf-8")
-    ladder = (PAYLOAD / "lib/failsafe.sh").read_text(encoding="utf-8")
-
-    # Every knob a rung sets must be accounted for in the register.
-    for knob in ("MCPE_FAKE_NO_NETWORK", "MCPE_PIN_RENDER_CORE",
-                 "MCPE_PERFORMANCE_MODE", "SDL_DRIVER_OVERRIDE",
-                 "GAMEWINDOW_EGLUT_CRUSTY_CONTEXT", "MCPE_ALSOFT_DRIVERS"):
-        assert knob in ladder, knob
-        assert knob in register, f"{knob} is applied but has no removal criterion"
-
-    rows = [line for line in register.splitlines() if line.startswith("| FS-")]
-    assert len(rows) >= 8
-    for row in rows:
-        # id | failsafe | why it exists | delete when
-        assert row.count("|") >= 5, row
-        assert row.strip().rstrip("|").rsplit("|", 1)[-1].strip(), f"no exit criterion: {row}"
+# The failsafe register is enforced by tests/test_failsafes.py, which reads the
+# knobs out of lib/failsafe.sh rather than from a list kept by hand.
 
 
 def test_the_ladder_cannot_degrade_a_launch_silently_or_permanently():
@@ -354,7 +335,6 @@ if __name__ == "__main__":
     test_cfw_identity_has_exactly_one_resolver()
     test_launch_leaves_a_breadcrumb_that_survives_a_hang()
     test_boot_report_covers_the_required_device_report_fields()
-    test_every_failsafe_has_a_documented_removal_criterion()
     test_the_ladder_cannot_degrade_a_launch_silently_or_permanently()
     test_the_registry_only_claims_guards_that_can_actually_fire()
     test_the_launcher_covers_startup_crashes_the_client_cannot()

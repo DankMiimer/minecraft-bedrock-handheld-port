@@ -483,7 +483,7 @@ something they cannot get.
 
 ---
 
-## 10. Phase 6 — Removing the failsafes
+## 10. Phase 6 — Removing the failsafes — **LANDED**
 
 `docs/FAILSAFES.md` holds one row per failsafe: id, what it does, which report
 justified it, **the evidence required to delete it**, and current status.
@@ -500,6 +500,39 @@ Example removal criteria:
 | L1 default rung on dArkOS | One full dArkOS acceptance pass in `TESTING.md` |
 | F2 startup watchdog | Never — this one is permanent; only its timeout is tunable |
 | F4 loader exec probe | Keep; cost is one exec |
+
+### What landed
+
+`tests/test_failsafes.py` reads the knobs straight out of `lib/failsafe.sh`
+rather than from a list kept by hand, and asserts that each one has a register
+row, that every row states why it exists and how it ends, that the ids are
+unique and contiguous, and that every row carries a status saying what is still
+missing. It replaces the weaker check that lived in the portability contracts.
+
+Writing it immediately found four knobs the rungs change that the register had
+never mentioned — `MCPE_MAX_FPS`, `MCPE_VSYNC`, `MCPE_PREWARM_GAMEPLAY_ASSETS`
+and `MCPE_DISABLE_AUTO_COMPACTION` — now registered as FS-9 and FS-10. That is
+the failure mode this phase exists to prevent, caught on its first run against
+a register I had written myself two phases earlier.
+
+The enforcement was mutation-tested: adding an unregistered knob to a rung,
+replacing an exit criterion with a placeholder, and deleting a status row are
+each caught. The third initially slipped through because the check looked for
+the id anywhere in the section and the prose beneath the table names several
+ids; it now requires an actual table row.
+
+### The review, and why nothing was removed
+
+All ten failsafes were reviewed against v2.0.0-rc.11 on both reference devices.
+**None could be removed**, and the reason converges on one thing: six of the ten
+criteria depend on muOS or the ArkOS family, and neither has a device. FS-2 to
+FS-5 and FS-9 are now *partly* evidenced — the profiles, governors, capability
+probe, Crusty context hand-off and frame budget all held at rung 0 on Knulli and
+ROCKNIX — but partial evidence is not an exit criterion, and the register says
+so rather than quietly promoting them.
+
+The single input that would move the most rows is one volunteer running **Self
+test** on muOS and one on dArkOS. That is what Phase 4 was built to make cheap.
 
 ---
 
