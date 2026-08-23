@@ -4,21 +4,21 @@
     {
       "edition": "minecraftbedrock.rgds",
       "channel": "testing",
-      "version": "2.0.0-rc.10",
-      "asset": "minecraftbedrock-rgds-v2.0.0-rc.10.zip",
-      "url": "https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.10/minecraftbedrock-rgds-v2.0.0-rc.10.zip",
-      "sha256": "6c0c98578e3f19234b6824f77d97bf79abd2f4dfefd534068248f50063093aef",
-      "size": 6216176,
+      "version": "2.0.0-rc.11",
+      "asset": "minecraftbedrock-rgds-v2.0.0-rc.11.zip",
+      "url": "https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-rgds-v2.0.0-rc.11.zip",
+      "sha256": "f6a7d8539120151faf5b2dc0c320cd53c14f04c43ab84acd736bb91807c4a6ca",
+      "size": 6239631,
       "minimum_updater": 2
     },
     {
       "edition": "minecraftbedrock.standard",
       "channel": "testing",
-      "version": "2.0.0-rc.10",
-      "asset": "minecraftbedrock-standard-v2.0.0-rc.10.zip",
-      "url": "https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.10/minecraftbedrock-standard-v2.0.0-rc.10.zip",
-      "sha256": "a021e384ee24a1fa66d6c2668f47e2aa810c5a64d95b609a2b2c991e65374631",
-      "size": 12412904,
+      "version": "2.0.0-rc.11",
+      "asset": "minecraftbedrock-standard-v2.0.0-rc.11.zip",
+      "url": "https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-standard-v2.0.0-rc.11.zip",
+      "sha256": "1a472f9fceae06b7ed74a1d236fe3fa74628c4920629f1c59f53d56071337560",
+      "size": 12439488,
       "minimum_updater": 2
     }
   ]
