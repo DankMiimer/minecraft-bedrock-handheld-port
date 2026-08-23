@@ -12,20 +12,42 @@ fixture() {
   printf 'NAME="%s"\n' "$1" >"$TMP/root/etc/os-release"
   : >"$TMP/root/proc/device-tree/model"
   : >"$TMP/root/proc/device-tree/compatible"
+  # The host's own CFW must never leak into a fixture's identity.
+  unset CFW_NAME MCPE_CFW_OVERRIDE MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
 }
 
+# Captured from the reference RG34XX-SP on Knulli (2026-08-23). Every string
+# here is what the device actually reports rather than a plausible stand-in:
+# its os-release calls itself Batocera except for OS_NAME, the compatible
+# says h616/sun50iw9p1 rather than h700, and there is no /dev/dri at all.
 fixture Knulli
-printf 'Anbernic RG34XX-SP H700\0' >"$TMP/root/proc/device-tree/model"
-printf 'allwinner,h700\0' >"$TMP/root/proc/device-tree/compatible"
+cat >"$TMP/root/etc/os-release" <<'OSREL'
+NAME=Batocera.linux
+PRETTY_NAME="Batocera.linux 42"
+VERSION=42
+ID=buildroot
+VERSION_ID=2024.11
+OS_NAME="knulli"
+OS_DATE=20260511
+OSREL
+printf 'Anbernic RG34XX-SP\0' >"$TMP/root/proc/device-tree/model"
+printf 'allwinner,h616\0arm,sun50iw9p1\0' >"$TMP/root/proc/device-tree/compatible"
 mkdir -p "$TMP/root/sys/class/graphics/fb0"
 printf '720,960\n' >"$TMP/root/sys/class/graphics/fb0/virtual_size"
 touch "$TMP/root/dev/mali0" "$TMP/root/dev/disp" "$TMP/root/dev/fb0"
+rmdir "$TMP/root/dev/dri" 2>/dev/null || true
 MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none MCPE_TEST_FB_MODE=720x480 \
   mcpe_probe_platform "$TMP/h700.env"
 source "$TMP/h700.env"
 [ "$MCPE_HOST_PROFILE" = h700 ] && [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = mali ] &&
   [ "$MCPE_FB_MODE" = 720x480 ] && [ "$MCPE_ACTIVE_HEIGHT" = 480 ]
+[ "$MCPE_HAS_DRM" = 0 ] || { echo "Knulli reference device exposes no DRM node" >&2; exit 1; }
+# The device does export CFW_NAME=knulli at launch (via device_info.txt), but
+# this fixture exercises the os-release fallback, where the file names its
+# Batocera upstream everywhere except OS_NAME.
+[ "$MCPE_CFW" = knulli ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
+# No muOS reference device; this fixture is constructed, not captured.
 fixture muOS
 printf 'Anbernic RG34XX-SP H700\0' >"$TMP/root/proc/device-tree/model"
 printf 'allwinner,h700\0' >"$TMP/root/proc/device-tree/compatible"
@@ -38,10 +60,13 @@ MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none \
 source "$TMP/muos.env"
 [ "$MCPE_HOST_PROFILE" = h700 ] &&
   [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = kmsdrm ] && [ "$MCPE_DRM_MODE" = 720x480 ]
+[ "$MCPE_CFW" = muos ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
+# Captured from the reference RGDS on ROCKNIX (2026-08-23).
 fixture ROCKNIX
+printf 'OS_NAME="ROCKNIX"\nOS_VERSION="20260710"\nHW_DEVICE="RK3566"\n' >"$TMP/root/etc/os-release"
 printf 'Anbernic RG DS\0' >"$TMP/root/proc/device-tree/model"
-printf 'rockchip,rk3568\0' >"$TMP/root/proc/device-tree/compatible"
+printf 'anbernic,rg-ds\0rockchip,rk3568\0' >"$TMP/root/proc/device-tree/compatible"
 for name in card0-DSI-1 card0-DSI-2; do
   mkdir -p "$TMP/root/sys/class/drm/$name"
   echo connected >"$TMP/root/sys/class/drm/$name/status"
@@ -66,7 +91,9 @@ MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=sway \
 source "$TMP/rocknix.env"
 [ "$MCPE_HOST_PROFILE" = generic ] &&
   [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = wayland ] && [ "$MCPE_DRM_MODE" = 1280x720 ]
+[ "$MCPE_CFW" = rocknix ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
+# No dArkOS reference device; constructed from the issue #1 log.
 fixture dArkOS
 printf 'R36S\0' >"$TMP/root/proc/device-tree/model"
 printf 'rockchip,rk3326\0' >"$TMP/root/proc/device-tree/compatible"
