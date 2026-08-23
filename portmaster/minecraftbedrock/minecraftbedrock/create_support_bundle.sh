@@ -45,6 +45,12 @@ copy_redacted "$GAMEDIR/install_progress.txt" "$TMP/install-progress.txt"
 cp "$GAMEDIR/versions/.install-transaction.json" "$TMP/install-transaction.json" 2>/dev/null || true
 {
   printf 'uid='; id 2>/dev/null || true
+  # Resolve rather than report, so a bundle created outside a launch still
+  # names the CFW instead of leaving the field empty.
+  type mcpe_resolve_cfw >/dev/null 2>&1 && mcpe_resolve_cfw
+  printf 'cfw=%s\n' "${MCPE_CFW:-unknown}"
+  printf 'cfw_confidence=%s\n' "${MCPE_CFW_CONFIDENCE:-unknown}"
+  printf 'CFW_NAME=%s\n' "${CFW_NAME:-}"
   printf 'locale_resolved=%s\n' "${MCPE_LOCALE_RESOLVED:-unknown}"
   printf 'LANG=%s\n' "${LANG:-}"
   printf 'LC_ALL=%s\n' "${LC_ALL:-}"

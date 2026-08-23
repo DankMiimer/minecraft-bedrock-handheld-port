@@ -52,6 +52,7 @@ MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=sway \
   mcpe_probe_platform "$TMP/rgds.env"
 source "$TMP/rgds.env"
 [ "$MCPE_IS_RGDS" = 1 ] && [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = wayland ]
+[ "$MCPE_CFW" = rocknix ]
 
 fixture ROCKNIX
 printf 'Anbernic RG503\0' >"$TMP/root/proc/device-tree/model"
@@ -78,6 +79,8 @@ MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=armv7l MCPE_TEST_COMPOSITOR=none \
 source "$TMP/r36s.env"
 [ "$MCPE_HOST_PROFILE" = rk3326 ] &&
   [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = kmsdrm ] && [ "$MCPE_DRM_MODE" = 640x480 ]
+# "dArkOS" and "dArkOSRE" both resolve to the shared ArkOS-family behaviour.
+[ "$MCPE_CFW" = arkos ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
 # A disconnected Pulse/PipeWire client must not hang host detection.
 fixture Generic
@@ -89,4 +92,148 @@ PATH="$TMP/bin:$PATH" MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 \
   MCPE_TEST_COMPOSITOR=none mcpe_probe_platform "$TMP/bounded-audio.env"
 elapsed=$(( $(date +%s) - started ))
 [ "$elapsed" -lt 5 ] || { echo "audio capability probe blocked for ${elapsed}s" >&2; exit 1; }
+
+# --- Canonical CFW identity ----------------------------------------------------
+# These replace four ad-hoc detectors that had drifted apart, so the resolver is
+# pinned directly rather than only through the capability fixtures above.
+cfw_root() { # dir-under-root...
+  rm -rf "$TMP/cfwroot"
+  mkdir -p "$TMP/cfwroot/etc"
+  local d
+  for d in "$@"; do mkdir -p "$TMP/cfwroot/$d"; done
+}
+expect_cfw() { # expected-id expected-confidence
+  local want_id="$1" want_conf="$2"
+  MCPE_PROBE_ROOT="$TMP/cfwroot" mcpe_resolve_cfw
+  [ "$MCPE_CFW" = "$want_id" ] ||
+    { echo "cfw: expected $want_id, got $MCPE_CFW" >&2; exit 1; }
+  [ "$MCPE_CFW_CONFIDENCE" = "$want_conf" ] ||
+    { echo "cfw $want_id: expected $want_conf, got $MCPE_CFW_CONFIDENCE" >&2; exit 1; }
+}
+
+# PortMaster's CFW_NAME outranks os-release: a system that names itself through
+# the launcher is the most direct evidence available.
+cfw_root
+printf 'NAME="Batocera"\n' >"$TMP/cfwroot/etc/os-release"
+CFW_NAME=Knulli expect_cfw knulli explicit
+unset CFW_NAME
+
+# Knulli is a Batocera derivative and must never be reported as its upstream.
+cfw_root
+printf 'NAME="Knulli"\nID=batocera\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw knulli explicit
+
+# A derivative commonly keeps its upstream's NAME and announces itself only in
+# PRETTY_NAME. Stopping at the first field that matched anything would report
+# the upstream and lose every Knulli-specific behaviour.
+cfw_root
+printf 'NAME="Batocera"\nID=batocera\nPRETTY_NAME="Knulli 40 (Scarab)"\n' \
+  >"$TMP/cfwroot/etc/os-release"
+expect_cfw knulli explicit
+
+# The same shape must still report plain Batocera when nothing more specific
+# appears anywhere in the file.
+cfw_root
+printf 'NAME="Batocera"\nID=batocera\nPRETTY_NAME="Batocera 40"\n' \
+  >"$TMP/cfwroot/etc/os-release"
+expect_cfw batocera explicit
+
+# Every ArkOS-family clone shares one identity, because the port branches on
+# their shared layout and display path rather than on the brand.
+for name in ArkOS dArkOS dArkOSRE "DarkOS RE"; do
+  cfw_root
+  printf 'NAME="%s"\n' "$name" >"$TMP/cfwroot/etc/os-release"
+  expect_cfw arkos explicit
+done
+
+# Layout inference, for systems that name themselves something unhelpful.
+cfw_root opt/muos/script/var/global
+printf 'NAME="Buildroot"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw muos inferred
+
+cfw_root mnt/sdcard/MUOS
+printf 'NAME="Buildroot"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw muos inferred
+
+cfw_root opt/system/Tools/PortMaster
+printf 'NAME="Ubuntu"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw arkos inferred
+
+cfw_root storage/.config storage/roms
+printf 'NAME="LibreELEC"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw rocknix inferred
+
+cfw_root userdata/system
+printf 'NAME="Linux"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw batocera inferred
+
+# muOS layout wins over an ArkOS-style tools directory left on the same card.
+cfw_root opt/muos opt/system/Tools/PortMaster
+printf 'NAME="Linux"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw muos inferred
+
+# Nothing recognisable must produce a definite-looking answer.
+cfw_root
+printf 'NAME="Debian"\n' >"$TMP/cfwroot/etc/os-release"
+expect_cfw unknown none
+
+cfw_root
+MCPE_CFW_OVERRIDE=rocknix expect_cfw rocknix override
+unset MCPE_CFW_OVERRIDE
+
+# mcpe_is_cfw accepts several ids and resolves lazily when none is cached.
+cfw_root
+printf 'NAME="ROCKNIX"\n' >"$TMP/cfwroot/etc/os-release"
+export MCPE_PROBE_ROOT="$TMP/cfwroot"
+mcpe_resolve_cfw
+mcpe_is_cfw knulli rocknix || { echo "mcpe_is_cfw missed a listed id" >&2; exit 1; }
+! mcpe_is_cfw muos arkos || { echo "mcpe_is_cfw matched an unlisted id" >&2; exit 1; }
+unset MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
+mcpe_is_cfw rocknix || { echo "mcpe_is_cfw did not resolve on demand" >&2; exit 1; }
+
+# CFW_NAME arrives only after PortMaster's control files are sourced. Any
+# mcpe_is_cfw call made before that must not pin the wrong answer for the rest
+# of the run -- that would silently disable every per-CFW behaviour at once.
+cfw_root
+printf 'NAME="Debian"\n' >"$TMP/cfwroot/etc/os-release"
+unset CFW_NAME MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
+! mcpe_is_cfw knulli || { echo "unknown host matched knulli" >&2; exit 1; }
+[ "$MCPE_CFW" = unknown ] || { echo "expected a cached unknown" >&2; exit 1; }
+CFW_NAME=Knulli
+mcpe_is_cfw knulli ||
+  { echo "late CFW_NAME was ignored because of a stale cache" >&2; exit 1; }
+unset CFW_NAME MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY MCPE_PROBE_ROOT
+
+# --- Launch stage breadcrumb ---------------------------------------------------
+# The point of the breadcrumb is that the *previous* run's last stage survives a
+# device that never got to write a log.
+rm -rf "$TMP/stagedir"
+mcpe_stage_begin "$TMP/stagedir"
+[ -z "$MCPE_STAGE_PREV" ] || { echo "first run reported a previous stage" >&2; exit 1; }
+[ "$(cut -f1 <"$TMP/stagedir/stage.txt")" = boot ] ||
+  { echo "stage_begin did not record boot" >&2; exit 1; }
+mcpe_stage client-exec
+[ "$(cut -f1 <"$TMP/stagedir/stage.txt")" = client-exec ] ||
+  { echo "stage was not overwritten in place" >&2; exit 1; }
+mcpe_stage_begin "$TMP/stagedir"
+[ "$MCPE_STAGE_PREV" = client-exec ] ||
+  { echo "previous stage lost across runs: $MCPE_STAGE_PREV" >&2; exit 1; }
+[ "$(cut -f1 <"$TMP/stagedir/stage.prev.txt")" = client-exec ] ||
+  { echo "stage.prev.txt not retained for the support bundle" >&2; exit 1; }
+
+# Child scripts source common.sh again. Re-sourcing must not disarm the
+# breadcrumb the parent opened: a live launch on the reference RG34XX-SP lost
+# every stage written by run_bedrock.sh and weston_launch.sh this way, which is
+# precisely the `client-exec` / `first-frame` evidence a hang report needs.
+mcpe_stage abi
+(
+  # shellcheck disable=SC1090
+  . "$ROOT/portmaster/minecraftbedrock/minecraftbedrock/lib/common.sh"
+  [ -n "${MCPE_STAGE_FILE:-}" ] ||
+    { echo "re-sourcing common.sh cleared MCPE_STAGE_FILE" >&2; exit 1; }
+  mcpe_stage client-exec
+)
+[ "$(cut -f1 <"$TMP/stagedir/stage.txt")" = client-exec ] ||
+  { echo "a child process could not advance the breadcrumb" >&2; exit 1; }
+
 echo "platform fixture tests passed"

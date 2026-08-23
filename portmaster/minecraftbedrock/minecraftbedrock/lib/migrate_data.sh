@@ -105,11 +105,14 @@ mcpe_recover_incomplete_migration() {
   mv "$manifest" "${manifest%.pending}.recovered"
 }
 
+# Canonical identity comes from mcpe_resolve_cfw in common.sh, which this file
+# is always loaded alongside. Unlike the CFW_NAME-only check it replaces, that
+# resolver also accepts /etc/os-release, so a Knulli install whose PortMaster
+# control files do not set CFW_NAME now takes the Knulli shared-data path it
+# always should have. The merge below is preflighted and aborts on any
+# collision, so adopting it on an existing install cannot overwrite user data.
 mcpe_is_knulli() {
-  local cfw_lower
-  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
-  case "$cfw_lower" in *knulli*) return 0 ;; esac
-  return 1
+  mcpe_is_cfw knulli
 }
 
 # Knulli's EmulationStation recursively inventories every visible directory in

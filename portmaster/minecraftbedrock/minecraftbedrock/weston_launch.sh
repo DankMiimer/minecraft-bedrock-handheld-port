@@ -65,21 +65,8 @@ ES_INIT=/etc/init.d/S31emulationstation
 ES_WAS_RUNNING=0
 MUOS_FRONTEND_STOPPED=0
 
-is_muos() {
-  local cfw_lower
-  [ "${MCPE_IS_MUOS:-0}" = 1 ] && return 0
-  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
-  case "$cfw_lower" in *muos*) return 0 ;; esac
-  [ -d /opt/muos ] || [ -d /mnt/mmc/MUOS ] || [ -d /mnt/sdcard/MUOS ] ||
-    [ -e /opt/muos/script/var/global/device.txt ]
-}
-
-is_knulli() {
-  local cfw_lower
-  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
-  case "$cfw_lower" in *knulli*) return 0 ;; esac
-  return 1
-}
+is_muos() { mcpe_is_cfw muos; }
+is_knulli() { mcpe_is_cfw knulli; }
 
 stop_emulationstation() {
   [ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return

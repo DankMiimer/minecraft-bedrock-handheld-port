@@ -102,6 +102,8 @@ if [ "$ABI" = arm64 ] && [ "$ARM64_USABLE" = 0 ]; then
   fi
 fi
 echo "ABI: $ABI (version has: 64=$V_HAS64 32=$V_HAS32, usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE, mem=${MEM_KB}kB)"
+mcpe_stage abi
+mcpe_report_set abi "$ABI (installed: 64=$V_HAS64 32=$V_HAS32; usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE; override=${MCPE_ABI_OVERRIDE:-none})"
 if [ "$ABI" = armhf ]; then
   mcpe_apply_r36s_defaults "$ABI"
   echo "R36S performance preset: ${MCPE_MAX_FPS} fps, render request ${MCPE_RENDER_DISTANCE} blocks, VSync ${MCPE_VSYNC}"
@@ -140,6 +142,8 @@ if [ -z "${WESTON_SQUASH:-}" ]; then
   }
   export WESTON_SQUASH
 fi
+mcpe_stage runtime
+mcpe_report_set weston_runtime "$WESTON_SQUASH"
 
 # Backing SDL video driver for crusty, per display stack:
 #  - sway compositor (ROCKNIX): crusty nests under sway -> wayland

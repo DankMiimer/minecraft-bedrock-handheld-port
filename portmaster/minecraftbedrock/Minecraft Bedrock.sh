@@ -83,17 +83,9 @@ export sdl_controllerconfig="${sdl_controllerconfig:-}"
 # copy taken before sourcing.
 SCRIPT_DIR="$PORTDIR"
 
-is_muos() {
-  local cfw_lower
-  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
-  case "$cfw_lower" in *muos*) return 0 ;; esac
-  [ -d /opt/muos ] || [ -d /mnt/mmc/MUOS ] || [ -d /mnt/sdcard/MUOS ] ||
-    [ -e /opt/muos/script/var/global/device.txt ]
-}
-
-if is_muos; then
-  export MCPE_IS_MUOS=1
-fi
+# CFW identity is resolved once by mcpe_resolve_cfw, immediately after
+# lib/common.sh loads below. It needs CFW_NAME from the PortMaster control
+# files sourced above, so it cannot run any earlier than this point.
 
 try_game_dir() {
   [ -f "$1/run_bedrock.sh" ] && [ -f "$1/setup_apk.sh" ] &&
@@ -135,13 +127,21 @@ mcpe_startup_mark() {
   now="$(mcpe_now_ms)"
   printf '%s ms\t%s\n' "$((now - MCPE_BOOT_START_MS))" "$1" >>"$STARTUP_TIMING" 2>/dev/null || true
 }
-mcpe_startup_mark "payload resolved"
 # shellcheck disable=SC1091
 source "$GAMEDIR/lib/common.sh" || { echo "Missing common runtime helpers."; exit 1; }
+# The breadcrumb is opened before anything that can hang, and the launcher log
+# is not truncated until after the capability probe, so these two files are the
+# only record a device leaves when it locks up during startup.
+mcpe_stage_begin "$GAMEDIR/logs"
+mcpe_report_begin "$GAMEDIR/logs/boot-report.txt"
+mcpe_resolve_cfw
+mcpe_stage payload
+mcpe_startup_mark "payload resolved"
 mcpe_load_edition "$GAMEDIR/edition.json" || { echo "Invalid edition manifest."; exit 1; }
 mcpe_select_utf8_locale
 # shellcheck disable=SC1091
 source "$GAMEDIR/lib/migrate_data.sh" || exit 1
+mcpe_stage migrate
 mcpe_migrate_shared_data || { echo "Shared-data migration failed without overwriting user data."; exit 1; }
 mcpe_startup_mark "shared data ready"
 python3 "$GAMEDIR/migrate_version_metadata.py" "$GAMEDIR" ||
@@ -526,7 +526,7 @@ menu_stop_frontend() {
   # escape hatch for direct/manual launches.
   [ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return
   pidof sway >/dev/null 2>&1 && return
-  if [ "${MCPE_IS_MUOS:-0}" = 1 ]; then
+  if mcpe_is_cfw muos; then
     if pidof frontend.sh >/dev/null 2>&1 || pidof muxlaunch >/dev/null 2>&1; then
       MENU_STOPPED_MUOS=1
       $ESUDO killall -q frontend.sh muxlaunch 2>/dev/null || true
@@ -549,7 +549,7 @@ menu_restore_frontend() {
   if [ "$MENU_STOPPED_MUOS" = 1 ]; then
     MENU_STOPPED_MUOS=0
     (
-      unset GAMEDIR MCVER_OVERRIDE MCPE_DATA_ROOT_OVERRIDE MCPE_IS_MUOS
+      unset GAMEDIR MCVER_OVERRIDE MCPE_DATA_ROOT_OVERRIDE MCPE_IS_MUOS MCPE_CFW
       if [ -x /opt/muos/script/mux/frontend.sh ]; then
         setsid /opt/muos/script/mux/frontend.sh launcher </dev/null >/dev/null 2>&1 &
       elif command -v frontend.sh >/dev/null 2>&1; then
@@ -593,11 +593,9 @@ menu_do_install() {
 }
 
 refresh_downloader_menu_state() {
-  local cfw_lower
   export MCPE_DOWNLOADER_SUPPORTED=0 MCPE_DOWNLOADER_SESSION=0 MCPE_DOWNLOADER_RUNTIME=0
-  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
   if [ "${MCPE_HOST_ARCH:-}" = aarch64 ] && [ "${MCPE_HOST_PROFILE:-}" = h700 ] &&
-     { case "$cfw_lower" in *knulli*|*batocera*) true ;; *) false ;; esac; }; then
+     mcpe_is_cfw knulli batocera; then
     export MCPE_DOWNLOADER_SUPPORTED=1
   fi
   [ -s "$MCPE_SHARED_ROOT/downloader/playdl.conf" ] &&
@@ -949,6 +947,7 @@ run_launcher_menu() {
   done
 }
 if [ -n "$MENU_LOVE_TXT" ]; then
+  mcpe_stage menu
   if ! run_launcher_menu; then
     {
       printf 'launcher menu failed at %s\n' "$(date 2>/dev/null || true)"
@@ -1122,5 +1121,9 @@ status=$?
 if command -v pm_finish >/dev/null 2>&1; then
   pm_finish || true
 fi
+
+# Reached only on an orderly return from the launch path. Any other outcome
+# leaves the breadcrumb on the stage that was still in progress.
+mcpe_stage done
 
 exit "$status"

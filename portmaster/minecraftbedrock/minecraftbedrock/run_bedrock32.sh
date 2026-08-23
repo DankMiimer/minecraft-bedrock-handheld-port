@@ -41,13 +41,7 @@ fi
 ES_INIT=/etc/init.d/S31emulationstation
 ES_WAS_RUNNING=0
 MUOS_FRONTEND_STOPPED=0
-is_muos() {
-  local cfw_lower
-  [ "${MCPE_IS_MUOS:-0}" = 1 ] && return 0
-  cfw_lower="$(printf '%s' "${CFW_NAME:-}" | tr '[:upper:]' '[:lower:]')"
-  case "$cfw_lower" in *muos*) return 0 ;; esac
-  [ -d /opt/muos ] || [ -d /mnt/mmc/MUOS ] || [ -d /mnt/sdcard/MUOS ]
-}
+is_muos() { mcpe_is_cfw muos; }
 stop_frontend() {
   [ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return
   if is_muos; then

@@ -1,6 +1,14 @@
 #!/bin/bash
 # Capability resolver. OS names annotate quirks; capabilities select backends.
 
+# mcpe_resolve_cfw lives in common.sh so that migrate_data.sh, which runs
+# before the capability probe, can use it too. Load it here as well so this
+# file stays usable on its own (tests/test_platform.sh sources only this one).
+if ! type mcpe_resolve_cfw >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+fi
+
 mcpe_first_drm_mode() {
   local connector mode
   local probe_root="${MCPE_PROBE_ROOT:-}"
@@ -51,6 +59,7 @@ mcpe_probe_platform() { # output env file
   [ -n "$os_name" ] || os_name="$(sed -n 's/^OS_NAME=//p' "$probe_root/etc/os-release" 2>/dev/null | head -1 | sed 's/^"//;s/"$//')"
   [ -n "$os_name" ] || os_name="$(sed -n 's/^NAME=//p' "$probe_root/etc/os-release" 2>/dev/null | head -1 | sed 's/^"//;s/"$//')"
   [ -n "$os_name" ] || os_name=unknown
+  mcpe_resolve_cfw
   if [ -n "${MCPE_TEST_COMPOSITOR:-}" ]; then compositor="$MCPE_TEST_COMPOSITOR"
   elif pidof sway >/dev/null 2>&1; then compositor=sway
   else compositor="${WAYLAND_DISPLAY:+wayland}"
@@ -132,6 +141,8 @@ mcpe_probe_platform() { # output env file
     printf 'MCPE_HOST_MODEL=%q\n' "$model"
     printf 'MCPE_HOST_COMPATIBLE=%q\n' "$compatible"
     printf 'MCPE_HOST_OS=%q\n' "$os_name"
+    printf 'MCPE_CFW=%q\n' "$MCPE_CFW"
+    printf 'MCPE_CFW_CONFIDENCE=%q\n' "$MCPE_CFW_CONFIDENCE"
     printf 'MCPE_HOST_MEMORY_KB=%q\n' "$mem"
     printf 'MCPE_HAS_ARM64_LOADER=%q\n' "$has_arm64_loader"
     printf 'MCPE_HAS_ARMHF_LOADER=%q\n' "$has_armhf_loader"
@@ -171,6 +182,11 @@ mcpe_apply_platform_profile() {
   source "$resolved"
   export MCPE_HOST_ARCH MCPE_HOST_PROFILE MCPE_HOST_COMPOSITOR
   export MCPE_GRAPHICS_BACKEND_RESOLVED MCPE_AUDIO_BACKEND_RESOLVED MCPE_IS_RGDS
+  export MCPE_CFW MCPE_CFW_CONFIDENCE
+  # Retained for payload scripts that still read it directly.
+  MCPE_IS_MUOS=0
+  [ "$MCPE_CFW" = muos ] && MCPE_IS_MUOS=1
+  export MCPE_IS_MUOS
   case "$MCPE_GRAPHICS_BACKEND_RESOLVED" in
     wayland) export SDL_DRIVER_OVERRIDE=wayland; export MCPE_SDL_VIDEODRIVER=wayland ;;
     mali) export SDL_DRIVER_OVERRIDE=mali ;;
