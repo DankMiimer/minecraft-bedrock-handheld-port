@@ -928,6 +928,23 @@ run_launcher_menu() {
         fi
         exit 0
         ;;
+      selftest)
+        # Answers "will this work here?" without installing an APK or starting
+        # the game, and leaves a redacted report to paste into a device report.
+        if [ -f "$GAMEDIR/selftest.sh" ]; then
+          SHOW_MSG_SLEEP=1 show_msg "Running the self test..."
+          if GAMEDIR="$GAMEDIR" bash "$GAMEDIR/selftest.sh" \
+               >"$GAMEDIR/logs/selftest-console.txt" 2>&1; then
+            MCPE_MENU_STATUS="Self test passed - see logs/selftest.txt"
+          else
+            MCPE_MENU_STATUS="Self test found problems - see logs/selftest.txt"
+          fi
+          SHOW_MSG_SLEEP=6 show_msg \
+            "$(tail -n 3 "$GAMEDIR/logs/selftest.txt" 2>/dev/null || echo 'Self test finished.')"
+        else
+          MCPE_MENU_STATUS="Self test helper is missing"
+        fi
+        ;;
       support_bundle)
         if [ -x "$GAMEDIR/create_support_bundle.sh" ]; then
           bundle="$(GAMEDIR="$GAMEDIR" bash "$GAMEDIR/create_support_bundle.sh")"

@@ -565,6 +565,8 @@ local function mainItems()
   }
   items[#items + 1] = {id = "update", title = "Update port", icon = "update",
                        desc = "get the newest port version (WiFi)"}
+  items[#items + 1] = {id = "selftest", title = "Self test", icon = "settings",
+                       desc = "check this device without starting Minecraft"}
   items[#items + 1] = {id = "support_bundle", title = "Support bundle", icon = "help",
                        desc = "save redacted device diagnostics locally"}
   items[#items + 1] = {id = "controller_test", title = "Controller test", icon = "settings",
@@ -1475,6 +1477,8 @@ local function activate()
       }
       sel.confirm = 1
       screen = "confirm"
+    elseif it.id == "selftest" then
+      quitWith("selftest")
     elseif it.id == "support_bundle" then
       quitWith("support_bundle")
     elseif it.id == "controller_test" then

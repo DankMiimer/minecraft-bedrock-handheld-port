@@ -7,6 +7,28 @@ body:
     attributes:
       value: |
         Do not attach Minecraft APKs, extracted game files, worlds, `versions/`, `profiles/`, or `libminecraftpe.so`.
+
+        **Before filling this in, run the self test.** In the launcher menu choose
+        **Self test**, or over SSH run `bash selftest.sh` in the `minecraftbedrock`
+        folder. It does not start Minecraft and does not need an APK installed. It
+        writes a redacted report to `minecraftbedrock/logs/selftest.txt` that
+        answers most of the questions below on its own.
+  - type: dropdown
+    id: cfw
+    attributes:
+      label: Firmware
+      description: |
+        Knulli and ROCKNIX have reference devices this port is tested on. muOS and
+        the ArkOS family do not, so reports from those are especially useful.
+      options:
+        - Knulli
+        - muOS
+        - ROCKNIX
+        - dArkOS / DarkOS RE / ArkOS
+        - Batocera
+        - Other or not sure
+    validations:
+      required: true
   - type: input
     id: device
     attributes:
@@ -17,17 +39,16 @@ body:
   - type: input
     id: firmware
     attributes:
-      label: Firmware / OS
-      placeholder: "Example: Knulli, ROCKNIX, muOS"
+      label: Firmware version
+      placeholder: "Example: Knulli 20260511, ROCKNIX 20260710, muOS Jacaranda"
     validations:
       required: true
   - type: input
     id: minecraft-version
     attributes:
       label: Minecraft APK version
-      placeholder: "Example: 1.20.62.02 arm64"
-    validations:
-      required: true
+      description: Leave blank if nothing is installed yet.
+      placeholder: "Example: 1.16.221.01 arm64"
   - type: textarea
     id: issue
     attributes:

@@ -14,15 +14,23 @@ trap cleanup EXIT INT TERM
 # Support bundles are meant to be attached to public issues, so nothing that
 # could carry Google account data may survive this filter. Keep it in sync with
 # scripts/check_downloader_policy.py, which asserts these patterns are present.
+# Bedrock versions are shaped exactly like IPv4 addresses -- 1.16.221.01,
+# 1.14.60.5-943146005-arm64 -- so the address filter used to rewrite them to
+# REDACTED_IP and destroy the single most useful field in a device report.
+# Their dots are swapped for a placeholder first and restored last, so the
+# address filter cannot see them.
 copy_redacted() {
   [ -f "$1" ] || return 0
   sed -E \
+    -e 's#([0-9]+)\.([0-9]+)\.([0-9]+)\.(0[0-9]+)#\1@D@\2@D@\3@D@\4#g' \
+    -e 's#([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9]+-arm)#\1@D@\2@D@\3@D@\4\5#g' \
     -e 's#(https?://)[^/@[:space:]]+@#\1REDACTED@#g' \
     -e 's#(user_token|user_email|access_token|refresh_token|master_token|oauth_token|token|password|passwd|secret|authorization)([[:space:]]*[=:][[:space:]]*)"?[^"[:space:]]+"?#\1\2REDACTED#Ig' \
     -e 's#(CRED|CREDB64)=[^[:space:]]+#\1=REDACTED#g' \
     -e 's#(^|[^A-Za-z0-9_])(aas_et|oauth2_4|ya29)[./][A-Za-z0-9._~+/=-]+#\1REDACTED_GOOGLE_TOKEN#g' \
     -e 's#[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}#REDACTED_EMAIL#g' \
-    -e 's#([0-9]{1,3}\.){3}[0-9]{1,3}#REDACTED_IP#g' "$1" >"$2"
+    -e 's#([0-9]{1,3}\.){3}[0-9]{1,3}#REDACTED_IP#g' \
+    -e 's#@D@#.#g' "$1" >"$2"
 }
 
 uname -a >"$TMP/uname.txt" 2>&1
