@@ -1,5 +1,48 @@
 # Changelog
 
+## v2.0.0-rc.11 (testing)
+
+Cross-firmware reliability work. Knulli and ROCKNIX were verified on reference
+devices; muOS and the ArkOS family remain unmeasured, which the new self test
+exists to change.
+
+- The port now resolves which firmware it is on in one place instead of four
+  drifting copies, and ROCKNIX and the ArkOS family have an identity for the
+  first time. Knulli reports `NAME=Batocera.linux` and announces itself only in
+  `OS_NAME`, so the resolver matches across all os-release fields at once.
+- Every launch records the stage it reached, overwritten in place so it
+  survives a hard power-off. After a freeze, the next launch reports where the
+  previous one stopped -- the information missing from issue #2, whose log
+  field is empty because the log is truncated on every start.
+- A startup watchdog supervises the launch from client exec. If the client
+  stops making progress it writes `logs/hang-report.txt` with process and
+  thread state, terminates it, and restores the frontend, instead of leaving a
+  device that needs a power cycle. It detects a stall rather than enforcing a
+  deadline, so a slow first launch on a cold card is not killed.
+- A failsafe ladder drops to a conservative launch profile when a launch fails
+  to start and climbs back after two clean ones. Every rung above the tuned
+  profile is announced on screen with a way to overrule it, and
+  `docs/FAILSAFES.md` records what each failsafe costs and the evidence needed
+  to remove it. Pin it with `safe_mode` in the launcher menu.
+- Old Bedrock builds that exit before the character menu when Wi-Fi is on are
+  now covered by the launcher. The in-client guard is compiled out on armhf and
+  pinned to one arm64 binary, and the compatibility registry claimed it for
+  three combinations where it cannot fire; the registry is corrected and the
+  launcher fills the gap. `Network / LAN` in the menu overrides it.
+- Both launch paths share one audio backend selection. The 32-bit path
+  previously set none, so OpenAL tried PipeWire first and failed twice on
+  dArkOS images that ship the libraries without a client config (issue #1).
+- ABI selection asks whether the loader the client requests exists, rather than
+  trusting `uname`: dArkOS RE runs a 64-bit kernel over an armhf userland.
+- New **Self test** in the launcher menu, and `selftest.sh` over SSH. It checks
+  the device without starting Minecraft or needing an APK and prints a short
+  redacted report for a bug report.
+- Support bundles no longer destroy Bedrock version numbers. They are shaped
+  like IPv4 addresses, so the address filter had been rewriting `1.16.221.01`
+  to `REDACTED_IP` and deleting the most useful field in every bundle.
+- The bug report template asks for the self test, the firmware, and how far the
+  launch got; `TESTING.md` gains a per-firmware acceptance checklist.
+
 ## v2.0.0-rc.10 (testing)
 
 - Extended the policy checks to the Windows/Linux helper, so both downloaders
