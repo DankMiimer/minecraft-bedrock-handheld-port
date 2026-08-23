@@ -36,10 +36,42 @@ body:
     validations:
       required: true
   - type: textarea
+    id: selftest
+    attributes:
+      label: Self test output
+      description: |
+        Paste `minecraftbedrock/logs/selftest.txt`, or the output of
+        `bash selftest.sh`. It is already redacted. If the port will not start
+        far enough to run it, say so here and fill in the rest.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: How far did it get?
+      description: |
+        If you do not know, look at the last line of
+        `minecraftbedrock/logs/stage.txt`, or at `stage.prev.txt` if the device
+        froze and you had to power it off.
+      options:
+        - The launcher menu never appeared
+        - The menu worked, the game never started
+        - The game started and then hung or crashed before the main menu
+        - The game reached the main menu or gameplay, then failed
+        - It runs, but something is wrong (sound, controls, performance)
+        - Something else
+    validations:
+      required: true
+  - type: textarea
     id: logs
     attributes:
       label: Relevant log text
-      description: Paste relevant lines from `minecraftbedrock/log.txt` or `minecraftbedrock/weston_launch.log`. Redact private details.
+      description: |
+        Paste relevant lines from `minecraftbedrock/log.txt` or
+        `minecraftbedrock/weston_launch.log`. If the device froze during a
+        launch, `minecraftbedrock/logs/hang-report.txt` is the useful one.
+        Redact private details.
       render: text
   - type: checkboxes
     id: safety

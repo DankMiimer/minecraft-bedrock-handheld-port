@@ -12,6 +12,21 @@ source "$GAMEDIR/lib/performance.sh" || {
   echo "Missing performance profile helpers."
   exit 1
 }
+# shellcheck disable=SC1091
+source "$GAMEDIR/lib/common.sh" || {
+  echo "Missing common runtime helpers."
+  exit 1
+}
+# shellcheck disable=SC1091
+source "$GAMEDIR/lib/audio.sh" || {
+  echo "Missing audio backend helpers."
+  exit 1
+}
+# shellcheck disable=SC1091
+source "$GAMEDIR/lib/watchdog.sh" || {
+  echo "Missing startup watchdog helpers."
+  exit 1
+}
 MCVER="${MCVER_OVERRIDE:?no version selected}"
 DATA_ROOT="${MCPE_DATA_ROOT_OVERRIDE:-$GAMEDIR/profiles/default}"
 DATA_DIR="$DATA_ROOT/mcpelauncher"
@@ -158,6 +173,10 @@ export MALLOC_MMAP_THRESHOLD_=131072
 export MALLOC_TRIM_THRESHOLD_=131072
 export SDL_JOYSTICK_HIDAPI=0
 export SDL_JOYSTICK_DEADZONE=12000
+# Pick the audio backend the same way the 64-bit path does. Without this the
+# armhf client left ALSOFT_DRIVERS unset, so OpenAL Soft tried PipeWire first
+# and failed twice on dArkOS RE before reaching ALSA (issue #1).
+mcpe_resolve_audio
 export SDL_AUDIODRIVER="${MCPE_SDL_AUDIODRIVER:-alsa}"
 
 # Display driver, per stack:
@@ -483,6 +502,9 @@ fi
 } >"$GAMEDIR/logs/runtime-armhf.env"
 
 echo "=== launching 32-bit: version=$MCVER sdl=$SDL_VIDEODRIVER ==="
+mcpe_stage client-exec
+mcpe_report_set launch "abi=armhf sdl_video=$SDL_VIDEODRIVER sdl_audio=${SDL_AUDIODRIVER:-alsa} alsoft=${ALSOFT_DRIVERS:-default} panel=${NATIVE_MODE:-unknown} privileged=$NEEDS_PRIVILEGE"
+mcpe_report_print
 # Start with an empty log so a readiness marker from the previous launch can
 # never end a handoff early. The client appends to it below on every backend.
 : >"$LOG"
@@ -540,13 +562,22 @@ elif [ -n "${MCPE_MENU_HANDOFF_PID:-}" ]; then
   # Direct KMS needs the display itself, so it cannot overlap the menu surface.
   kill "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
 fi
+# Run in the background so the startup watchdog has something to supervise. A
+# hang before the first frame used to leave the device frozen with no frontend
+# and no log (issue #2, seen on the 64-bit path but equally possible here).
 if [ "${MCPE_32BIT_TEE_LOG:-0}" = 1 ]; then
-  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} 2>&1 | tee -a "$LOG"
-  status="${PIPESTATUS[0]}"
+  (
+    set -o pipefail
+    $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} 2>&1 | tee -a "$LOG"
+  ) &
 else
-  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} >>"$LOG" 2>&1
-  status="$?"
+  $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} >>"$LOG" 2>&1 &
 fi
+LAUNCH_PID=$!
+mcpe_watchdog_start "$LAUNCH_PID" "$LOG"
+wait "$LAUNCH_PID"
+status="$?"
+mcpe_watchdog_stop
 
 [ -n "${GPTOKEYB:-}" ] && $ESUDO killall -9 gptokeyb 2>/dev/null
 echo "--- exit: $status ---"

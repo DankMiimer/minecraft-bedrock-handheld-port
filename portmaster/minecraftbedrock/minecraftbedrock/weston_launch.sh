@@ -15,6 +15,12 @@ WESTON_DIR=/tmp/weston
 WESTON_SQUASH="${WESTON_SQUASH:?weston runtime path not set}"
 TIMEOUT="${1:-0}"
 GFX="${2:-crusty_x11egl}"
+# Normally inherited from the entry script; loaded here so this stage also
+# works when the launch path is driven directly (manual and harness launches).
+# shellcheck disable=SC1091
+. "$GAMEDIR/lib/common.sh" || { echo "Missing common runtime helpers."; exit 1; }
+# shellcheck disable=SC1091
+. "$GAMEDIR/lib/watchdog.sh" || { echo "Missing startup watchdog helpers."; exit 1; }
 LOG="$GAMEDIR/weston_launch.log"
 CONTEXT_BRIDGE="$GAMEDIR/bin/crusty-context-v1.so"
 ESUDO="${ESUDO:-}"
@@ -449,8 +455,13 @@ CLIENT_PIDS_BEFORE="$(pidof mcpelauncher-client 2>/dev/null || true)"
 LAUNCH_PIPE_PID=$!
 shutdown_watchdog "$LAUNCH_PIPE_PID" &
 SHUTDOWN_WATCH_PID=$!
+# Nothing watched the *startup* before this: the shutdown watchdog only arms
+# after the stop marker, so a launch that hung before the first frame left a
+# frozen device, no frontend and no log (issue #2).
+mcpe_watchdog_start "$LAUNCH_PIPE_PID" "$LOG"
 wait "$LAUNCH_PIPE_PID"
 GAME_STATUS=$?
+mcpe_watchdog_stop
 kill "$SHUTDOWN_WATCH_PID" 2>/dev/null || true
 wait "$SHUTDOWN_WATCH_PID" 2>/dev/null || true
 echo "--- exit: $GAME_STATUS (124 = timeout) ---"

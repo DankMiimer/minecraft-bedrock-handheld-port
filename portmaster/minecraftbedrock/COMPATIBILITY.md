@@ -4,10 +4,10 @@ This file is generated from `minecraftbedrock/compat/compatibility.json`.
 
 | Bedrock | ABI | Status | Renderer | Recommendation | Guards / notes |
 |---|---|---|---|---|---|
-| 1.16.40.02 | armhf | Best Effort | legacy_gles_no_renderdragon | Optional Smoke | edumode_guard; http_resolver_guard; older no-RenderDragon armhf anchor; physical release gate pending |
+| 1.16.40.02 | armhf | Best Effort | legacy_gles_no_renderdragon | Optional Smoke | older no-RenderDragon armhf anchor; physical release gate pending; the EduMode and HTTP-resolver guards are arm64-only code paths and cannot apply here, so the launcher forces offline startup instead |
 | 1.16.221.01 | arm64 | Best Effort | legacy_gles_no_renderdragon | Recommended | edumode_guard; http_resolver_guard; recommended everyday build because its legacy UI scales cleanly on handheld displays; guarded patches, Mali rendering, active RG34 audio, RGDS live telemetry and companion startup, and forced-timeout restoration passed on RG34XX-SP/Knulli and RGDS/ROCKNIX; full acceptance remains pending |
-| 1.16.221.01 | armhf | Best Effort | legacy_gles_no_renderdragon | Recommended | edumode_guard; http_resolver_guard; recommended armhf target for usable UI scaling; R36S KMSDRM validation required |
-| 1.17.41.01 | arm64 | Best Effort | renderdragon_or_unclassified | Optional Smoke | http_resolver_guard; RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter |
+| 1.16.221.01 | armhf | Best Effort | legacy_gles_no_renderdragon | Recommended | recommended armhf target for usable UI scaling; R36S KMSDRM validation required; the EduMode and HTTP-resolver guards are arm64-only code paths and cannot apply here, so the launcher forces offline startup instead |
+| 1.17.41.01 | arm64 | Best Effort | renderdragon_or_unclassified | Optional Smoke | RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter; the HTTP-resolver guard is pinned to the arm64 1.16.221.01 binary and cannot apply here |
 | 1.20.15.01 | arm64 | Best Effort | renderdragon_or_unclassified | Optional Smoke | RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter |
 | 1.20.51.01 | arm64 | Best Effort | renderdragon_or_unclassified | Optional Smoke | assets: preserve_nested; RenderDragon-era compatibility smoke only; not a 2.0 release gate because of severe handheld stutter |
 | 1.20.62.02 | arm64 | Best Effort | renderdragon_or_unclassified | Optional Smoke | optional: auto_compaction; assets: preserve_nested; guarded compaction signature matched and timed launch/cleanup passed on RG34XX-SP/Knulli; retained as an optional compatibility smoke, not a 2.0 release gate |

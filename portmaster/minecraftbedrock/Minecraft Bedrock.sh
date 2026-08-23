@@ -766,9 +766,16 @@ run_launcher_menu() {
     # paths (for example printed A as both select and Escape), so use the
     # bridge only on older profiles that actually need keyboard emulation.
     if [ -n "${GPTOKEYB:-}" ] && [ "${MCPE_HOST_PROFILE:-}" != h700 ]; then
+      # gptokeyb attaches by process name. Take it from the LOVE runtime this
+      # launch actually resolved rather than assembling it from DEVICE_ARCH,
+      # which is unset on several CFWs -- on armhf dArkOS that produced
+      # "love.aarch64", a process that never exists, so menu input was never
+      # mapped (visible in the issue #1 log as the helper being killed).
+      menu_gptk_target="$(basename "${LOVE_BINARY:-}" 2>/dev/null)"
+      [ -n "$menu_gptk_target" ] || menu_gptk_target="love.${DEVICE_ARCH:-aarch64}"
       SDL_GAMECONTROLLERCONFIG="$menu_controller_config" \
       SDL_GAMECONTROLLERCONFIG_FILE="$menu_controller_file" \
-        $GPTOKEYB "love.${DEVICE_ARCH:-aarch64}" >/dev/null 2>&1 &
+        $GPTOKEYB "$menu_gptk_target" >/dev/null 2>&1 &
       menu_gptk_pid=$!
     fi
     SDL_AUDIODRIVER=dummy \

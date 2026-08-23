@@ -1,6 +1,197 @@
 #!/bin/bash
 # Shared, side-effect-light helpers for both Minecraft Bedrock editions.
 
+# --- Canonical CFW identity ---------------------------------------------------
+# One resolver so every per-CFW behaviour keys off the same answer. This
+# replaces four ad-hoc detectors (two for muOS, two for Knulli) that had
+# drifted apart, and gives ROCKNIX and the ArkOS family an identity they never
+# had -- both were previously only inferred incidentally from `pidof sway` or
+# from falling through to the generic profile.
+#
+#   MCPE_CFW             knulli|muos|rocknix|arkos|batocera|unknown
+#   MCPE_CFW_CONFIDENCE  explicit  the system named itself (PortMaster
+#                                  CFW_NAME, or /etc/os-release)
+#                        inferred  filesystem layout markers only
+#                        override  MCPE_CFW_OVERRIDE was set
+#                        none      nothing matched
+#
+# The ArkOS family (ArkOS, dArkOS, DarkOS RE, ArkOS-for-clone) reports as
+# `arkos`: they share the PortMaster layout, ESUDO=sudo, and the direct-KMSDRM
+# display path, which is what this port actually branches on. Knulli is a
+# Batocera derivative and is matched first so it is never reported as its
+# upstream. Aurknix is deliberately absent from the name table: it is described
+# inconsistently in this tree as both a ROCKNIX and an ArkOS derivative, so it
+# is left to resolve on layout markers rather than on a guess.
+#
+# Names are matched before filesystem markers because a system that names
+# itself is never wrong, while markers can be left behind on a shared SD card
+# by a previous install.
+mcpe_cfw_from_name() { # name -> prints canonical id, or fails
+  local lower
+  lower="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    "")         return 1 ;;
+    *knulli*)   printf 'knulli\n' ;;
+    *muos*)     printf 'muos\n' ;;
+    *rocknix*)  printf 'rocknix\n' ;;
+    # Both "darkos" and "dArkOSRE" contain "arkos".
+    *arkos*)    printf 'arkos\n' ;;
+    *batocera*) printf 'batocera\n' ;;
+    *)          return 1 ;;
+  esac
+}
+
+mcpe_osrelease_field() { # file field
+  sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//;s/"$//'
+}
+
+mcpe_resolve_cfw() {
+  local probe="${MCPE_PROBE_ROOT:-}" id="" origin="" field value osr
+
+  osr="$probe/etc/os-release"
+
+  if [ -n "${MCPE_CFW_OVERRIDE:-}" ]; then
+    id="$(mcpe_cfw_from_name "$MCPE_CFW_OVERRIDE")" || id=unknown
+    origin=override
+  fi
+  if [ -z "$id" ] && id="$(mcpe_cfw_from_name "${CFW_NAME:-}")"; then
+    origin=explicit
+  fi
+  if [ -z "$id" ] && [ -r "$osr" ]; then
+    # Match against every field at once rather than field by field. A
+    # derivative often keeps its upstream's NAME and only announces itself in
+    # PRETTY_NAME -- Knulli reports NAME="Batocera" -- and stopping at the
+    # first field that matched anything would then report the upstream.
+    # mcpe_cfw_from_name already orders derivatives ahead of their upstreams,
+    # so one match over the joined text gives the right precedence.
+    value=""
+    for field in OS_NAME NAME ID ID_LIKE PRETTY_NAME VERSION; do
+      value="$value $(mcpe_osrelease_field "$osr" "$field")"
+    done
+    if id="$(mcpe_cfw_from_name "$value")"; then
+      origin=explicit
+    else
+      id=""
+    fi
+  fi
+  if [ -z "$id" ]; then
+    origin=inferred
+    if [ -d "$probe/opt/muos" ] || [ -d "$probe/mnt/mmc/MUOS" ] ||
+       [ -d "$probe/mnt/sdcard/MUOS" ] ||
+       [ -e "$probe/opt/muos/script/var/global/device.txt" ]; then
+      id=muos
+    elif [ -d "$probe/opt/system/Tools/PortMaster" ]; then
+      # ArkOS-family tools layout; dArkOS RE reports exactly this path in the
+      # field logs behind issue #1.
+      id=arkos
+    elif [ -d "$probe/storage/.config" ] && [ -d "$probe/storage/roms" ]; then
+      # LibreELEC-derived read-only root, as used by ROCKNIX.
+      id=rocknix
+    elif [ -d "$probe/userdata/system" ]; then
+      # Batocera-derived. Knulli is one of these, but this tree has no verified
+      # marker separating it from upstream, so Knulli is only reported as such
+      # when the system names itself -- which PortMaster does do on Knulli.
+      id=batocera
+    else
+      id=unknown
+      origin=none
+    fi
+  fi
+
+  MCPE_CFW="$id"
+  MCPE_CFW_CONFIDENCE="$origin"
+  MCPE_CFW_CACHE_KEY="$(mcpe_cfw_cache_key)"
+  export MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
+}
+
+mcpe_cfw_cache_key() {
+  printf '%s|%s|%s\n' "${MCPE_CFW_OVERRIDE:-}" "${CFW_NAME:-}" "${MCPE_PROBE_ROOT:-}"
+}
+
+# CFW_NAME only becomes available after PortMaster's control files are sourced.
+# A cached answer taken before that point would otherwise stick for the whole
+# run and silently disable every per-CFW behaviour, so the cache is keyed on the
+# inputs and re-resolves whenever they change.
+mcpe_is_cfw() { # id [id...]
+  local want
+  if [ -z "${MCPE_CFW:-}" ] ||
+     [ "${MCPE_CFW_CACHE_KEY:-}" != "$(mcpe_cfw_cache_key)" ]; then
+    mcpe_resolve_cfw
+  fi
+  for want in "$@"; do
+    [ "$MCPE_CFW" = "$want" ] && return 0
+  done
+  return 1
+}
+
+# --- Launch stage breadcrumb --------------------------------------------------
+# A single token, overwritten in place, so a device that is hard-reset or
+# powered off mid-launch still records where it stopped. The previous run's
+# final stage is kept as stage.prev.txt and reported at the next boot: the
+# RG35XX-H/Knulli hang (issue #2) produced no log at all, because the log is
+# truncated on start and the console froze before anything useful was written.
+#
+# Tokens, in order: boot payload migrate probe menu version abi runtime
+#                   client-exec window first-frame shutdown done
+# `window` and `first-frame` are written by the startup watchdog and are not
+# emitted yet; a run that stops at `client-exec` means the client was started
+# and never came back.
+# Preserve anything the parent already exported. run_bedrock.sh, weston_launch.sh
+# and run_bedrock32.sh all source this file, so a plain assignment here silently
+# disarmed the breadcrumb for every child: a live launch on the reference
+# RG34XX-SP recorded `version` and then jumped straight to `done`, losing the
+# `client-exec`, `window` and `first-frame` stages -- exactly the ones that
+# matter for diagnosing a hang.
+MCPE_STAGE_FILE="${MCPE_STAGE_FILE:-}"
+MCPE_STAGE_PREV="${MCPE_STAGE_PREV:-}"
+
+mcpe_stage() { # token
+  [ -n "${MCPE_STAGE_FILE:-}" ] || return 0
+  printf '%s\t%s\n' "$1" \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)" \
+    >"$MCPE_STAGE_FILE" 2>/dev/null || true
+}
+
+mcpe_stage_begin() { # [logdir]
+  local dir="${1:-$GAMEDIR/logs}"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  MCPE_STAGE_FILE="$dir/stage.txt"
+  MCPE_STAGE_PREV=""
+  if [ -s "$MCPE_STAGE_FILE" ]; then
+    MCPE_STAGE_PREV="$(cut -f1 <"$MCPE_STAGE_FILE" 2>/dev/null | head -1)"
+    mv -f "$MCPE_STAGE_FILE" "$dir/stage.prev.txt" 2>/dev/null || true
+  fi
+  export MCPE_STAGE_FILE MCPE_STAGE_PREV
+  mcpe_stage boot
+}
+
+# --- Boot report ---------------------------------------------------------------
+# Everything a device report needs, in one block, accumulated as each value is
+# resolved and printed once before the game starts. These facts were previously
+# spread over a dozen echo lines in three scripts, in no fixed order, so no two
+# reports looked alike. Child scripts inherit MCPE_REPORT_FILE and append to the
+# same file.
+mcpe_report_begin() { # [file]
+  MCPE_REPORT_FILE="${1:-$GAMEDIR/logs/boot-report.txt}"
+  mkdir -p "$(dirname "$MCPE_REPORT_FILE")" 2>/dev/null || { MCPE_REPORT_FILE=""; return 0; }
+  : >"$MCPE_REPORT_FILE" 2>/dev/null || MCPE_REPORT_FILE=""
+  export MCPE_REPORT_FILE
+}
+
+mcpe_report_set() { # key value...
+  local key="$1"
+  shift
+  [ -n "${MCPE_REPORT_FILE:-}" ] || return 0
+  printf '%s=%s\n' "$key" "$*" >>"$MCPE_REPORT_FILE" 2>/dev/null || true
+}
+
+mcpe_report_print() {
+  [ -n "${MCPE_REPORT_FILE:-}" ] && [ -s "$MCPE_REPORT_FILE" ] || return 0
+  echo "--- boot report ---"
+  sed 's/^/  /' "$MCPE_REPORT_FILE" 2>/dev/null || true
+  echo "-------------------"
+}
+
 mcpe_json_string() { # file key
   sed -n 's/^[[:space:]]*"'"$2"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" 2>/dev/null | head -1
 }
