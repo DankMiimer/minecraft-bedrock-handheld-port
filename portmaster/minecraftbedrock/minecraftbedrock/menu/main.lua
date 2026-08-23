@@ -203,6 +203,18 @@ local SCHEMA = {
     help   = "Keeps known-good renderer flags and disables dev logging.",
   },
   {
+    key = "network", label = "Network / LAN",
+    values = {"auto", "on", "off"},
+    names  = {"Auto", "On", "Off"},
+    help   = "Old builds can crash on startup with Wi-Fi on. Auto goes offline only for those.",
+  },
+  {
+    key = "safe_mode", label = "Safe mode",
+    values = {"auto", "0", "1", "2", "3"},
+    names  = {"Auto", "Normal", "Conservative", "Minimal", "Diagnostic"},
+    help   = "Auto follows launch history. Normal forces the tuned profile.",
+  },
+  {
     key = "measure_fps", label = "FPS logging", widget = "toggle",
     values = {"0", "1"},
     names  = {"Off", "On"},

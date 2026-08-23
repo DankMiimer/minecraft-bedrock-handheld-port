@@ -149,18 +149,42 @@ python3 "$GAMEDIR/migrate_version_metadata.py" "$GAMEDIR" ||
 mcpe_startup_mark "version metadata ready"
 # shellcheck disable=SC1091
 source "$GAMEDIR/lib/platform.sh" || exit 1
+# shellcheck disable=SC1091
+source "$GAMEDIR/lib/failsafe.sh" || exit 1
+MCPE_PORT_VERSION="$(cat "$GAMEDIR/PORT_VERSION" 2>/dev/null || echo unknown)"
+export MCPE_PORT_VERSION
+mcpe_stage probe
 mcpe_apply_platform_profile "$CONFDIR/resolved_host.env" || { echo "Host capability probe failed."; exit 1; }
 mcpe_startup_mark "device profile ready"
 
 > "$GAMEDIR/logs/launcher.log" && ln -sfn "logs/launcher.log" "$GAMEDIR/log.txt" 2>/dev/null || true
 exec > >(tee -a "$GAMEDIR/logs/launcher.log") 2>&1
 cd "$GAMEDIR"
+mcpe_report_set port_dir "$PORTDIR"
+mcpe_report_set game_dir "$GAMEDIR"
+mcpe_report_set port_version "$(cat "$GAMEDIR/PORT_VERSION" 2>/dev/null || echo unknown)"
+mcpe_report_set edition "$MCPE_EDITION_ID"
+mcpe_report_set shared_data "$MCPE_SHARED_ROOT"
+mcpe_report_set cfw "$MCPE_CFW ($MCPE_CFW_CONFIDENCE, CFW_NAME=${CFW_NAME:-unset}, os=${MCPE_HOST_OS:-unknown})"
+mcpe_report_set host "arch=${MCPE_HOST_ARCH:-unknown} profile=${MCPE_HOST_PROFILE:-generic} model=${MCPE_HOST_MODEL:-unknown}"
+mcpe_report_set memory_kb "${MCPE_HOST_MEMORY_KB:-unknown}"
+mcpe_report_set graphics "backend=${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown} compositor=${MCPE_HOST_COMPOSITOR:-none}"
+mcpe_report_set panel "${MCPE_ACTIVE_WIDTH:-0}x${MCPE_ACTIVE_HEIGHT:-0} drm=${MCPE_DRM_CONNECTOR:-none}/${MCPE_DRM_MODE:-none} fb=${MCPE_FB_MODE:-none}"
+mcpe_report_set audio "backend=${MCPE_AUDIO_BACKEND_RESOLVED:-unknown} alsa=${MCPE_HAS_ALSA:-0} pulse=${MCPE_HAS_PULSE:-0} pipewire=${MCPE_HAS_PIPEWIRE:-0}"
+mcpe_report_set loaders "arm64=${MCPE_HAS_ARM64_LOADER:-0} armhf=${MCPE_HAS_ARMHF_LOADER:-0}"
+mcpe_report_set locale "${MCPE_LOCALE_RESOLVED:-unknown}"
+mcpe_report_set portmaster "control=${PM_CONTROL_ROOT:-none} mapping=${MCPE_PORTMASTER_MAPPING:-0}"
 echo "Port dir: $PORTDIR"
 echo "Game dir: $GAMEDIR"
 echo "Edition: $MCPE_EDITION_ID"
 echo "Shared data: $MCPE_SHARED_ROOT"
-echo "CFW: ${CFW_NAME:-unknown} profile=${MCPE_HOST_PROFILE:-generic} backend=${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown}"
+echo "CFW: $MCPE_CFW ($MCPE_CFW_CONFIDENCE; CFW_NAME=${CFW_NAME:-unset}) profile=${MCPE_HOST_PROFILE:-generic} backend=${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown}"
 echo "Locale: ${MCPE_LOCALE_RESOLVED:-unknown}"
+# The single most useful line in a report about a launch that never came back.
+if [ -n "${MCPE_STAGE_PREV:-}" ] && [ "$MCPE_STAGE_PREV" != done ]; then
+  echo "Previous launch did not finish; it last reached stage '$MCPE_STAGE_PREV'."
+  mcpe_report_set previous_stage "$MCPE_STAGE_PREV"
+fi
 
 # The Weston runtime (weston_pkg_0.2) is only needed by the 64-bit EGLUT path,
 # so it is resolved lazily in run_bedrock.sh's arm64 branch — a 32-bit-only
@@ -1016,6 +1040,19 @@ apply_settings() {
         case "$v" in 0|1)
           [ -z "${MCPE_VSYNC:-}" ] && export MCPE_VSYNC="$v" ;;
         esac ;;
+      network)
+        # auto = offline only for legacy builds the in-client guard cannot
+        # cover; on = keep LAN; off = always report offline.
+        case "$v" in auto|on|off)
+          [ -z "${MCPE_NETWORK_MODE:-}" ] && export MCPE_NETWORK_MODE="$v" ;;
+        esac ;;
+      safe_mode)
+        # Pins the failsafe ladder instead of letting it follow the launch
+        # history. safe_mode=0 is the way back to the tuned profile after the
+        # ladder has escalated.
+        case "$v" in 0|1|2|3)
+          [ -z "${MCPE_SAFE_MODE:-}" ] && export MCPE_SAFE_MODE="$v" ;;
+        esac ;;
       perf_mode)
         case "$v" in 0|1)
           [ -z "${MCPE_PERFORMANCE_MODE:-}" ] && export MCPE_PERFORMANCE_MODE="$v" ;;
@@ -1090,6 +1127,40 @@ export MCPE_BEDROCK_ABI_LABEL MCPE_COMPAT_STATUS MCPE_PROFILE_CLASS
 export MCPE_GAME_LIBRARY_SHA256 MCPE_RENDERER_PROFILE MCPE_RECOMMENDATION
 export MCPE_COMPAT_WARNING
 export MCPE_PATCH_EDUMODE MCPE_PATCH_HTTP_RESOLVE MCPE_COMPACTION_AVAILABLE
+mcpe_stage version
+mcpe_report_set bedrock "${MCPE_BEDROCK_VERSION_NAME:-$MCVER} code=${MCPE_BEDROCK_VERSION_CODE:-unknown} abi=${MCPE_BEDROCK_ABI_LABEL:-unknown}"
+mcpe_report_set bedrock_status "${MCPE_COMPAT_STATUS:-best_effort} renderer=${MCPE_RENDERER_PROFILE:-unclassified} recommendation=${MCPE_RECOMMENDATION:-none}"
+mcpe_report_set bedrock_library_sha256 "${MCPE_GAME_LIBRARY_SHA256:-unknown}"
+mcpe_report_set patches "edumode=${MCPE_PATCH_EDUMODE:-0} http_resolve=${MCPE_PATCH_HTTP_RESOLVE:-0} compaction_available=${MCPE_COMPACTION_AVAILABLE:-0}"
+
+# --- Startup network policy ---------------------------------------------------
+# Old builds initialise a broken cpprest/boost-asio stack at startup and exit
+# before the character menu when they believe the network is up; offline they
+# reach it every time (muOS report, 10 Jul). The in-client fix,
+# patchOldHttpResolveCrash, is compiled out on armhf and pinned to the arm64
+# 1.16.221.01 binary, so on every other legacy build there is nothing guarding
+# this at all. MCPE_FAKE_NO_NETWORK makes the game see no network and skip the
+# path entirely.
+#
+# LAN multiplayer is one of this port's better features, so this is only the
+# default where the crash is known and unguarded, and `network` in settings.cfg
+# overrides it in both directions.
+if [ -z "${MCPE_FAKE_NO_NETWORK:-}" ]; then
+  case "${MCPE_NETWORK_MODE:-auto}" in
+    off) export MCPE_FAKE_NO_NETWORK=1 ;;
+    on)  export MCPE_FAKE_NO_NETWORK=0 ;;
+    *)
+      if [ "${MCPE_PROFILE_CLASS:-default}" = legacy_1_16 ] &&
+         [ "${MCPE_PATCH_HTTP_RESOLVE:-0}" != 1 ]; then
+        export MCPE_FAKE_NO_NETWORK=1
+      else
+        export MCPE_FAKE_NO_NETWORK=0
+      fi
+      ;;
+  esac
+fi
+# Reported once the failsafe ladder has had its say below, since rung 1 and
+# above force offline regardless of this decision.
 if [ "${MCPE_COMPAT_STATUS:-best_effort}" = unsupported ]; then
   echo "Selected Bedrock build is unsupported by the compatibility registry."
   exit 1
@@ -1113,8 +1184,59 @@ else
 fi
 mkdir -p "$MCPE_DATA_ROOT_OVERRIDE"
 
-bash "$GAMEDIR/run_bedrock.sh"
-status=$?
+# --- Failsafe ladder ----------------------------------------------------------
+# Decided here, after the version is known and after apply_settings, because a
+# rung above 0 has to win over the saved profile that just failed to start.
+mcpe_failsafe_plan
+mcpe_failsafe_apply
+mcpe_report_set failsafe "rung=${MCPE_FAILSAFE_RUNG:-0} (${MCPE_FAILSAFE_RUNG_NAME:-tuned}) floor=${MCPE_FAILSAFE_FLOOR:-0} pinned=${MCPE_FAILSAFE_PINNED:-0}"
+mcpe_report_set failsafe_reason "${MCPE_FAILSAFE_REASON:-no change}"
+echo "Failsafe: rung ${MCPE_FAILSAFE_RUNG:-0} (${MCPE_FAILSAFE_RUNG_NAME:-tuned}) - $(mcpe_failsafe_describe)"
+echo "Failsafe reason: ${MCPE_FAILSAFE_REASON:-no change}"
+
+if [ "${MCPE_FAKE_NO_NETWORK:-0}" = 1 ]; then
+  echo "Network: reporting offline to the game (mode=${MCPE_NETWORK_MODE:-auto}; in-client guard=${MCPE_PATCH_HTTP_RESOLVE:-0}). LAN will not work."
+  echo "         Set network=on in config/settings.cfg to keep LAN and accept the startup risk."
+else
+  echo "Network: normal (mode=${MCPE_NETWORK_MODE:-auto}; in-client guard=${MCPE_PATCH_HTTP_RESOLVE:-0})"
+fi
+mcpe_report_set network "mode=${MCPE_NETWORK_MODE:-auto} offline=${MCPE_FAKE_NO_NETWORK:-0} guarded=${MCPE_PATCH_HTTP_RESOLVE:-0}"
+
+if [ "${MCPE_FAILSAFE_RUNG:-0}" -ge 1 ]; then
+  # Never degrade silently: a player who is handed 20 fps and no sound must be
+  # told why, and how to overrule it.
+  show_msg "Safe mode ${MCPE_FAILSAFE_RUNG}: $(mcpe_failsafe_describe)" \
+           "Reason: ${MCPE_FAILSAFE_REASON:-previous launch did not finish}" \
+           "It returns to normal by itself after two good launches." \
+           "To force normal: set safe_mode=0 in config/settings.cfg."
+fi
+
+MCPE_LAUNCH_SECONDS=0
+if [ "${MCPE_FAILSAFE_RUNG:-0}" -ge 3 ]; then
+  # Terminal rung: relaunching into the same failure teaches nobody anything,
+  # so collect the report instead. This still falls through to the shared
+  # cleanup below -- skipping pm_finish here would strand the CFW frontend.
+  echo "Every launch profile down to the minimal one failed to start on this device."
+  bundle="$(bash "$GAMEDIR/create_support_bundle.sh" 2>/dev/null || true)"
+  [ -n "$bundle" ] && echo "Support bundle: $bundle"
+  show_msg "Minecraft did not start at any safe-mode level." \
+           "Minecraft was NOT started this time; a report was collected instead." \
+           "${bundle:-Run create_support_bundle.sh in the minecraftbedrock folder.}" \
+           "Attach it to a device report, then set safe_mode=0 to try again."
+  status=3
+  mcpe_report_set exit_status "diagnostic; the game was not started"
+else
+  MCPE_LAUNCH_STARTED_MS="$(mcpe_now_ms)"
+  bash "$GAMEDIR/run_bedrock.sh"
+  status=$?
+  MCPE_LAUNCH_SECONDS=$(( ($(mcpe_now_ms) - MCPE_LAUNCH_STARTED_MS) / 1000 ))
+  mcpe_failsafe_record "$status" "$MCPE_LAUNCH_SECONDS"
+  mcpe_report_set exit_status "$status after ${MCPE_LAUNCH_SECONDS}s (${MCPE_FAILSAFE_OUTCOME:-unknown})"
+  mcpe_report_set failsafe_next "rung ${MCPE_FAILSAFE_NEXT_RUNG:-${MCPE_FAILSAFE_RUNG:-0}} on the next launch"
+fi
+
+mcpe_stage shutdown
+mcpe_report_print
 
 [ "$status" -eq 0 ] && mcpe_mark_migration_success
 

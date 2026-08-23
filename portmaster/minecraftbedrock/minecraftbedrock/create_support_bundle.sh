@@ -32,6 +32,13 @@ cp "$GAMEDIR/config/resolved_host.env" "$TMP/resolved_host.env" 2>/dev/null || t
 cp "$GAMEDIR/edition.json" "$TMP/edition.json" 2>/dev/null || true
 cp "$GAMEDIR/PORT_VERSION" "$TMP/PORT_VERSION" 2>/dev/null || true
 cp "$GAMEDIR/bin/mcpelauncher-client.buildinfo" "$TMP/mcpelauncher-client.buildinfo" 2>/dev/null || true
+# The breadcrumb and boot report survive a launch that produced no usable log,
+# which is the case this bundle most needs to explain.
+copy_redacted "$GAMEDIR/logs/stage.txt" "$TMP/stage.txt"
+copy_redacted "$GAMEDIR/logs/stage.prev.txt" "$TMP/stage.prev.txt"
+copy_redacted "$GAMEDIR/logs/boot-report.txt" "$TMP/boot-report.txt"
+copy_redacted "$GAMEDIR/logs/failsafe-ledger.tsv" "$TMP/failsafe-ledger.tsv"
+copy_redacted "$GAMEDIR/config/launch_state.json" "$TMP/launch-state.json"
 copy_redacted "$GAMEDIR/log.txt" "$TMP/launcher.log"
 copy_redacted "$GAMEDIR/weston_launch.log" "$TMP/game.log"
 copy_redacted "$GAMEDIR/logs/controller-test.txt" "$TMP/controller-test.txt"

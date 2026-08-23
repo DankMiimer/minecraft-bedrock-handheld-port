@@ -11,6 +11,7 @@ python3 -m py_compile \
   portmaster/minecraftbedrock/minecraftbedrock/release_select.py \
   portmaster/minecraftbedrock/minecraftbedrock/runtime_select.py \
   portmaster/minecraftbedrock/minecraftbedrock/version_env.py \
+  portmaster/minecraftbedrock/minecraftbedrock/failsafe_state.py \
   portmaster/minecraftbedrock/minecraftbedrock/migrate_version_metadata.py \
   portmaster/minecraftbedrock/minecraftbedrock/downloader/credentials.py \
   portmaster/minecraftbedrock/minecraftbedrock/downloader/deb_extract.py \
@@ -23,22 +24,30 @@ python3 -m py_compile \
   tools/mcbedrock-get/wsl_backend.py tests/test_apkmeta.py tests/test_downloader.py \
   tests/test_prepare_resources.py tests/test_release_builder.py tests/test_docs.py \
   tests/test_portability_contracts.py tests/test_downloader_policy.py \
+  tests/test_failsafe.py \
+  tests/test_cfw_contracts.py \
   scripts/check_downloader_policy.py
 for patch in source_release/*.patch; do git apply --recount --numstat "$patch" >/dev/null; done
 bash tests/test_migration.sh
 bash tests/test_performance.sh
 bash tests/test_platform.sh
 bash tests/test_abi.sh
+bash tests/test_failsafe_apply.sh
+bash tests/test_audio.sh
+bash tests/test_redaction.sh
+bash tests/test_watchdog.sh
 bash tests/test_update.sh
 python3 tests/test_apkmeta.py
 python3 tests/test_downloader.py
 python3 tests/test_downloader_policy.py
 python3 scripts/check_downloader_policy.py
 python3 tests/test_version_selection.py
+python3 tests/test_failsafe.py
 python3 tests/test_prepare_resources.py
 python3 -m unittest discover -s tools/mcbedrock-get/tests -p 'test_*.py' -v
 python3 tests/test_docs.py
 python3 tests/test_portability_contracts.py
+python3 tests/test_cfw_contracts.py
 bash tests/test_terrain_loop.sh
 bash tests/test_rgds_session.sh
 python3 tests/test_release_builder.py
