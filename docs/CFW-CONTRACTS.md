@@ -311,10 +311,13 @@ assembled from it points at a process that never exists.
 
 ## What would raise these from assumed to measured
 
-- muOS on any H700 device: identity, frontend handoff, the Jacaranda audio
-  path, and whether the Wi-Fi startup crash still occurs on 2.0.
+- muOS: what is left is what needs a player, not another capture. Identity, the
+  frontend handoff, graphics, storage and the downloader are measured above on
+  the RG34XX-SP reference device; the Jacaranda audio path has been selected
+  correctly but never *heard*, and whether the Wi-Fi startup crash still occurs
+  on 2.0 needs a real session.
 - An R36S-class device on dArkOS RE: identity, `ESUDO`, the KMSDRM panel-mode
-  fix, the audio triage, and the ABI loader check.
+  fix, the audio triage, and the ABI loader check. Still nothing measured.
 
 Both correspond to open issues with a reporter attached, so the cheapest route
 is the self-test from Phase 4 rather than another round of guessing.
