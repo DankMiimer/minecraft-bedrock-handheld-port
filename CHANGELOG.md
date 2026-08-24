@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **The muOS sign-in window came up black.** With the helper finally alive, Qt
+  rendered frames and swapped them, and the page inside stayed empty:
+  QtWebEngine's renderer could not create its shared-memory file. In `/dev/shm`
+  that is fatal — Chromium calls `LOG(FATAL)` for that directory by name — and
+  in `/tmp` it is survivable but blank, because software compositing is how a
+  rendered page reaches the window. Both directories are `tmpfs` mode 1777 and
+  the renderer runs as uid 0 with no seccomp filter and no chroot; what it does
+  not have is capabilities. A renderer forked from Chromium's zygote reports
+  `CapEff: 0000000000000000`, against `0000003fffffffff` for one the browser
+  starts directly.
+
+  The port now passes `--no-zygote` (and keeps `--disable-dev-shm-usage`, so
+  that a future child which does lose its capabilities degrades instead of
+  aborting). The zygote is only a pre-fork optimisation here — the sandbox is
+  already disabled for this window — so nothing is lost by skipping it. On the
+  muOS reference device the allocation errors go to zero and **Google's sign-in
+  page renders on the panel**, confirmed by eye on the hardware.
+
 - **The muOS sign-in window crashed the moment Qt asked for OpenGL.** Past the
   missing `libcom_err.so.2`, `mcpe-signin` died at PC 0 inside
   `glXChooseVisual` — a call through a null pointer, on its first use of SDL.

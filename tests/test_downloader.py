@@ -259,6 +259,11 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn("refresh_crusty_link CRUSTY_LIBSDL", run)
         self.assertIn("refresh_crusty_link CRUSTY_LIBEGL", run)
         self.assertIn('link="/tmp/${1}64.so"', run)
+        session = (MODULE / "gui-session.sh").read_text(encoding="utf-8")
+        self.assertIn("--disable-dev-shm-usage", session)
+        # A renderer forked from the zygote loses its capabilities and
+        # cannot allocate the shared memory a composited page arrives in.
+        self.assertIn("--no-zygote", session)
 
         progress_ui = (MODULE / "progress-ui/main.lua").read_text(encoding="utf-8")
         self.assertIn("MCPE_PROGRESS_EXIT_INTERACTIVE", progress_ui)
