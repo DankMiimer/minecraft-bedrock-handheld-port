@@ -20,6 +20,8 @@
 
 #include <QNetworkCookie>
 
+#include <cstdio>
+
 #include <fcntl.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
@@ -32,23 +34,22 @@ class HandheldController final : public QObject
 public:
     explicit HandheldController(QObject *parent = nullptr) : QObject(parent)
     {
-        const QStringList devices = QDir(QStringLiteral("/dev/input")).entryList(
-            {QStringLiteral("event*")}, QDir::System | QDir::Files, QDir::Name);
-        for (const QString &device : devices) {
-            const QByteArray path = QStringLiteral("/dev/input/%1").arg(device).toLocal8Bit();
-            const int candidate = open(path.constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-            if (candidate < 0)
-                continue;
-            char name[256] = {};
-            if (ioctl(candidate, EVIOCGNAME(sizeof(name)), name) >= 0 &&
-                QByteArray(name).contains("Anbernic RG34XX-SP Controller")) {
-                fd_ = candidate;
-                break;
-            }
-            close(candidate);
-        }
+        // Every firmware names this hardware differently: Knulli calls it
+        // "Anbernic RG34XX-SP Controller", muOS calls it "muOS-Keys". Matching
+        // the name alone found nothing on muOS, so the sign-in window took no
+        // input at all. Prefer the name the reference device was verified with,
+        // then fall back to what a device can actually do -- the buttons and
+        // the hat this class drives.
+        QByteArray name;
+        fd_ = openController(true, &name);
+        if (fd_ < 0)
+            fd_ = openController(false, &name);
         if (fd_ < 0)
             return;
+        map_ = mapFor(name);
+        // Named in the private sign-in log, so the next firmware that arrives
+        // can be told apart from one whose buttons are merely mapped wrongly.
+        fprintf(stderr, "sign-in controller: %s\n", name.constData());
 
         notifier_ = new QSocketNotifier(fd_, QSocketNotifier::Read, this);
         connect(notifier_, &QSocketNotifier::activated, this, &HandheldController::readEvents);
@@ -64,6 +65,67 @@ signals:
     void keyboardNavigationKey(int key);
 
 private:
+    // Button positions counted from BTN_GAMEPAD. Neither firmware numbers them
+    // semantically -- on both, the button at index 6 is printed "Select" -- so
+    // no order can be derived from the other and each one here was measured by
+    // pressing every printed button on the hardware and reading the codes.
+    struct ButtonMap {
+        int a, b, x, y, select, start, pageUp, pageDown;
+    };
+
+    static ButtonMap mapFor(const QByteArray &name)
+    {
+        // Knulli, "Anbernic RG34XX-SP Controller".
+        if (name.contains("Anbernic RG34XX-SP Controller"))
+            return ButtonMap{0, 1, 2, 3, 6, 7, 10, 11};
+        // muOS 2601.0, "muOS-Keys" on the same RG34XX-SP: A, B, Select and
+        // Start land in the same places, X and Y are swapped, and the shoulders
+        // sit at 4 and 5 rather than 10 and 11. Also the default for a firmware
+        // nobody has measured yet, because it is the layout of the gpio-keys
+        // node these handhelds ship rather than a vendor driver's own order.
+        return ButtonMap{0, 1, 3, 2, 6, 7, 4, 5};
+    }
+
+    static bool hasBit(const unsigned char *bits, int bit)
+    {
+        return bits[bit / 8] & (1u << (bit % 8));
+    }
+
+    // byName: the reference device's exact name. Otherwise any node reporting
+    // the gamepad buttons and the hat, which is what this class reads.
+    static int openController(bool byName, QByteArray *found)
+    {
+        const QStringList devices = QDir(QStringLiteral("/dev/input")).entryList(
+            {QStringLiteral("event*")}, QDir::System | QDir::Files, QDir::Name);
+        for (const QString &device : devices) {
+            const QByteArray path = QStringLiteral("/dev/input/%1").arg(device).toLocal8Bit();
+            const int candidate = open(path.constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+            if (candidate < 0)
+                continue;
+            char name[256] = {};
+            if (ioctl(candidate, EVIOCGNAME(sizeof(name)), name) < 0)
+                name[0] = '\0';
+            if (byName) {
+                if (QByteArray(name).contains("Anbernic RG34XX-SP Controller")) {
+                    *found = QByteArray(name);
+                    return candidate;
+                }
+            } else {
+                unsigned char keys[KEY_MAX / 8 + 1] = {};
+                unsigned char axes[ABS_MAX / 8 + 1] = {};
+                if (ioctl(candidate, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 &&
+                    ioctl(candidate, EVIOCGBIT(EV_ABS, sizeof(axes)), axes) >= 0 &&
+                    hasBit(keys, BTN_GAMEPAD) && hasBit(axes, ABS_HAT0X) &&
+                    hasBit(axes, ABS_HAT0Y)) {
+                    *found = QByteArray(name);
+                    return candidate;
+                }
+            }
+            close(candidate);
+        }
+        return -1;
+    }
+
     void sendKey(int key, Qt::KeyboardModifiers modifiers = Qt::NoModifier)
     {
         QObject *target = QGuiApplication::focusObject();
@@ -100,34 +162,38 @@ private:
             if (event.type != EV_KEY || event.value != 1 || event.code < BTN_GAMEPAD)
                 continue;
 
-            // Knulli exposes these as raw SDL buttons b0..b12.  The RG34XXSP
-            // mapping identifies printed A as b0 and printed B as b1.
+            // Both firmwares expose these as raw button positions rather than
+            // named buttons, so the printed labels come from map_.
             const bool keyboardVisible = QGuiApplication::inputMethod()->isVisible();
-            switch (event.code - BTN_GAMEPAD) {
-            case 0:
+            const int button = event.code - BTN_GAMEPAD;
+            if (button == map_.a) {                      // printed A
                 if (keyboardVisible)
                     emit keyboardNavigationKey(Qt::Key_Return);
                 else
                     sendKey(Qt::Key_Space);
-                break;                                   // printed A
-            case 1:
+            } else if (button == map_.b) {               // printed B
                 if (keyboardVisible)
                     QGuiApplication::inputMethod()->hide();
                 else
                     sendKey(Qt::Key_Escape);
-                break;                                   // printed B
-            case 2: sendKey(Qt::Key_Return); break;      // printed X
-            case 3: sendKey(Qt::Key_Backtab, Qt::ShiftModifier); break;
-            case 6: sendKey(Qt::Key_Escape); break;      // Select
-            case 7: sendKey(Qt::Key_Return); break;      // Start
-            case 10: sendKey(Qt::Key_PageUp); break;
-            case 11: sendKey(Qt::Key_PageDown); break;
-            default: break;
+            } else if (button == map_.x) {
+                sendKey(Qt::Key_Return);
+            } else if (button == map_.y) {
+                sendKey(Qt::Key_Backtab, Qt::ShiftModifier);
+            } else if (button == map_.select) {
+                sendKey(Qt::Key_Escape);
+            } else if (button == map_.start) {
+                sendKey(Qt::Key_Return);
+            } else if (button == map_.pageUp) {
+                sendKey(Qt::Key_PageUp);
+            } else if (button == map_.pageDown) {
+                sendKey(Qt::Key_PageDown);
             }
         }
     }
 
     int fd_ = -1;
+    ButtonMap map_{0, 1, 3, 2, 6, 7, 4, 5};
     QSocketNotifier *notifier_ = nullptr;
 };
 

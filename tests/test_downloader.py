@@ -174,6 +174,16 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn('QStringLiteral("/dev/input")', helper_source)
         self.assertIn('Anbernic RG34XX-SP Controller', helper_source)
         self.assertIn('event.code - BTN_GAMEPAD', helper_source)
+        # Firmwares name the same hardware differently -- muOS calls it
+        # muOS-Keys -- so a name match alone left the window taking no input at
+        # all. What a device can do is the fallback, and it is what this class
+        # reads: the gamepad buttons and the hat.
+        self.assertIn("hasBit(keys, BTN_GAMEPAD)", helper_source)
+        self.assertIn("hasBit(axes, ABS_HAT0X)", helper_source)
+        # Both button orders were measured by pressing every printed button.
+        # Neither is semantic, so neither may be derived from the other.
+        self.assertIn("ButtonMap{0, 1, 2, 3, 6, 7, 10, 11}", helper_source)
+        self.assertIn("ButtonMap{0, 1, 3, 2, 6, 7, 4, 5}", helper_source)
         self.assertIn('QGuiApplication::inputMethod()->isVisible()', helper_source)
         self.assertIn('emit keyboardNavigationKey(event.value < 0 ? Qt::Key_Up : Qt::Key_Down)', helper_source)
         self.assertIn('emit keyboardNavigationKey(Qt::Key_Return)', helper_source)

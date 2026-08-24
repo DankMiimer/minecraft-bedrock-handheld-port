@@ -272,6 +272,29 @@ skipping it. This kernel is 4.9 and has **no `CONFIG_USER_NS`** at all
 (`/proc/<pid>/ns/user` does not exist), which is worth knowing before reading
 anything else about Chromium's sandbox on this firmware.
 
+**Controller — measured.** The gamepad is `/dev/input/event1`, named
+**`muOS-Keys`** — a `gpio-keys-polled` node, not the `Anbernic RG34XX-SP
+Controller` that Knulli exposes for the same hardware. Anything that finds this
+device by name therefore finds nothing here, which is what left the Google
+sign-in window taking no input at all: it reads evdev directly rather than going
+through gptokeyb, because Qt's on-screen keyboard needs in-process navigation
+signals that injected key events cannot provide. Match on capability instead —
+`BTN_GAMEPAD` plus `ABS_HAT0X`/`ABS_HAT0Y` in the device's own bitmaps.
+
+Neither firmware numbers its buttons semantically (on both, the button at
+index 6 is printed *Select*), so the order has to be measured by pressing each
+one. Counted from `BTN_GAMEPAD`, on a physical RG34XX-SP:
+
+| Printed | muOS `muOS-Keys` | Knulli `Anbernic RG34XX-SP Controller` |
+|---|---|---|
+| A / B | 0 / 1 | 0 / 1 |
+| X / Y | **3 / 2** | 2 / 3 |
+| L / R | **4 / 5** | 10 / 11 |
+| Select / Start | 6 / 7 | 6 / 7 |
+
+The D-pad is `ABS_HAT0X`/`ABS_HAT0Y` on both, with -1 up/left and +1
+down/right. There are no `ABS_X`/`ABS_Y` axes on this node at all.
+
 **Time — measured.** `date` is busybox 1.36.1 and **does not support `%N`**:
 `date +%s%3N` returns the literal `1787598189%3N`. The launcher's guard rejects
 the non-numeric result and falls back to seconds×1000, so timings are correct

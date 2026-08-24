@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **The muOS sign-in window took no input.** The page rendered and the buttons
+  did nothing. The helper reads the gamepad straight from `/dev/input` — it has
+  to, because Qt's on-screen keyboard needs in-process navigation signals that
+  injected key events cannot provide — but it found that gamepad by *name*, and
+  the name it looked for is Knulli's `Anbernic RG34XX-SP Controller`. muOS calls
+  the identical hardware `muOS-Keys`, so no device was ever opened.
+
+  It now prefers that name and otherwise takes any device that reports what it
+  actually reads: the gamepad buttons and the D-pad hat. The button order had to
+  be measured rather than derived — neither firmware numbers its buttons
+  semantically, and on muOS X and Y are swapped and the shoulders sit at 4 and 5
+  instead of 10 and 11 — so both layouts are now recorded in the helper and in
+  the CFW contract, each one captured by pressing every printed button on the
+  hardware. The chosen device is named in the private sign-in log, so the next
+  firmware can be told apart from one whose buttons are merely mapped wrongly.
+
 - **On muOS, a second frontend appeared on top of the running port.** Any
   launcher message drew it: the message ladder stops muOS's frontend before
   drawing, and `pidof frontend.sh` matches even when that supervisor is the
