@@ -2,6 +2,197 @@
 
 ## Unreleased
 
+- **Minecraft Bedrock now runs on muOS, start to finish, with no PC involved.**
+  On 2026-08-25 an RG34XX-SP running muOS 2601.0 JACARANDA signed in to Google
+  on the device, downloaded the 1.16.221.01 arm64 split set, installed it and
+  played, with working controls and sound. The session ran at failsafe rung 0
+  with performance mode active and exited cleanly after 488 seconds. muOS is now
+  a firmware this port is *measured* on for behaviour, not only for capability,
+  and the README tells players the on-device route exists.
+
+  Every fault between the muOS tile and that session is fixed, and each is
+  listed separately below: the PortMaster stub redirect, the launcher message no
+  console rendered, the downloader gate and its missing Mesa package, the absent
+  `libcom_err.so.2`, the SDL library Crusty never resolved, the sign-in
+  browser's renderer capabilities, the second frontend the message ladder
+  started over the running port, and the controller the sign-in window could not
+  find.
+
+- **The muOS sign-in window took no input.** The page rendered and the buttons
+  did nothing. The helper reads the gamepad straight from `/dev/input` — it has
+  to, because Qt's on-screen keyboard needs in-process navigation signals that
+  injected key events cannot provide — but it found that gamepad by *name*, and
+  the name it looked for is Knulli's `Anbernic RG34XX-SP Controller`. muOS calls
+  the identical hardware `muOS-Keys`, so no device was ever opened.
+
+  It now prefers that name and otherwise takes any device that reports what it
+  actually reads: the gamepad buttons and the D-pad hat. The button order had to
+  be measured rather than derived — neither firmware numbers its buttons
+  semantically, and on muOS X and Y are swapped and the shoulders sit at 4 and 5
+  instead of 10 and 11 — so both layouts are now recorded in the helper and in
+  the CFW contract, each one captured by pressing every printed button on the
+  hardware. The chosen device is named in the private sign-in log, so the next
+  firmware can be told apart from one whose buttons are merely mapped wrongly.
+
+- **On muOS, a second frontend appeared on top of the running port.** Any
+  launcher message drew it: the message ladder stops muOS's frontend before
+  drawing, and `pidof frontend.sh` matches even when that supervisor is the
+  port's own blocked ancestor — muOS starts ports from inside its frontend
+  loop, so `frontend.sh` is alive but waiting and `muxlaunch` is not running at
+  all. The ladder killed the ancestor, drew the message, and then "restored"
+  the frontend by starting a fresh one, which promptly drew over the port and
+  took its input. The player saw it beside the Google sign-in window, with the
+  sign-in page visible but only the muOS menu responding.
+
+  The ladder now walks up `/proc` first and leaves a `frontend.sh` that
+  launched this port alone; nothing of it is on the panel while it waits, and
+  muOS returns to its own menu when the port exits. A frontend that really is
+  drawing — a port started over SSH or from a shell — is still stopped and
+  restored exactly as before.
+
+- **The muOS sign-in window came up black.** With the helper finally alive, Qt
+  rendered frames and swapped them, and the page inside stayed empty:
+  QtWebEngine's renderer could not create its shared-memory file. In `/dev/shm`
+  that is fatal — Chromium calls `LOG(FATAL)` for that directory by name — and
+  in `/tmp` it is survivable but blank, because software compositing is how a
+  rendered page reaches the window. Both directories are `tmpfs` mode 1777 and
+  the renderer runs as uid 0 with no seccomp filter and no chroot; what it does
+  not have is capabilities. A renderer forked from Chromium's zygote reports
+  `CapEff: 0000000000000000`, against `0000003fffffffff` for one the browser
+  starts directly.
+
+  The port now passes `--no-zygote` (and keeps `--disable-dev-shm-usage`, so
+  that a future child which does lose its capabilities degrades instead of
+  aborting). The zygote is only a pre-fork optimisation here — the sandbox is
+  already disabled for this window — so nothing is lost by skipping it. On the
+  muOS reference device the allocation errors go to zero and **Google's sign-in
+  page renders on the panel**, confirmed by eye on the hardware.
+
+- **The muOS sign-in window crashed the moment Qt asked for OpenGL.** Past the
+  missing `libcom_err.so.2`, `mcpe-signin` died at PC 0 inside
+  `glXChooseVisual` — a call through a null pointer, on its first use of SDL.
+  Crusty reads the libraries it wraps from `$CRUSTY_LIBSDL` and `$CRUSTY_LIBEGL`,
+  and with either unset it symlinks the bare soname into `/tmp/<VARIABLE>64.so`,
+  a relative target that can never resolve from `/tmp`. westonwrap fills those
+  in only for its own `crusty*` graphics modes, and the port asks for `llvmpipe`
+  and preloads Crusty itself, so nothing was setting them and every SDL entry
+  point stayed null.
+
+  `run.sh` now resolves both with the Weston package's own `tools/findlib`
+  (falling back to the usual library directories) and hands them to the session.
+  Crusty caches the result as that `/tmp` symlink and never replaces an existing
+  one, so one failed run used to poison every later run until the device
+  rebooted; a stale link is now cleared before each start. Measured on the muOS
+  reference device: the helper survives startup, maps `libSDL2` and `libmali`,
+  and opens `/dev/mali0` and `/dev/fb0` — Crusty's SDL/Mali window is real.
+
+- **The muOS sign-in window died before it drew anything.** With the tile finally
+  reachable, `mcpe-signin` exited immediately:
+  `error while loading shared libraries: libcom_err.so.2`. muOS ships no 64-bit
+  copy of that library — Knulli does, and muOS has only a 32-bit one under
+  `/usr/lib32` — while the sign-in AppImage's `libgssapi_krb5.so.2` needs it.
+  The pinned Weston package already carries the right one, so
+  `$WESTON_DIR/lib_aarch64` is now appended to every library path the downloader
+  builds. It goes **last** deliberately: it fills a genuine gap without being
+  able to shadow a system or AppImage library. Measured on the device, the
+  helper went from two unresolved libraries to none.
+
+  For the record, the `Output 'headless'` line in `downloader.log` is not a
+  fault. `run.sh` asks Weston for `headless noop kiosk llvmpipe` on purpose and
+  Crusty presents the frame to Mali directly, so a headless output is what a
+  healthy run looks like.
+
+- **The Google Play downloader now runs on muOS.** It was gated to Knulli and
+  Batocera, and behind that gate sat a real dependency rather than an arbitrary
+  restriction: the Qt WebEngine sign-in window needs Mesa to provide GLX to
+  XWayland, and `ensure_mesa` only ever looked for `mesa_pkg_0.1.squashfs` in
+  PortMaster's `libs/`. That is the filename Batocera and Knulli install
+  locally. muOS ships an empty `libs/`, and the firmware itself has no Mesa, no
+  Xwayland and no gbm — only Mali EGL/GLESv2 — so the package was genuinely
+  absent rather than merely misnamed.
+
+  Upstream publishes it as `mesa_pkg_0.1.aarch64.squashfs`, which the port had
+  never asked for. Its `lib/aarch64-linux-gnu/libGLX_mesa.so.0` is exactly the
+  file the GLX step probes for, so it is now pinned in
+  `compat/runtime-index.json` by SHA-256 and size and fetched by
+  `ensure_runtime.sh` — the same verified path the Weston package already uses,
+  from the same host, so the downloader's network allowlist is unchanged and
+  `scripts/check_downloader_policy.py` still passes.
+
+  Measured on an RG34XX-SP running muOS 2601.0 JACARANDA: both squashfs images
+  mount on loop devices, `libGLX_mesa.so.0` resolves, the GL bridge links, and
+  `Xwayland` comes from the Weston package. The gate now reads the firmware the
+  launcher already resolved (`MCPE_CFW`) instead of re-grepping `os-release`,
+  and falls back to reading the firmware directly when the downloader is run
+  without the launcher in front of it.
+
+- **muOS is a reference device now, and the port could not start on it.** An
+  RG34XX-SP running muOS 2601.0 (JACARANDA) — the same hardware as the Knulli
+  reference, so the pair is a controlled comparison — showed the port opening to
+  a black screen and dropping back to the menu. Nothing had crashed. Two
+  separate faults stacked into one dead end:
+
+  - **PortMaster resolved to a stub.** On muOS `/roms/ports/PortMaster` holds
+    `control.txt` and nothing else; its first act is to point `controlfolder` at
+    the real 35 MB install under `/mnt/mmc/MUOS/PortMaster`. The launcher threw
+    that redirect away — the line existed to stop *other* CFWs rewriting
+    `controlfolder` at a bare ROMs directory — so every later lookup ran against
+    a directory with no runtimes in it. The LOVE menu was reported missing while
+    `runtimes/love_11.5/love.aarch64` sat there working, which meant the one
+    route a player has to install an APK was gone. The redirect is now followed
+    when, and only when, the target carries PortMaster payload the holder lacks.
+  - **The message saying so was invisible.** `show_msg` writes to `/dev/tty1`.
+    muOS binds no framebuffer console: `/proc/consoles` lists only `ttyS0` and
+    the sole vtconsole is `(S) dummy device`, so `/dev/tty1` is writable and
+    never reaches the panel. "No Minecraft version installed. Copy your own APK
+    into…" was printed correctly and shown to nobody.
+
+  `show_msg` is now a ladder. The console keeps first place wherever it is
+  really rendered, so both existing reference devices are on the path they were
+  verified on. Where it is not rendered the launcher draws a LOVE frame, and
+  failing that paints `/dev/fb0` directly using ImageMagick and the port's own
+  font, which depends on no runtime at all (FS-11). Stopping the muOS frontend
+  to draw is always paired with restarting it: `frontend.sh` is a supervisor
+  started by init that nothing respawns, so an unpaired stop leaves the device
+  black until it is rebooted.
+
+- **A broken interpreter now says it is broken.** The reference unit's ext4 root
+  is corrupt — `EXT4-fs error … Directory block failed checksum` on the inode
+  for `/usr/lib/python3.11/site-packages` — so `readdir` there returns EBADMSG
+  and every `python3` import that scans `sys.path` fails. The port needs Python
+  to install an APK and to resolve a version, so this is fatal, but it used to
+  surface much later as "Legacy version metadata backfill failed". The launcher
+  and the self test now check the interpreter up front and name the cause,
+  pointing at `e2fsck` and the kernel log rather than at the port.
+
+- **Two stderr captures fed `eval`.** `version_env.py` and `release_select.py`
+  were captured with `2>&1` and evaluated. muOS's Python writes a
+  `sitecustomize` warning on every run while still exiting 0, so the noise
+  became shell: measured, the assignments still landed but four "not found"
+  errors were printed and `$@` was clobbered. Both now keep the streams apart
+  and read stderr only when the interpreter actually failed.
+
+- **The muOS platform fixture was wrong where it mattered.** It had been
+  constructed rather than captured, and gave the device `/dev/dri` and the
+  `kmsdrm` backend. The hardware exposes no DRM node at all and correctly
+  resolves to `mali`; it also reports its model as the bare SoC string
+  `sun50iw9` rather than a product name, which is why the `h700` profile has to
+  match on the compatible. Replaced with the captured values, and
+  `docs/CFW-CONTRACTS.md` promotes the muOS contract from assumed to measured —
+  including that muOS *does* ship `/usr/share/pipewire/client.conf`, so the
+  dArkOS cause behind FS-6 does not apply there.
+
+  Two things the capture did **not** establish, recorded in `docs/FAILSAFES.md`
+  so nobody reads more into it: no rung of the failsafe ladder ran in a real
+  session, because that unit cannot launch the game at all; and busybox `date`
+  has no `%N`, so `date +%s%3N` returns a literal `1787598189%3N` and every
+  millisecond timing on muOS is quantised to one second.
+
+- **`mcpe_pipewire_client_usable` now honours `MCPE_PROBE_ROOT`.** Its fallback
+  paths answered for the build host, so on any machine with PipeWire installed —
+  muOS among them — the negative case could never be observed and
+  `tests/test_audio.sh` failed. Behaviour on a device is unchanged.
+
 - **The frame cap is now keyed to the game version, and 40 is gone.** Bedrock
   1.16.221.01 and older default to 50 fps, everything newer to 30. The cap the
   port shipped was the worst value available on the RG34XX-SP's 59.156 Hz
@@ -87,12 +278,23 @@
 - The startup watchdog no longer costs a frame's worth of work every second.
   It never disarms unless frame metrics are on -- which they are not by default
   -- so its tick ran for the whole session, and the tick spawned four processes
-  (`cat`, `awk`, a command substitution, `wc`) to read two numbers. Measured on
-  the reference RG34XX-SP over 500 ticks: 21.1 ms of wall time and 2.4 ms of
-  CPU each, against 25 ms per rendered frame. Reading `/proc/pid/stat` in the
-  shell and detecting log growth with an mtime sentinel does the same job in
-  0.45 ms with no process at all. Behaviour is unchanged, and the same tests
-  pass against both versions.
+  (`cat`, `awk`, and `wc` twice) to read two numbers. Reading `/proc/pid/stat`
+  in the shell and detecting log growth with an mtime sentinel does the same
+  job with no process at all.
+
+  Re-measured on the reference RG34XX-SP, 500 ticks of each against a 400 KB
+  log, frontend resident, governor on schedutil:
+
+  | | wall | cpu | `execve` | `clone` |
+  | --- | --- | --- | --- | --- |
+  | old tick | 28.8 ms | 2.46 ms | 5 (bash, cat, awk, wc, wc) | 6 |
+  | new tick | 0.61 ms | 0.60 ms | 1 (bash) | 0 |
+
+  Roughly a 47x cut in wall time, against 25 ms per rendered frame. An earlier
+  pass recorded 21.1 ms against 0.45 ms without stating its log size; the ratio
+  reproduces exactly but the absolute numbers do not, and `wc -c` scales with
+  the log, which is the likely difference. Behaviour is unchanged, and the same
+  tests pass against both versions.
 - The shutdown watchdog greps the client log once every two seconds rather than
   every second. Bounding the read with `tail -c` was tried and measured no
   better (5.4 ms against 5.3 ms on a 420 KB log) because the second process

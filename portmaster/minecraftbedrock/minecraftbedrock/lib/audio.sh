@@ -55,11 +55,16 @@ mcpe_has_alsa_pcm_plugin() {
 # dArkOS RE has exactly this shape and logs "can't load config client.conf"
 # before every audio attempt, so PipeWire must not be offered to OpenAL there.
 mcpe_pipewire_client_usable() {
-  local p
+  # MCPE_PROBE_ROOT is honoured so the fixtures can exercise this on a build
+  # host that has its own PipeWire installed, the same way abi.sh and
+  # platform.sh do. Without it the system paths below answer for the host and
+  # the probe can never be observed returning false.
+  local probe="${MCPE_PROBE_ROOT:-}" p
   for p in "${PIPEWIRE_CONFIG_DIR:-/nonexistent}/client.conf" \
            "${XDG_CONFIG_HOME:-$HOME/.config}/pipewire/client.conf" \
-           /etc/pipewire/client.conf /usr/share/pipewire/client.conf \
-           /usr/local/share/pipewire/client.conf; do
+           "$probe/etc/pipewire/client.conf" \
+           "$probe/usr/share/pipewire/client.conf" \
+           "$probe/usr/local/share/pipewire/client.conf"; do
     [ -f "$p" ] && return 0
   done
   return 1

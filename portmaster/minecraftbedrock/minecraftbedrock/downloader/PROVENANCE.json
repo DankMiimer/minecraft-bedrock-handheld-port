@@ -38,8 +38,8 @@
         },
         {
             "path": "portmaster/minecraftbedrock/minecraftbedrock/downloader/bin/mcpe-signin",
-            "sha256": "c5e6948d93e37e978aaabacee4bf18482795ed462f21dcd659b77f1f3bfc05db",
-            "size": 68888,
+            "sha256": "128c975f1b2361e378f8a7e1005503d2fbb37405b94e5962de2efc0c6599d890",
+            "size": 68896,
             "arch": "aarch64",
             "role": "Hosts Google's own embedded sign-in page and adds handheld controller navigation.",
             "upstream": "this repository",

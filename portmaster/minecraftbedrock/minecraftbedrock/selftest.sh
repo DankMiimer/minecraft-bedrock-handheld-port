@@ -2,9 +2,11 @@
 # Answer "will this port work on my device?" without installing an APK or
 # starting Minecraft.
 #
-# muOS and dArkOS have no reference device in this project, so their contracts
-# in docs/CFW-CONTRACTS.md are assumptions. This exists so a reporter can turn
-# "it crashes" into a structured answer before anyone guesses.
+# dArkOS has no reference device in this project, so its contract in
+# docs/CFW-CONTRACTS.md is an assumption. This exists so a reporter can turn
+# "it crashes" into a structured answer before anyone guesses. It is also what
+# produced the muOS contract: everything that firmware's row claims, apart from
+# the behaviour of a running game, came from one run of this script.
 #
 # Read-only apart from its own report file. Output is short, redacted with the
 # same filter as the support bundle, and meant to be pasted into an issue.
@@ -52,9 +54,21 @@ case "$MCPE_CFW" in
          "reported as '$MCPE_CFW'; per-firmware behaviour falls back to generic" ;;
 esac
 case "$MCPE_CFW" in
-  muos|arkos) warn "firmware has no reference device" \
+  arkos) warn "firmware has no reference device" \
       "its contract in docs/CFW-CONTRACTS.md is assumed, not measured" ;;
 esac
+
+# ------------------------------------------------------------------- python
+head_ "python"
+if PY_FAULT="$(mcpe_python_health)"; then
+  ok "python3 usable" "$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null)"
+else
+  bad "python3 cannot import the standard library"       "$(printf '%s' "$PY_FAULT" | tr '
+' ' ' | cut -c1-120)"
+  mcpe_python_health_hint "$PY_FAULT" | while IFS= read -r hint_line; do
+    say "       $hint_line"
+  done
+fi
 
 # ------------------------------------------------------------- capabilities
 head_ "device"
@@ -126,7 +140,8 @@ for cf in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
           /userdata/system/.local/share/PortMaster /storage/roms/ports/PortMaster \
           /roms/ports/PortMaster /roms/tools/PortMaster \
           /mnt/mmc/MUOS/PortMaster /mnt/sdcard/MUOS/PortMaster; do
-  [ -f "$cf/control.txt" ] && { pm="$cf"; break; }
+  # Follow a stub control.txt to the tree that actually holds the runtimes.
+  [ -f "$cf/control.txt" ] && { pm="$(mcpe_resolve_pm_root "$cf")"; break; }
 done
 [ -n "$pm" ] && ok "PortMaster found" "$pm" || bad "PortMaster control.txt not found" "the port cannot resolve device settings"
 

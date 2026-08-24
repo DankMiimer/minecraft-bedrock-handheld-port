@@ -28,7 +28,21 @@ export QTWEBENGINE_RESOURCES_PATH="$APPROOT/usr/resources"
 export QTWEBENGINE_LOCALES_PATH="$APPROOT/usr/translations/qtwebengine_locales"
 export XKB_CONFIG_ROOT="${MCPE_DOWNLOADER_XKB_ROOT:-/tmp/weston/share/X11/xkb}"
 export QTWEBENGINE_DISABLE_SANDBOX=1
-export QTWEBENGINE_CHROMIUM_FLAGS="${MCPE_DOWNLOADER_CHROMIUM_FLAGS:---no-sandbox --disable-gpu-sandbox}"
+# --no-zygote is what makes the browser draw on muOS. A renderer forked from
+# Chromium's zygote runs with an empty effective capability set, and there it
+# could not create its shared-memory file at all -- EACCES from both the file
+# and access(W_OK|X_OK) on its directory, even as uid 0 on a 1777 tmpfs. With
+# software compositing that memory is how a rendered page reaches the window,
+# so the sign-in window came up black. Started straight from the browser
+# process the renderer keeps its parent's credentials and allocates normally.
+# The zygote only pre-forks renderers faster; it is not a security boundary
+# here, because the sandbox is already off above.
+#
+# --disable-dev-shm-usage stays with it. The same allocation in /dev/shm is
+# not survivable -- Chromium calls LOG(FATAL) for that directory specifically
+# -- so any future child that does lose its capabilities degrades instead of
+# killing the sign-in window.
+export QTWEBENGINE_CHROMIUM_FLAGS="${MCPE_DOWNLOADER_CHROMIUM_FLAGS:---no-sandbox --disable-gpu-sandbox --disable-dev-shm-usage --no-zygote}"
 export QT_QUICK_BACKEND=opengl
 export QT_XCB_GL_INTEGRATION=xcb_glx
 export QSG_RHI_BACKEND=opengl

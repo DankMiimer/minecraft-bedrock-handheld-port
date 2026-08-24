@@ -16,6 +16,13 @@ INTERACTIVE_ACK="${MCPE_DOWNLOADER_INTERACTIVE_ACK:-}"
 APPROOT=""
 WESTON_DIR=/tmp/weston
 MESA_DIR=/tmp/mesa
+# Firmwares differ in what they leave in /usr/lib. muOS ships no 64-bit
+# libcom_err.so.2 -- Knulli does -- and the AppImage's libgssapi_krb5.so.2
+# pulls it in, so the Qt sign-in helper exited with "cannot open shared object
+# file" before it drew anything. The pinned Weston package already carries that
+# library. Append this LAST everywhere so it can only ever fill a genuine gap
+# and can never shadow a system or AppImage library.
+WESTON_FALLBACK_LIBS="$WESTON_DIR/lib_aarch64"
 SYSTEM_XKB_LINK=/usr/share/X11/xkb
 SYSTEM_XKB_LINK_CREATED=0
 CREDENTIAL_MANIFEST="$SCRIPT_DIR/credential-artifacts.txt"
@@ -113,11 +120,18 @@ trap 'exit 143' HUP INT TERM
 is_supported() {
   case "$(uname -m 2>/dev/null)" in aarch64|arm64) ;; *) return 1 ;; esac
   [ "${MCPE_HOST_PROFILE:-h700}" = h700 ] || return 1
-  if [ -r /etc/os-release ]; then
-    grep -Eqi 'knulli|batocera' /etc/os-release || return 1
-  else
-    return 1
-  fi
+  # The launcher resolves the firmware once and exports it, so prefer that over
+  # re-reading os-release. muOS joined the list on 2026-08-24: it is the same
+  # H700 hardware as the Knulli reference, and it reaches the same Mali display
+  # stack -- the only thing it lacked was PortMaster's Mesa package, which
+  # ensure_mesa now fetches for itself.
+  case "${MCPE_CFW:-}" in
+    knulli|batocera|muos) return 0 ;;
+    ?*) return 1 ;;
+  esac
+  # No launcher in front of us: fall back to reading the firmware directly.
+  [ -r /etc/os-release ] || return 1
+  grep -Eqi 'knulli|batocera|muos|mustardos' /etc/os-release
 }
 
 safe_remove_tree() {
@@ -265,23 +279,33 @@ ensure_system_xkb_link() {
 
 ensure_mesa() {
   local squash="${MESA_SQUASH:-}" candidate
-  progress 56 active "Preparing browser graphics" "Checking Knulli's Mesa and XWayland support."
+  progress 56 active "Preparing browser graphics" "Checking Mesa and XWayland support."
   [ -f "$MESA_DIR/lib/aarch64-linux-gnu/libGLX_mesa.so.0" ] && return 0
   mkdir -p "$MESA_DIR" || return 1
   if grep -qs " $MESA_DIR " /proc/mounts 2>/dev/null; then
-    log "The PortMaster Mesa runtime is mounted but incomplete. Reboot and try again."
+    log "The Mesa runtime is mounted but incomplete. Reboot and try again."
     return 1
   fi
   if [ -z "$squash" ]; then
     for candidate in \
       /userdata/system/.local/share/PortMaster/libs/mesa_pkg_0.1.squashfs \
-      "${controlfolder:-/nonexistent}/libs/mesa_pkg_0.1.squashfs"
+      "${controlfolder:-/nonexistent}/libs/mesa_pkg_0.1.squashfs" \
+      "${controlfolder:-/nonexistent}/libs/mesa_pkg_0.1.aarch64.squashfs"
     do
       if [ -f "$candidate" ]; then squash="$candidate"; break; fi
     done
   fi
+  # Knulli and Batocera ship this package through PortMaster. muOS does not --
+  # its PortMaster libs directory is empty -- so fetch the same pinned runtime
+  # the Weston step already downloads, verified against compat/runtime-index.json.
+  if [ -z "$squash" ]; then
+    squash="$(bash "$GAMEDIR/ensure_runtime.sh" mesa_pkg_0.1.aarch64)" || {
+      log "The Mesa support package is missing and could not be downloaded."
+      return 1
+    }
+  fi
   [ -n "$squash" ] && [ -f "$squash" ] || {
-    log "Knulli's PortMaster Mesa support package is missing."
+    log "The Mesa support package is missing."
     return 1
   }
   ${ESUDO:-} mount "$squash" "$MESA_DIR" >>"$LOG" 2>&1 || return 1
@@ -349,8 +373,48 @@ ensure_qt_launcher_view() {
   mv "$config.new" "$config" || return 1
 }
 
+# Crusty reads the libraries it needs from $CRUSTY_LIBSDL and $CRUSTY_LIBEGL.
+# With either unset it falls back to symlinking a bare soname into /tmp, a
+# relative target that can never resolve there, so every SDL entry point in it
+# stays NULL and the first call -- SDL_SetHint -- crashes the sign-in helper
+# before it draws anything. westonwrap fills those variables in only for its
+# own crusty graphics modes; this port asks for llvmpipe and preloads crusty
+# itself, so resolving them is this script's job.
+find_shared_library() { # soname...
+  local candidate resolved directory
+  for candidate in "$@"; do
+    if [ -x "$WESTON_DIR/tools/findlib" ]; then
+      resolved="$("$WESTON_DIR/tools/findlib" "$candidate" 2>/dev/null | tail -n 1)"
+      if [ -n "$resolved" ] && [ -f "$resolved" ]; then
+        printf '%s\n' "$resolved"
+        return 0
+      fi
+    fi
+    for directory in /usr/lib64 /usr/lib/aarch64-linux-gnu /usr/lib /lib64 \
+      "$WESTON_FALLBACK_LIBS"; do
+      if [ -f "$directory/$candidate" ]; then
+        printf '%s\n' "$directory/$candidate"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+# Crusty caches whatever it resolved as /tmp/<VARIABLE>64.so and never replaces
+# an existing one, so a single run that resolved nothing leaves a dangling
+# symlink behind that breaks every later run until the device is rebooted.
+# Replace any link that does not already point at the library resolved here,
+# and leave a real file alone -- that is somebody else's deliberate override.
+refresh_crusty_link() { # variable path
+  local link="/tmp/${1}64.so"
+  [ -L "$link" ] || return 0
+  [ "$(readlink -f "$link" 2>/dev/null)" = "$(readlink -f "$2" 2>/dev/null)" ] && return 0
+  rm -f "$link"
+}
+
 run_google_gui() {
-  local width height gui_rc gui_preload
+  local width height gui_rc gui_preload crusty_sdl crusty_egl
   ensure_app_root || return 1
   ensure_keyboard_plugin || return 1
   ensure_weston || return 1
@@ -362,6 +426,21 @@ run_google_gui() {
   ensure_gui_gl_bridge || return 1
   ensure_qt_plugin_view || return 1
   ensure_qt_launcher_view || return 1
+  crusty_sdl="${CRUSTY_LIBSDL:-}"
+  [ -n "$crusty_sdl" ] ||
+    crusty_sdl="$(find_shared_library libSDL2-2.0.so.0 libSDL2-2.0.so \
+      libSDL2.so.0 libSDL2.so)" || {
+      log "This device has no 64-bit SDL2 library, which Google sign-in needs."
+      return 1
+    }
+  crusty_egl="${CRUSTY_LIBEGL:-}"
+  [ -n "$crusty_egl" ] ||
+    crusty_egl="$(find_shared_library libEGL.so.1 libEGL.so)" || {
+      log "This device has no 64-bit EGL library, which Google sign-in needs."
+      return 1
+    }
+  refresh_crusty_link CRUSTY_LIBSDL "$crusty_sdl"
+  refresh_crusty_link CRUSTY_LIBEGL "$crusty_egl"
   read -r width height < <(fbset 2>/dev/null | awk '/geometry/ {print $2, $3; exit}')
   width="${width:-720}" height="${height:-480}"
   export MCPE_DOWNLOADER_APPROOT="$APPROOT" MCPE_DOWNLOADER_STATE="$STATE"
@@ -377,13 +456,14 @@ run_google_gui() {
   wait_for_interactive_handoff || return 1
   WP_32BIT=0 DISPLAY_WIDTH="$width" DISPLAY_HEIGHT="$height" \
   SDL_VIDEODRIVER="${MCPE_DOWNLOADER_SDL_DRIVER:-mali}" \
+  CRUSTY_LIBSDL="$crusty_sdl" CRUSTY_LIBEGL="$crusty_egl" \
   CRUSTY_GL4ES=1 \
   LIBGL_ES=2 LIBGL_GL=21 LIBGL_NOTEST=1 LIBGL_NOCLEAN=1 \
   WESTON_HEADLESS_WIDTH="$width" WESTON_HEADLESS_HEIGHT="$height" \
   WRAPPED_PRELOAD="$gui_preload" \
-  WRAPPED_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib" \
+  WRAPPED_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib:$WESTON_FALLBACK_LIBS" \
     "$WESTON_DIR/westonwrap.sh" headless noop kiosk llvmpipe \
-      env LD_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib:/lib64" \
+      env LD_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib:/lib64:$WESTON_FALLBACK_LIBS" \
       MCPE_DOWNLOADER_APPROOT="$APPROOT" MCPE_DOWNLOADER_STATE="$STATE" \
       MCPE_DOWNLOADER_UI="$STATE/runtime/qt-launcher/bin/mcpelauncher-ui-qt" \
       MCPE_DOWNLOADER_SCRIPT_DIR="$SCRIPT_DIR" \
@@ -431,7 +511,7 @@ ensure_session() {
   progress 77 active "Finishing Google Play sign-in" "Securely exchanging Google's approval for a saved Play session."
   (
     cd "$STATE" || exit 1
-    timeout 180 env LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib" \
+    timeout 180 env LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib:$WESTON_FALLBACK_LIBS" \
       "$BIN_DIR/gplayver" --interactive --device "$STATE/device-arm64.conf" \
       --accept-tos --app com.mojang.minecraftpe <"$auth_input"
   ) >>"$LOG" 2>&1
@@ -487,7 +567,7 @@ download_version() {
   valid_download_request "$code" "$abi" || {
     log "Unsupported prototype request: version code $code / $abi"; return 2;
   }
-  is_supported || { log "On-device download is currently limited to RG34XXSP/H700 on Knulli."; return 2; }
+  is_supported || { log "On-device download is currently limited to H700 devices on Knulli, Batocera or muOS."; return 2; }
   [ -x "$BIN_DIR/gplaydl" ] || { log "The ARM64 downloader helper is missing."; return 1; }
   progress 2 active "Starting Google Play downloader" "Checking the optional components and saved session."
   rm -f "$RESULT_FILE" "$RESULT_FILE.new"
@@ -502,7 +582,7 @@ download_version() {
   progress 82 active "Downloading Minecraft APKs" "Requested $abi build $code from Google Play."
   (
     cd "$STATE" || exit 1
-    LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib" \
+    LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib:$WESTON_FALLBACK_LIBS" \
       "$BIN_DIR/gplaydl" --login-no-verify --device "$profile" \
       --accept-tos --app com.mojang.minecraftpe --app-version "$code" --output "$output"
   ) 2>&1 | tr '\r' '\n' | (

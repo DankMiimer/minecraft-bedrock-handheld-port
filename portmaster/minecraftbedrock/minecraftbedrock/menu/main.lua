@@ -278,7 +278,7 @@ local HELP = {
   {t = "Install the game",
    d = "Use optional Google Play download, or copy your own APK into apk/."},
   {t = "Google Play downloader",
-   d = "RG34XXSP/Knulli prototype. Optional; session and APKs stay on device."},
+   d = "H700 on Knulli/Batocera/muOS. Optional; session and APKs stay on device."},
   {t = "Which APK",
    d = "arm64-v8a for most devices; armeabi-v7a for R36S-class."},
   {t = "Game will not start",
@@ -548,7 +548,7 @@ local function mainItems()
       and ((DOWNLOADER_SESSION and "saved session | " or "Google sign-in required | ") ..
            (DOWNLOADER_RUNTIME and "browser ready | " or "one-time browser setup | ") ..
            "tested + experimental ARM builds")
-      or "RG34XXSP/H700 + Knulli prototype only",
+      or "H700 on Knulli/Batocera/muOS only",
     disabled = not DOWNLOADER_SUPPORTED,
   }
   items[#items + 1] = {

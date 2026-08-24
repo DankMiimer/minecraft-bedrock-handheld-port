@@ -79,11 +79,18 @@ mcpe_resolve_audio >/dev/null
 # --- The client-config probe looks where PipeWire actually looks ---------------
 unset -f mcpe_pipewire_client_usable
 source "$PAYLOAD/lib/audio.sh"
-PIPEWIRE_CONFIG_DIR="$TMP/pw" mcpe_pipewire_client_usable &&
+# Scope the system paths to an empty probe root, or this asserts about whatever
+# PipeWire the build host happens to have. muOS -- one of the hosts this suite
+# is run on -- ships /usr/share/pipewire/client.conf, which made the negative
+# case unobservable there.
+mkdir -p "$TMP/emptyroot"
+MCPE_PROBE_ROOT="$TMP/emptyroot" HOME="$TMP/emptyroot" PIPEWIRE_CONFIG_DIR="$TMP/pw" \
+  mcpe_pipewire_client_usable &&
   fail "client config reported present when the directory is empty"
 mkdir -p "$TMP/pw"
 : >"$TMP/pw/client.conf"
-PIPEWIRE_CONFIG_DIR="$TMP/pw" mcpe_pipewire_client_usable ||
+MCPE_PROBE_ROOT="$TMP/emptyroot" HOME="$TMP/emptyroot" PIPEWIRE_CONFIG_DIR="$TMP/pw" \
+  mcpe_pipewire_client_usable ||
   fail "client config not found where PipeWire would look"
 
 echo "audio backend tests passed"

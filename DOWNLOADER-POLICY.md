@@ -173,7 +173,8 @@ credentials on anyone else's server. Re-enabling the sandbox is the open item.
 
 ## What this policy does not claim
 
-The downloader is a prototype, gated to 64-bit H700 devices on Knulli, and
+The downloader is a prototype, gated to 64-bit H700 devices on Knulli,
+Batocera or muOS, and
 entirely optional — manual APK installation remains fully supported and is the
 default path. Nothing here is legal advice. The wider distribution rules for
 this repository — no game files, no mirroring, no APK sharing — are in
