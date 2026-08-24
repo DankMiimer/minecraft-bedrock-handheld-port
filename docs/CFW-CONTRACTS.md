@@ -225,6 +225,22 @@ or AppImage library. Weston itself is asked for the `headless noop llvmpipe`
 combination on purpose — Crusty presents the frame to Mali directly — so a
 headless output in the log is correct rather than a fault.
 
+Crusty reads the libraries it wraps from `$CRUSTY_LIBSDL` and `$CRUSTY_LIBEGL`,
+and with either unset it symlinks the bare soname into `/tmp/<VARIABLE>64.so` —
+a relative target that can never resolve from `/tmp`. westonwrap fills those in
+only for its own `crusty*` graphics modes, and this port asks for `llvmpipe`
+and preloads Crusty itself, so nothing was setting them. Every SDL pointer in
+Crusty therefore stayed null and the sign-in helper died at PC 0 on its first
+call, `SDL_SetHint`, inside `glXChooseVisual` during `QGuiApplication` startup.
+The port now resolves both with the Weston package's own `tools/findlib`:
+`/usr/lib/libSDL2-2.0.so.0` (2.28.5, and it does carry the `mali` video driver)
+and `/usr/lib64/libEGL.so.1`. Crusty caches the result as that `/tmp` symlink
+and **never replaces an existing one**, so a single failed run poisons every
+later run until the device reboots; a stale link is cleared before each start.
+Measured on the reference device: with the variables set, `mcpe-signin` maps
+`libSDL2` and `libmali`, opens `/dev/mali0`, `/dev/ion` and `/dev/fb0`, and
+clears the panel — Crusty's SDL/Mali window is real.
+
 **Time — measured.** `date` is busybox 1.36.1 and **does not support `%N`**:
 `date +%s%3N` returns the literal `1787598189%3N`. The launcher's guard rejects
 the non-numeric result and falls back to seconds×1000, so timings are correct

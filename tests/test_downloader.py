@@ -247,6 +247,19 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn("Install it anyway", menu)
         self.assertIn("MCPE_ALLOW_UNTESTED", outer)
 
+        # Crusty resolves libSDL2/libEGL from these variables and otherwise
+        # symlinks a bare soname into /tmp, which can never resolve there. The
+        # sign-in helper then dies on its first SDL call, so the port has to
+        # resolve both itself and hand them to westonwrap.
+        self.assertIn("find_shared_library libSDL2-2.0.so.0", run)
+        self.assertIn("find_shared_library libEGL.so.1", run)
+        self.assertIn('CRUSTY_LIBSDL="$crusty_sdl" CRUSTY_LIBEGL="$crusty_egl"', run)
+        # A run that resolved nothing leaves the cached symlink behind, and
+        # crusty never replaces one, so every later run inherits the failure.
+        self.assertIn("refresh_crusty_link CRUSTY_LIBSDL", run)
+        self.assertIn("refresh_crusty_link CRUSTY_LIBEGL", run)
+        self.assertIn('link="/tmp/${1}64.so"', run)
+
         progress_ui = (MODULE / "progress-ui/main.lua").read_text(encoding="utf-8")
         self.assertIn("MCPE_PROGRESS_EXIT_INTERACTIVE", progress_ui)
         self.assertIn('mode == "interactive"', progress_ui)

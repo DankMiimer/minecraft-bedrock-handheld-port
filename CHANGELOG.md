@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **The muOS sign-in window crashed the moment Qt asked for OpenGL.** Past the
+  missing `libcom_err.so.2`, `mcpe-signin` died at PC 0 inside
+  `glXChooseVisual` — a call through a null pointer, on its first use of SDL.
+  Crusty reads the libraries it wraps from `$CRUSTY_LIBSDL` and `$CRUSTY_LIBEGL`,
+  and with either unset it symlinks the bare soname into `/tmp/<VARIABLE>64.so`,
+  a relative target that can never resolve from `/tmp`. westonwrap fills those
+  in only for its own `crusty*` graphics modes, and the port asks for `llvmpipe`
+  and preloads Crusty itself, so nothing was setting them and every SDL entry
+  point stayed null.
+
+  `run.sh` now resolves both with the Weston package's own `tools/findlib`
+  (falling back to the usual library directories) and hands them to the session.
+  Crusty caches the result as that `/tmp` symlink and never replaces an existing
+  one, so one failed run used to poison every later run until the device
+  rebooted; a stale link is now cleared before each start. Measured on the muOS
+  reference device: the helper survives startup, maps `libSDL2` and `libmali`,
+  and opens `/dev/mali0` and `/dev/fb0` — Crusty's SDL/Mali window is real.
+
 - **The muOS sign-in window died before it drew anything.** With the tile finally
   reachable, `mcpe-signin` exited immediately:
   `error while loading shared libraries: libcom_err.so.2`. muOS ships no 64-bit

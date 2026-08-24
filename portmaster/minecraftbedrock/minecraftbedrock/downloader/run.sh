@@ -373,8 +373,48 @@ ensure_qt_launcher_view() {
   mv "$config.new" "$config" || return 1
 }
 
+# Crusty reads the libraries it needs from $CRUSTY_LIBSDL and $CRUSTY_LIBEGL.
+# With either unset it falls back to symlinking a bare soname into /tmp, a
+# relative target that can never resolve there, so every SDL entry point in it
+# stays NULL and the first call -- SDL_SetHint -- crashes the sign-in helper
+# before it draws anything. westonwrap fills those variables in only for its
+# own crusty graphics modes; this port asks for llvmpipe and preloads crusty
+# itself, so resolving them is this script's job.
+find_shared_library() { # soname...
+  local candidate resolved directory
+  for candidate in "$@"; do
+    if [ -x "$WESTON_DIR/tools/findlib" ]; then
+      resolved="$("$WESTON_DIR/tools/findlib" "$candidate" 2>/dev/null | tail -n 1)"
+      if [ -n "$resolved" ] && [ -f "$resolved" ]; then
+        printf '%s\n' "$resolved"
+        return 0
+      fi
+    fi
+    for directory in /usr/lib64 /usr/lib/aarch64-linux-gnu /usr/lib /lib64 \
+      "$WESTON_FALLBACK_LIBS"; do
+      if [ -f "$directory/$candidate" ]; then
+        printf '%s\n' "$directory/$candidate"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+# Crusty caches whatever it resolved as /tmp/<VARIABLE>64.so and never replaces
+# an existing one, so a single run that resolved nothing leaves a dangling
+# symlink behind that breaks every later run until the device is rebooted.
+# Replace any link that does not already point at the library resolved here,
+# and leave a real file alone -- that is somebody else's deliberate override.
+refresh_crusty_link() { # variable path
+  local link="/tmp/${1}64.so"
+  [ -L "$link" ] || return 0
+  [ "$(readlink -f "$link" 2>/dev/null)" = "$(readlink -f "$2" 2>/dev/null)" ] && return 0
+  rm -f "$link"
+}
+
 run_google_gui() {
-  local width height gui_rc gui_preload
+  local width height gui_rc gui_preload crusty_sdl crusty_egl
   ensure_app_root || return 1
   ensure_keyboard_plugin || return 1
   ensure_weston || return 1
@@ -386,6 +426,21 @@ run_google_gui() {
   ensure_gui_gl_bridge || return 1
   ensure_qt_plugin_view || return 1
   ensure_qt_launcher_view || return 1
+  crusty_sdl="${CRUSTY_LIBSDL:-}"
+  [ -n "$crusty_sdl" ] ||
+    crusty_sdl="$(find_shared_library libSDL2-2.0.so.0 libSDL2-2.0.so \
+      libSDL2.so.0 libSDL2.so)" || {
+      log "This device has no 64-bit SDL2 library, which Google sign-in needs."
+      return 1
+    }
+  crusty_egl="${CRUSTY_LIBEGL:-}"
+  [ -n "$crusty_egl" ] ||
+    crusty_egl="$(find_shared_library libEGL.so.1 libEGL.so)" || {
+      log "This device has no 64-bit EGL library, which Google sign-in needs."
+      return 1
+    }
+  refresh_crusty_link CRUSTY_LIBSDL "$crusty_sdl"
+  refresh_crusty_link CRUSTY_LIBEGL "$crusty_egl"
   read -r width height < <(fbset 2>/dev/null | awk '/geometry/ {print $2, $3; exit}')
   width="${width:-720}" height="${height:-480}"
   export MCPE_DOWNLOADER_APPROOT="$APPROOT" MCPE_DOWNLOADER_STATE="$STATE"
@@ -401,6 +456,7 @@ run_google_gui() {
   wait_for_interactive_handoff || return 1
   WP_32BIT=0 DISPLAY_WIDTH="$width" DISPLAY_HEIGHT="$height" \
   SDL_VIDEODRIVER="${MCPE_DOWNLOADER_SDL_DRIVER:-mali}" \
+  CRUSTY_LIBSDL="$crusty_sdl" CRUSTY_LIBEGL="$crusty_egl" \
   CRUSTY_GL4ES=1 \
   LIBGL_ES=2 LIBGL_GL=21 LIBGL_NOTEST=1 LIBGL_NOCLEAN=1 \
   WESTON_HEADLESS_WIDTH="$width" WESTON_HEADLESS_HEIGHT="$height" \
