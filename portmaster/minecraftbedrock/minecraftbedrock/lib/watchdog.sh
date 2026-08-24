@@ -37,12 +37,29 @@
 
 mcpe_watchdog_pid=""
 
-mcpe_proc_cpu_ticks() { # pid
-  local stat
-  stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 1
-  # utime and stime are fields 14 and 15, counted after the (comm) field,
-  # which may itself contain spaces.
-  printf '%s' "${stat#*) }" | awk '{print $12 + $13}'
+# Sets mcpe_cpu_ticks rather than printing it, and parses in the shell rather
+# than in awk, because this runs once a second for the *whole session* -- the
+# watchdog only disarms early when frame metrics are on, which they are not by
+# default -- and the obvious spelling of it is not cheap.
+#
+# Measured on the reference RG34XX-SP, 500 steady-state ticks of each: the old
+# tick (`$(cat /proc/pid/stat | awk ...)` plus `wc -c` on the log) costs 21.1 ms
+# of wall time and 2.4 ms of CPU and spawns four processes; the same tick with
+# no subprocess at all costs 0.45 ms and 0.44 ms and spawns none. On a device
+# rendering a frame every 25 ms, four process creations per second is churn the
+# render thread can be made to wait behind.
+mcpe_proc_cpu_ticks() { # pid -> sets mcpe_cpu_ticks
+  local stat rest
+  mcpe_cpu_ticks=0
+  read -r stat <"/proc/$1/stat" 2>/dev/null || return 1
+  # utime and stime are fields 14 and 15, counted after the (comm) field, which
+  # may itself contain spaces -- hence trimming through the closing paren
+  # first, after which they are fields 12 and 13.
+  rest="${stat#*) }"
+  # shellcheck disable=SC2086 # deliberate word splitting into $1..$n
+  set -- $rest
+  [ "$#" -ge 13 ] || return 1
+  mcpe_cpu_ticks=$(( ${12} + ${13} ))
 }
 
 mcpe_watchdog_hang_report() { # pid log outfile reason
@@ -88,9 +105,19 @@ mcpe_watchdog_body() { # supervisor_pid log
   local stall_limit="${MCPE_STALL_SECONDS:-90}"
   local deadline="${MCPE_STARTUP_TIMEOUT:-0}"
   local metrics="${MCPE_FRAME_METRICS:-}"
-  local elapsed=0 stalled=0 hung=0 windowed=0
-  local last_log=-1 last_cpu=-1 last_metrics=-1
-  local now_log now_cpu now_metrics victim
+  local elapsed=0 stalled=0 hung=0 windowed=0 progressed=0
+  local last_cpu=-1 victim now_log
+  # Log and frame-metrics growth are detected by comparing mtimes against a
+  # sentinel: `[ a -nt b ]` is a shell primitive and `: >b` is a redirection,
+  # so neither costs a process, where `wc -c` costs one per file per second.
+  # One-second mtime granularity is the same granularity as the tick.
+  # Where the sentinel cannot be created -- a read-only or full logs directory
+  # -- fall back to measuring the log by size. That costs a process per tick,
+  # but dropping log growth as a progress signal would let this kill a healthy
+  # start that is only slow, which is the worse bug of the two.
+  local seen="$GAMEDIR/logs/.watchdog-seen" last_log=-1
+  mkdir -p "$GAMEDIR/logs" 2>/dev/null || true
+  : >"$seen" 2>/dev/null || seen=""
 
   case "$stall_limit" in ''|*[!0-9]*) stall_limit=90 ;; esac
   case "$deadline" in ''|*[!0-9]*) deadline=0 ;; esac
@@ -104,10 +131,13 @@ mcpe_watchdog_body() { # supervisor_pid log
     fi
     kill -0 "$pid" 2>/dev/null || return 0
 
+    progressed=0
+
     # A frame-metrics row is the only positive proof the game reached a frame.
-    now_metrics=0
     if [ -n "$metrics" ] && [ -s "$metrics" ]; then
-      now_metrics="$(wc -c <"$metrics" 2>/dev/null || echo 0)"
+      if [ -n "$seen" ] && [ "$metrics" -nt "$seen" ]; then
+        progressed=1
+      fi
       if [ "$(wc -l <"$metrics" 2>/dev/null || echo 0)" -gt 1 ]; then
         mcpe_stage first-frame
         echo "Startup watchdog: first frame after ${elapsed}s; disarmed."
@@ -115,17 +145,25 @@ mcpe_watchdog_body() { # supervisor_pid log
       fi
     fi
 
+    # Only until it is found: the whole-log grep is the dearest thing here.
     if [ "$windowed" = 0 ] && grep -q 'Creating window' "$log" 2>/dev/null; then
       windowed=1
       mcpe_stage window
     fi
 
-    now_log="$(wc -c <"$log" 2>/dev/null || echo 0)"
-    now_cpu="$(mcpe_proc_cpu_ticks "$pid" 2>/dev/null || echo 0)"
-    if [ "$now_log" != "$last_log" ] || [ "$now_cpu" != "$last_cpu" ] ||
-       [ "$now_metrics" != "$last_metrics" ]; then
+    if [ -n "$seen" ]; then
+      [ "$log" -nt "$seen" ] && progressed=1
+      : >"$seen" 2>/dev/null
+    else
+      now_log="$(wc -c <"$log" 2>/dev/null || echo 0)"
+      [ "$now_log" != "$last_log" ] && { progressed=1; last_log="$now_log"; }
+    fi
+    if mcpe_proc_cpu_ticks "$pid" && [ "$mcpe_cpu_ticks" != "$last_cpu" ]; then
+      progressed=1
+      last_cpu="$mcpe_cpu_ticks"
+    fi
+    if [ "$progressed" = 1 ]; then
       stalled=0
-      last_log="$now_log"; last_cpu="$now_cpu"; last_metrics="$now_metrics"
     else
       stalled=$((stalled + 1))
     fi

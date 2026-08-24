@@ -426,6 +426,15 @@ diff --git a/src/jni/main_activity.cpp b/src/jni/main_activity.cpp
 index 01e728c..401d2b7 100644
 --- a/src/jni/main_activity.cpp
 +++ b/src/jni/main_activity.cpp
+@@ -20,4 +20,10 @@
+ #include <android/keycodes.h>
+ 
+ #include <log.h>
++#include <atomic>
++#include <chrono>
++#include <cstdio>
++#include <cstring>
+ 
 @@ -28,14 +28,30 @@ std::shared_ptr<FakeJni::JString> MainActivity::createUUID() {
      return UUID::randomUUID()->toString();
  }
@@ -459,6 +468,138 @@ index 01e728c..401d2b7 100644
  }
  
  FakeJni::JLong MainActivity::getUsedMemory() {
+@@ -68,6 +68,64 @@ FakeJni::JLong MainActivity::getUsedMemory() {
+     fclose(file);
+     return pageCount * pageSize;
+ #endif
+ }
+ 
++// --- Device memory ------------------------------------------------------------
++// Android asks three separate memory questions and Bedrock uses the answers
++// for three different things, but upstream answers all of them with physical
++// RAM. On a handheld that is wrong in both directions at once, so the port
++// measures the device (lib/performance.sh) and hands the answers in.
++//
++//   MCPE_GAME_MEMORY_BUDGET_MB  physical RAM minus what the firmware, the
++//                               frontend, Weston and this process already
++//                               hold. Unset means "answer as upstream did".
++static long long mcpeMemoryBudgetBytes() {
++    static long long budget = []() -> long long {
++        const char *value = std::getenv("MCPE_GAME_MEMORY_BUDGET_MB");
++        if(value == nullptr || *value == '\0')
++            return 0;
++        char *end = nullptr;
++        long long parsed = std::strtoll(value, &end, 10);
++        if(end == value || *end != '\0' || parsed < 64 || parsed > 65536) {
++            Log::warn("Memory", "Ignoring unusable MCPE_GAME_MEMORY_BUDGET_MB=%s",
++                      value);
++            return 0;
++        }
++        return parsed * 1024LL * 1024LL;
++    }();
++    return budget;
++}
++
++// Linux keeps every otherwise-idle page in the page cache, so sysinfo()'s
++// freeram is not "memory the game may have". Measured on the reference
++// RG34XX-SP, idle with the frontend resident: freeram 484 MB against a
++// MemAvailable of 1643 MB out of 1979 MB total, because 1179 MB of it is
++// buffers and page cache the kernel would hand back on demand. The port's own
++// asset prewarm in weston_launch.sh drives freeram lower still, by design. In
++// a loaded world it reaches 33 MB against 1078 MB available. MemAvailable is
++// the kernel's own answer to the question Bedrock is asking.
++//
++// Measured caveat: an A/B against the pre-change client on the 2 GB reference
++// device found no frame-rate difference and no stutter on either side, so the
++// old figure was wrong without being costly there -- peak RSS was 632 MB,
++// far from either limit. This is a correctness fix whose performance effect,
++// if any, belongs to smaller devices where the budget actually binds.
++static long long mcpeAvailableBytes() {
++    using Clock = std::chrono::steady_clock;
++    // Reading /proc/meminfo costs far more than the single sysinfo() call it
++    // replaces, and nothing here moves meaningfully inside half a second, so
++    // the answer is held briefly however often the game asks for it.
++    static std::atomic<long long> cachedBytes{0};
++    static std::atomic<long long> cachedAtMs{0};
++    auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
++        Clock::now().time_since_epoch()).count();
++    long long cached = cachedBytes.load(std::memory_order_relaxed);
++    if(cached > 0 && nowMs - cachedAtMs.load(std::memory_order_relaxed) < 500)
++        return cached;
++
++    long long availableKb = -1;
++    if(FILE *meminfo = std::fopen("/proc/meminfo", "r")) {
++        char line[128];
++        while(std::fgets(line, sizeof(line), meminfo)) {
++            if(std::strncmp(line, "MemAvailable:", 13) == 0) {
++                availableKb = std::strtoll(line + 13, nullptr, 10);
++                break;
++            }
++        }
++        std::fclose(meminfo);
++    }
++
++    long long bytes = 0;
++    if(availableKb >= 0) {
++        bytes = availableKb * 1024LL;
++    } else {
++#if !defined(__APPLE__) && !defined(__FreeBSD__)
++        // Kernels before 3.14 have no MemAvailable, and sysinfo() is the only
++        // header this file has on those platforms anyway. Free plus the
++        // reclaimable buffers is the closest it can offer.
++        struct sysinfo memInfo;
++        if(sysinfo(&memInfo) == 0)
++            bytes = (long long)(memInfo.freeram + memInfo.bufferram) *
++                    memInfo.mem_unit;
++#endif
++    }
++    if(bytes > 0) {
++        cachedBytes.store(bytes, std::memory_order_relaxed);
++        cachedAtMs.store(nowMs, std::memory_order_relaxed);
++    }
++    return bytes;
++}
++
+ FakeJni::JLong MainActivity::getFreeMemory() {
+ #ifdef __APPLE__
+     uint64_t page_size;
+@@ -97,6 +155,10 @@ FakeJni::JLong MainActivity::getFreeMemory() {
+     return info.t_free * page_K * 1000;
+ #else
++    // MemAvailable, not freeram -- see mcpeAvailableBytes above.
++    long long available = mcpeAvailableBytes();
++    if(available > 0)
++        return available;
+     struct sysinfo memInfo;
+     sysinfo(&memInfo);
+     long long total = memInfo.freeram;
+@@ -135,11 +197,27 @@ FakeJni::JLong MainActivity::getTotalMemory() {
+ FakeJni::JLong MainActivity::getMemoryLimit() {
+-    return getTotalMemory();
++    // Android's memory limit is this app's share, not the machine's RAM.
++    long long total = getTotalMemory();
++    long long budget = mcpeMemoryBudgetBytes();
++    long long limit = (budget > 0 && budget < total) ? budget : total;
++    static bool logged = false;
++    if(!logged) {
++        logged = true;
++        Log::info("Memory", "total=%lld MB limit=%lld MB (%s)",
++                  total / (1024 * 1024), limit / (1024 * 1024),
++                  budget > 0 ? "measured budget"
++                             : "no budget set, reporting physical RAM");
++    }
++    return limit;
+ }
+ 
+ FakeJni::JLong MainActivity::getAvailableMemory() {
+-    return getTotalMemory();
++    long long limit = getMemoryLimit();
++    long long available = mcpeAvailableBytes();
++    if(available <= 0 || available > limit)
++        return limit;
++    return available;
+ }
+ 
 diff --git a/src/jni/main_activity.h b/src/jni/main_activity.h
 index 20080b4..56d6aa7 100644
 --- a/src/jni/main_activity.h
@@ -472,72 +613,41 @@ index 20080b4..56d6aa7 100644
  
  class BuildVersion : public FakeJni::JObject {
  public:
-@@ -98,6 +100,22 @@ private:
-     bool ignoreNextHideKeyboard = false;
-     FakeJni::JInt lastChar = 0;
- 
-+    static float getReportedDisplayScale() {
-+        // Float, 0.25-4.0. Values below 1 report a smaller screen than the
-+        // real EGL surface, magnifying the whole UI (0.5 => 2x UI).
-+        static float scale = []() {
-+            const char *value = std::getenv("MCPE_REPORTED_DISPLAY_SCALE");
-+            if(value == nullptr || *value == '\0')
-+                return 1.0f;
-+            char *end = nullptr;
-+            float parsed = std::strtof(value, &end);
-+            if(end == value || *end != '\0' || !(parsed >= 0.25f && parsed <= 4.0f))
-+                return 1.0f;
-+            return parsed;
-+        }();
-+        return scale;
-+    }
-+
- public:
-     unsigned char *(*stbi_load_from_memory)(unsigned char const *buffer, int len, int *x, int *y, int *channels_in_file, int desired_channels);
-     void (*stbi_image_free)(void *retval_from_stbi_load);
-@@ -116,30 +134,52 @@ public:
+@@ -116,30 +118,46 @@ public:
      int getScreenWidth() {
          int width, height;
          window->getWindowSize(width, height);
--        return width;
-+        int v = static_cast<int>(width * getReportedDisplayScale());
 +        static int logged = 0;
 +        if(logged++ < 4)
-+            Log::info("UIDiag", "getScreenWidth -> %d", v);
-+        return v;
++            Log::info("UIDiag", "getScreenWidth -> %d", width);
+         return width;
      }
  
      int getScreenHeight() {
          int width, height;
          window->getWindowSize(width, height);
--        return height;
-+        int v = static_cast<int>(height * getReportedDisplayScale());
 +        static int logged = 0;
 +        if(logged++ < 4)
-+            Log::info("UIDiag", "getScreenHeight -> %d", v);
-+        return v;
++            Log::info("UIDiag", "getScreenHeight -> %d", height);
+         return height;
      }
  
      int getDisplayWidth() {
          int width, height;
          window->getWindowSize(width, height);
--        return width;
-+        int v = static_cast<int>(width * getReportedDisplayScale());
 +        static int logged = 0;
 +        if(logged++ < 4)
-+            Log::info("UIDiag", "getDisplayWidth -> %d", v);
-+        return v;
++            Log::info("UIDiag", "getDisplayWidth -> %d", width);
+         return width;
      }
  
      int getDisplayHeight() {
          int width, height;
          window->getWindowSize(width, height);
--        return height;
-+        int v = static_cast<int>(height * getReportedDisplayScale());
 +        static int logged = 0;
 +        if(logged++ < 4)
-+            Log::info("UIDiag", "getDisplayHeight -> %d", v);
-+        return v;
++            Log::info("UIDiag", "getDisplayHeight -> %d", height);
+         return height;
      }
  
      void tick() {}

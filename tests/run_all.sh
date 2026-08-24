@@ -11,6 +11,7 @@ python3 -m py_compile \
   portmaster/minecraftbedrock/minecraftbedrock/release_select.py \
   portmaster/minecraftbedrock/minecraftbedrock/runtime_select.py \
   portmaster/minecraftbedrock/minecraftbedrock/version_env.py \
+  portmaster/minecraftbedrock/minecraftbedrock/screenshot_watch.py \
   portmaster/minecraftbedrock/minecraftbedrock/failsafe_state.py \
   portmaster/minecraftbedrock/minecraftbedrock/migrate_version_metadata.py \
   portmaster/minecraftbedrock/minecraftbedrock/downloader/credentials.py \
@@ -25,6 +26,7 @@ python3 -m py_compile \
   tests/test_prepare_resources.py tests/test_release_builder.py tests/test_docs.py \
   tests/test_portability_contracts.py tests/test_downloader_policy.py \
   tests/test_failsafe.py \
+  tests/test_screenshot_watch.py \
   tests/test_cfw_contracts.py \
   tests/test_failsafes.py \
   scripts/check_downloader_policy.py
@@ -46,6 +48,7 @@ python3 tests/test_version_selection.py
 python3 tests/test_failsafe.py
 python3 tests/test_failsafes.py
 python3 tests/test_prepare_resources.py
+python3 tests/test_screenshot_watch.py
 python3 -m unittest discover -s tools/mcbedrock-get/tests -p 'test_*.py' -v
 python3 tests/test_docs.py
 python3 tests/test_portability_contracts.py

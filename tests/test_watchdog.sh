@@ -1,8 +1,16 @@
 #!/bin/bash
 # Startup watchdog behaviour, against processes that really do stall or really
 # do make progress. The watchdog finds its target with `pidof
-# mcpelauncher-client`, so the fixtures are a copy of /bin/sleep under that
+# mcpelauncher-client`, so the fixture has to be a *binary* copied under that
 # name -- a shell script would show up as "bash" and never be found.
+#
+# The binary is bash rather than sleep, because on the firmwares this port
+# targets /bin/sleep is a symlink into a multi-call coreutils binary, which
+# refuses to run at all under an argv[0] it does not recognise ("unknown
+# program 'mcpelauncher-client'"). The fixture exited instantly there and every
+# case in this file failed on the reference RG34XX-SP. The trailing `:` matters
+# too: without it bash exec()s the sleep and the process loses the name the
+# watchdog is looking for.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PAYLOAD="$ROOT/portmaster/minecraftbedrock/minecraftbedrock"
@@ -18,7 +26,7 @@ trap cleanup EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-cp /bin/sleep "$TMP/bin/mcpelauncher-client"
+cp "$(command -v bash)" "$TMP/bin/mcpelauncher-client"
 LOG="$GAMEDIR/logs/client.log"
 
 # shellcheck disable=SC1091
@@ -31,7 +39,7 @@ mcpe_stage_begin "$GAMEDIR/logs"
 # with $(...) holds the command-substitution pipe open, so the assignment would
 # block for the child's whole lifetime instead of returning its pid.
 start_fake_client() { # seconds -> sets $pid
-  "$TMP/bin/mcpelauncher-client" "$1" >/dev/null 2>&1 &
+  "$TMP/bin/mcpelauncher-client" -c "sleep $1; :" >/dev/null 2>&1 &
   pid=$!
 }
 
@@ -42,7 +50,7 @@ unset MCPE_FRAME_METRICS
 export MCPE_STALL_SECONDS=3 MCPE_STARTUP_TIMEOUT=0
 start_fake_client 120
 mcpe_watchdog_start "$pid" "$LOG" >/dev/null
-# sleep(1) burns no CPU and writes nothing, so this is a stall by every signal.
+# A waiting shell burns no CPU and writes nothing: a stall by every signal.
 waited=0
 while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 20 ]; do
   sleep 1
