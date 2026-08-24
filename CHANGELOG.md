@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **The muOS sign-in window died before it drew anything.** With the tile finally
+  reachable, `mcpe-signin` exited immediately:
+  `error while loading shared libraries: libcom_err.so.2`. muOS ships no 64-bit
+  copy of that library — Knulli does, and muOS has only a 32-bit one under
+  `/usr/lib32` — while the sign-in AppImage's `libgssapi_krb5.so.2` needs it.
+  The pinned Weston package already carries the right one, so
+  `$WESTON_DIR/lib_aarch64` is now appended to every library path the downloader
+  builds. It goes **last** deliberately: it fills a genuine gap without being
+  able to shadow a system or AppImage library. Measured on the device, the
+  helper went from two unresolved libraries to none.
+
+  For the record, the `Output 'headless'` line in `downloader.log` is not a
+  fault. `run.sh` asks Weston for `headless noop kiosk llvmpipe` on purpose and
+  Crusty presents the frame to Mali directly, so a headless output is what a
+  healthy run looks like.
+
 - **The Google Play downloader now runs on muOS.** It was gated to Knulli and
   Batocera, and behind that gate sat a real dependency rather than an arbitrary
   restriction: the Qt WebEngine sign-in window needs Mesa to provide GLX to

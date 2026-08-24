@@ -16,6 +16,13 @@ INTERACTIVE_ACK="${MCPE_DOWNLOADER_INTERACTIVE_ACK:-}"
 APPROOT=""
 WESTON_DIR=/tmp/weston
 MESA_DIR=/tmp/mesa
+# Firmwares differ in what they leave in /usr/lib. muOS ships no 64-bit
+# libcom_err.so.2 -- Knulli does -- and the AppImage's libgssapi_krb5.so.2
+# pulls it in, so the Qt sign-in helper exited with "cannot open shared object
+# file" before it drew anything. The pinned Weston package already carries that
+# library. Append this LAST everywhere so it can only ever fill a genuine gap
+# and can never shadow a system or AppImage library.
+WESTON_FALLBACK_LIBS="$WESTON_DIR/lib_aarch64"
 SYSTEM_XKB_LINK=/usr/share/X11/xkb
 SYSTEM_XKB_LINK_CREATED=0
 CREDENTIAL_MANIFEST="$SCRIPT_DIR/credential-artifacts.txt"
@@ -398,9 +405,9 @@ run_google_gui() {
   LIBGL_ES=2 LIBGL_GL=21 LIBGL_NOTEST=1 LIBGL_NOCLEAN=1 \
   WESTON_HEADLESS_WIDTH="$width" WESTON_HEADLESS_HEIGHT="$height" \
   WRAPPED_PRELOAD="$gui_preload" \
-  WRAPPED_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib" \
+  WRAPPED_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib:$WESTON_FALLBACK_LIBS" \
     "$WESTON_DIR/westonwrap.sh" headless noop kiosk llvmpipe \
-      env LD_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib:/lib64" \
+      env LD_LIBRARY_PATH="$STATE/runtime/qt-gl4es:$APPROOT/usr/lib:/usr/lib:/lib64:$WESTON_FALLBACK_LIBS" \
       MCPE_DOWNLOADER_APPROOT="$APPROOT" MCPE_DOWNLOADER_STATE="$STATE" \
       MCPE_DOWNLOADER_UI="$STATE/runtime/qt-launcher/bin/mcpelauncher-ui-qt" \
       MCPE_DOWNLOADER_SCRIPT_DIR="$SCRIPT_DIR" \
@@ -448,7 +455,7 @@ ensure_session() {
   progress 77 active "Finishing Google Play sign-in" "Securely exchanging Google's approval for a saved Play session."
   (
     cd "$STATE" || exit 1
-    timeout 180 env LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib" \
+    timeout 180 env LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib:$WESTON_FALLBACK_LIBS" \
       "$BIN_DIR/gplayver" --interactive --device "$STATE/device-arm64.conf" \
       --accept-tos --app com.mojang.minecraftpe <"$auth_input"
   ) >>"$LOG" 2>&1
@@ -519,7 +526,7 @@ download_version() {
   progress 82 active "Downloading Minecraft APKs" "Requested $abi build $code from Google Play."
   (
     cd "$STATE" || exit 1
-    LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib" \
+    LD_LIBRARY_PATH="$APPROOT/usr/lib:/usr/lib:$WESTON_FALLBACK_LIBS" \
       "$BIN_DIR/gplaydl" --login-no-verify --device "$profile" \
       --accept-tos --app com.mojang.minecraftpe --app-version "$code" --output "$output"
   ) 2>&1 | tr '\r' '\n' | (

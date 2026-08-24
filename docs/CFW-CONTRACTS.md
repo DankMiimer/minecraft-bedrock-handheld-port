@@ -215,6 +215,16 @@ for, so `ensure_mesa` downloads and verifies it the way `ensure_weston` already
 does. Both squashfs images mount cleanly on `/dev/loop0` and `/dev/loop1`, and
 `Xwayland` comes from the Weston package at `/tmp/weston/bin/Xwayland`.
 
+muOS also ships **no 64-bit `libcom_err.so.2`** — Knulli does, and only a
+32-bit copy exists here under `/usr/lib32`. The sign-in AppImage's
+`libgssapi_krb5.so.2` needs it, so the Qt helper exited with "cannot open
+shared object file" before drawing anything. The pinned Weston package carries
+the library, so `$WESTON_DIR/lib_aarch64` is appended last to every library
+path the downloader builds: last, so it fills gaps without shadowing a system
+or AppImage library. Weston itself is asked for the `headless noop llvmpipe`
+combination on purpose — Crusty presents the frame to Mali directly — so a
+headless output in the log is correct rather than a fault.
+
 **Time — measured.** `date` is busybox 1.36.1 and **does not support `%N`**:
 `date +%s%3N` returns the literal `1787598189%3N`. The launcher's guard rejects
 the non-numeric result and falls back to seconds×1000, so timings are correct
