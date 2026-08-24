@@ -26,7 +26,9 @@ def test_every_supported_cfw_has_a_written_contract():
     for cfw in ("Knulli", "ROCKNIX", "muOS", "dArkOS"):
         assert f"## {cfw}" in text, cfw
     # Clauses no device backs must say so, so nobody mistakes them for evidence.
-    for cfw in ("muOS", "dArkOS"):
+    # muOS moved out of this set on 2026-08-24 when an RG34XX-SP running
+    # JACARANDA was captured; dArkOS is what remains.
+    for cfw in ("dArkOS",):
         heading = next(line for line in text.splitlines() if line.startswith(f"## {cfw}"))
         assert "no reference device" in heading, heading
     assert "**measured**" in text and "**assumed**" in text
@@ -121,8 +123,11 @@ def test_the_probe_fixtures_are_captured_not_invented():
     # RGDS identifies by model, and its compatible leads with the board name.
     assert "anbernic,rg-ds" in fixtures
     assert 'OS_NAME="ROCKNIX"' in fixtures
+    # muOS reports its model as the bare SoC string and exposes no DRM node,
+    # both of which the earlier invented fixture got wrong.
+    assert "MustardOS" in fixtures and "JACARANDA" in fixtures
+    assert "sun50iw9" in fixtures
     # Fixtures with no device behind them are labelled.
-    assert "No muOS reference device" in fixtures
     assert "No dArkOS reference device" in fixtures
 
 
@@ -195,3 +200,65 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(function):
             function()
     print("CFW contract tests passed")
+
+
+def test_muos_follows_the_portmaster_redirect():
+    """muOS ships a stub control.txt that points at the real install.
+
+    Stopping at the first control.txt found leaves the port with no runtimes,
+    so it reports no LOVE menu and cannot offer a way to install an APK.
+    """
+    launcher = read(ROOT / "portmaster/minecraftbedrock/Minecraft Bedrock.sh")
+    score = launcher.split("mcpe_pm_payload_score()", 1)[1].split(chr(10) + "}", 1)[0]
+    for marker in ("runtimes", "libs", "funcs.txt", "device_info.txt", "PortMaster.sh"):
+        assert marker in score, marker
+    # The redirect is adopted only when it is richer than where it came from.
+    assert 'mcpe_pm_payload_score "$controlfolder"' in launcher
+    assert 'mcpe_pm_payload_score "$cf"' in launcher
+    # The self test resolves the same way without sourcing anything.
+    selftest = read(PAYLOAD / "selftest.sh")
+    assert "mcpe_resolve_pm_root" in selftest
+    contracts = read(CONTRACTS)
+    assert "The redirect must be followed" in contracts
+
+
+def test_a_message_has_somewhere_to_go_when_the_console_is_not_rendered():
+    """muOS binds no framebuffer console, so /dev/tty1 reaches nobody."""
+    message = read(PAYLOAD / "lib/message.sh")
+    # The console rung stays first so the firmwares it was verified on keep it.
+    assert "mcpe_console_is_visible" in message
+    assert "frame buffer device" in message
+    # Two further rungs exist for the firmwares that have no console.
+    assert "mcpe_msg_love" in message and "mcpe_msg_framebuffer" in message
+    launcher = read(ROOT / "portmaster/minecraftbedrock/Minecraft Bedrock.sh")
+    show = launcher.split("show_msg() {", 1)[1].split(chr(10) + "}", 1)[0]
+    assert "/dev/tty1" in show
+    assert "mcpe_console_is_visible" in show
+    assert "mcpe_msg_love" in show and "mcpe_msg_framebuffer" in show
+
+
+def test_stopping_the_muos_frontend_is_always_paired_with_restarting_it():
+    """frontend.sh is an init-started supervisor that nothing respawns."""
+    message = read(PAYLOAD / "lib/message.sh")
+    assert "mcpe_msg_restore_frontend" in message
+    assert "/opt/muos/script/mux/frontend.sh launcher" in message
+    # Every path that stops it restores it, including an interrupted draw.
+    assert message.count("mcpe_msg_restore_frontend") >= 4
+    assert "trap 'mcpe_msg_restore_frontend' INT TERM" in message
+    contracts = read(CONTRACTS)
+    assert "leaves the device" in contracts
+
+
+def test_a_broken_interpreter_is_reported_as_such():
+    """Installing and launching both need python3; say so before it bites."""
+    common = read(PAYLOAD / "lib/common.sh")
+    health = common.split("mcpe_python_health()", 1)[1].split(chr(10) + "}", 1)[0]
+    for module in ("json", "re", "zipfile", "hashlib"):
+        assert module in health, module
+    launcher = read(ROOT / "portmaster/minecraftbedrock/Minecraft Bedrock.sh")
+    assert "mcpe_python_health" in launcher
+    assert "mcpe_python_health_hint" in launcher
+    # The self test answers the same question without launching anything.
+    assert "mcpe_python_health" in read(PAYLOAD / "selftest.sh")
+    # A filesystem fault must be named as a firmware problem.
+    assert "e2fsck" in common

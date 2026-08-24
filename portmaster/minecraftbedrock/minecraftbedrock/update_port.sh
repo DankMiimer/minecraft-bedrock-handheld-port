@@ -70,7 +70,9 @@ mkdir -p "$WORK" || fail "cannot create update staging directory"
 show_msg "Checking $TARGET_EDITION ($CHANNEL)..."
 mcpe_fetch "$INDEX_URL" "$WORK/release-index.json" || fail "could not download the release index; check WiFi"
 command -v python3 >/dev/null 2>&1 || fail "Python 3 is required to validate the release index"
-SELECTED="$(python3 "$GAMEDIR/release_select.py" "$WORK/release-index.json" "$TARGET_EDITION" "$CHANNEL" 2>&1)" || fail "$SELECTED"
+# Keep stderr out of the value: it is eval'd, and on muOS python3 prints a
+# sitecustomize warning on every run even when it succeeds.
+SELECTED="$(python3 "$GAMEDIR/release_select.py" "$WORK/release-index.json" "$TARGET_EDITION" "$CHANNEL" 2>"$WORK/release_select.err")" || fail "$(cat "$WORK/release_select.err" 2>/dev/null)"
 eval "$SELECTED"
 [ "${RELEASE_MINIMUM_UPDATER:-99}" -le "$UPDATER_SCHEMA" ] || fail "this release requires a newer updater"
 

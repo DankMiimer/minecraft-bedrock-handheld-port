@@ -37,6 +37,7 @@ bash tests/test_platform.sh
 bash tests/test_abi.sh
 bash tests/test_failsafe_apply.sh
 bash tests/test_audio.sh
+bash tests/test_message.sh
 bash tests/test_redaction.sh
 bash tests/test_watchdog.sh
 bash tests/test_update.sh

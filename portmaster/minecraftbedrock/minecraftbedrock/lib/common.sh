@@ -331,3 +331,100 @@ mcpe_fb_mode_aligned() { # width height
   case "$w$h" in *[!0-9]*|"") return 1 ;; esac
   [ "$((w % 16))" = 0 ] && [ "$((h % 16))" = 0 ]
 }
+
+# --- Interpreter health -------------------------------------------------------
+# Installing an APK and resolving a version both go through python3, so a
+# Python that cannot import the standard library makes the port unusable no
+# matter which rung of the failsafe ladder it is on. Check it once, early, and
+# say what is actually wrong instead of surfacing it later as an unrelated
+# "metadata backfill failed" from whichever script needed json first.
+#
+# Measured on muOS 2601.0 (RG34XX-SP, 2026-08-24): readdir on
+# /usr/lib/python3.11/site-packages returned EBADMSG and every import that
+# scans sys.path died. The kernel log gave the real cause -- "EXT4-fs error
+# ... Directory block failed checksum ... Please run e2fsck" -- which is a
+# damaged root filesystem, not anything the port can work around.
+mcpe_python_health() {
+  command -v python3 >/dev/null 2>&1 || { echo "python3 is not installed"; return 1; }
+  local out status
+  out="$(python3 -c 'import json, re, zipfile, hashlib
+print("mcpe-python-ok")' 2>&1)"
+  status=$?
+  case "$out" in
+    *mcpe-python-ok*) return 0 ;;
+  esac
+  [ "$status" = 0 ] && status=1
+  printf '%s\n' "$out"
+  return "$status"
+}
+
+# The remedy differs entirely depending on the cause, so name it when we can
+# rather than telling a player to "reinstall something".
+mcpe_python_health_hint() {
+  local detail="$1"
+  case "$detail" in
+    *'Bad message'*|*'Input/output error'*|*'Structure needs cleaning'*)
+      echo "The firmware's own filesystem looks damaged, not the port."
+      echo "Check the kernel log for EXT4 errors: dmesg | grep -i ext4"
+      echo "The fix is to run e2fsck on the firmware partition from a PC,"
+      echo "or to reflash the firmware card."
+      ;;
+    *'not installed'*)
+      echo "Install Python 3 through your firmware's package manager."
+      ;;
+    *)
+      echo "Report this with logs/selftest.txt so it can be diagnosed."
+      ;;
+  esac
+}
+
+# --- PortMaster root resolution -----------------------------------------------
+# A control.txt may redirect controlfolder at a fuller PortMaster tree than the
+# directory holding it. muOS ships exactly that: /roms/ports/PortMaster holds
+# control.txt and nothing else, and points at /mnt/mmc/MUOS/PortMaster where the
+# runtimes actually live. Taking the first control.txt found therefore reports a
+# tree with no LOVE and no libs in it.
+#
+# The launcher resolves this by sourcing control.txt, which is authoritative;
+# it keeps its own copy of the scoring below because it must run before this
+# library loads. Callers that have to stay read-only -- the self test clears the
+# framebuffer if it sources a control.txt -- use the parsing variant here.
+mcpe_pm_payload_score() {
+  local root="$1" score=0 marker
+  [ -d "$root" ] || { printf '0\n'; return; }
+  for marker in runtimes libs funcs.txt device_info.txt PortMaster.sh; do
+    [ -e "$root/$marker" ] && score=$((score + 1))
+  done
+  printf '%s\n' "$score"
+}
+
+# Read a literal controlfolder assignment out of a control.txt without running
+# it. Anything that is not a plain absolute path is refused, because guessing at
+# a value that needs shell expansion is worse than not following the redirect.
+mcpe_pm_declared_root() {
+  local control="$1" value
+  [ -f "$control" ] || return 1
+  value="$(grep -E '^[[:space:]]*(export[[:space:]]+)?controlfolder=' "$control" 2>/dev/null | tail -1)"
+  [ -n "$value" ] || return 1
+  value="${value#*controlfolder=}"
+  value="${value%%[[:space:]]*}"
+  value="${value%\"}"; value="${value#\"}"
+  value="${value%\'}"; value="${value#\'}"
+  case "$value" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$value" in *'$'*|*'`'*) return 1 ;; esac
+  printf '%s\n' "$value"
+}
+
+mcpe_resolve_pm_root() {
+  local cf="$1" declared
+  declared="$(mcpe_pm_declared_root "$cf/control.txt")" || { printf '%s\n' "$cf"; return 0; }
+  if [ "$declared" != "$cf" ] && [ -d "$declared" ] &&
+     [ "$(mcpe_pm_payload_score "$declared")" -gt "$(mcpe_pm_payload_score "$cf")" ]; then
+    printf '%s\n' "$declared"
+    return 0
+  fi
+  printf '%s\n' "$cf"
+}

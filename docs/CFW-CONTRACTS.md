@@ -14,12 +14,16 @@ from captured device output.
 |---|---|---|---|
 | Knulli | Anbernic RG34XX-SP | Knulli 20260511 (Batocera.linux 42 base), kernel 4.9.170 | 2026-08-23 |
 | ROCKNIX | Anbernic RG DS | ROCKNIX 20260710 nightly, kernel 7.0.2, RK3566/RK3568 | 2026-08-23 |
-| muOS | — | — | none |
+| muOS | Anbernic RG34XX-SP | muOS 2601.0 (JACARANDA), kernel 4.9.170, Allwinner H700 | 2026-08-24 |
 | dArkOS | — | — | none |
 
-Two firmwares have no reference device. Their contracts are written from the
-code and from the two field reports, and are marked accordingly; they are the
-ones most likely to be wrong.
+One firmware has no reference device. Its contract is written from the code and
+from a field report, and is marked accordingly; it is the one most likely to be
+wrong.
+
+The muOS column was captured on the same RG34XX-SP hardware as the Knulli
+reference, which makes the pair a controlled comparison: where the two differ,
+the cause is the firmware and not the device.
 
 ---
 
@@ -121,32 +125,100 @@ must fall back to `/proc/cpuinfo`.
 
 ---
 
-## muOS — no reference device
+## muOS
 
-**Identity — assumed.** `CFW_NAME` contains `muos`, or `/opt/muos`,
-`/mnt/mmc/MUOS` or `/mnt/sdcard/MUOS` exist. Both SD roots must be searched and
-`MUOS` is uppercase.
+**Identity — measured.** `/etc/os-release` reads `NAME=MustardOS`, `ID=muos`,
+`PRETTY_NAME="MustardOS 2601.0 (JACARANDA)"`. At launch `CFW_NAME=muOS`, so the
+resolver reports `muos` with `explicit` confidence. Note that PortMaster's own
+`device_info.txt` on this device reads `CFW_NAME="Unknown"`; the value the port
+sees is set later in the control chain, so the os-release path has to stay
+correct as the backstop.
 
-**Frontend — assumed.** muOS owns its framebuffer outside a launched port, so
-the port stops `frontend.sh`/`muxlaunch` and restarts through
-`/opt/muos/script/mux/frontend.sh launcher` with the port's environment unset.
-This is the one firmware where the port manages the frontend itself.
+**Device identity — measured.** `model` is the bare SoC string `sun50iw9`, not a
+product name, while `compatible` is `allwinner,h616` + `arm,sun50iw9p1` — the
+same pair the Knulli reference device reports for the same hardware. The `h700`
+profile must therefore continue to match on the compatible; matching on `model`
+would work on Knulli and fail here.
 
-**Install layout — assumed.** Split installs are supported:
-`/roms/Ports/Minecraft Bedrock.sh` alongside `/ports/minecraftbedrock/`.
+**PortMaster root — measured.** `/roms/ports/PortMaster` contains `control.txt`
+and nothing else. That file's first act is
+`export controlfolder="/mnt/mmc/MUOS/PortMaster"`, where the real 35 MB install
+lives, and it goes on to source `funcs.txt` and `device_info.txt` from there.
+A search that stops at the first `control.txt` therefore lands on a directory
+with no runtimes and no libs in it. **The redirect must be followed** whenever
+the target carries PortMaster payload the holder lacks; the reverse case — a
+control.txt rewriting `controlfolder` at a barer directory — must still be
+ignored.
 
-**Audio — reported.** On muOS Jacaranda, PipeWire runs with
-`PIPEWIRE_RUNTIME_DIR=/run` and **no** Pulse socket; raw ALSA then fails with
-"Device or resource busy" because PipeWire holds the device exclusively. The
-triage routes ALSA through the PipeWire plugin via `ALSA_CONFIG_PATH`. Fixed in
-v1.4.1 and confirmed by the reporter; not re-verified since.
+**Runtimes — measured.** LOVE 11.5 is present as an *extracted directory* at
+`$controlfolder/runtimes/love_11.5/` (`love.aarch64` plus `libs.aarch64/`), not
+as a squashfs under `libs/`; `libs/` is empty. There is no Weston runtime, so
+the 64-bit path downloads it on first launch. `love.txt` expands
+`$controlfolder` and `$DEVICE_ARCH` at source time, so both must be correct
+before it is sourced — finding the file by absolute path is not sufficient.
 
-**Startup network — reported, open.** The same reporter saw the game exit
-before the character menu whenever Wi-Fi was on, and reach it every time
-offline. Covered by the launcher's offline default for unguarded legacy builds
-(FS-1); **unverified on a device**.
+**Console — measured.** There is no framebuffer console. `/proc/consoles` lists
+only `ttyS0` (the kernel console is the serial port, `console=ttyS0,115200`),
+and the only virtual console is `/sys/class/vtconsole/vtcon0` = `(S) dummy
+device`. `/dev/tty1` is writable and **never rendered to the panel**, so a
+launcher message written there is invisible. This is the one firmware in the
+matrix where the console rung of the message ladder is not available.
+
+**Frontend — measured.** `frontend.sh` is a supervisor loop started by init
+(`while :; do … done`), and `muxlaunch`/`muxplore` are its children. Nothing
+respawns `frontend.sh`, so **stopping it without restarting it leaves the device
+on a black screen until it is rebooted**. Killing only the child is not enough
+to hold the panel: the supervisor relaunches it immediately. Every stop must be
+paired with `setsid /opt/muos/script/mux/frontend.sh launcher` with the port's
+environment unset.
+
+**Graphics — measured.** No `/dev/dri` at all. `/dev/mali0` and `/dev/disp` are
+present, so the capability probe must select the `mali` backend — the same
+answer as Knulli on the same silicon. `fbset` reports `720x480` visible with a
+`720 960` virtual geometry, 32 bpp, `rgba 8/16,8/8,8/0,8/24` (BGRA byte order,
+2880-byte stride). The visible height must come from the mode, not from
+`virtual_size`.
+
+**Install layout — measured.** The split install works:
+`/mnt/mmc/ROMS/Ports/Minecraft Bedrock.sh` alongside
+`/mnt/mmc/ports/minecraftbedrock/`, with `/mnt/union/…` unionfs views of both.
+The SD card is exfat mounted `fmask=0022,dmask=0022`, so every file already
+reads as mode 755 and the launcher never needs an executable bit set.
+
+**Audio — measured.** PipeWire is running with **no Pulse socket at all**
+(`/run/pulse` and `/var/run/pulse` are both absent). The native socket is
+`/run/pipewire-0` and `PIPEWIRE_RUNTIME_DIR` is unset, which confirms the
+reported `PIPEWIRE_RUNTIME_DIR=/run` shape. `/usr/share/pipewire/client.conf`
+**is present**, so the dArkOS failure behind FS-6 — PipeWire libraries with no
+client config — does not apply here, and OpenAL may be offered PipeWire. The
+ALSA PipeWire plugin exists under both `/usr/lib` and `/usr/lib32`.
+
+**ABI — measured.** Both loaders are present (`/lib/ld-linux-aarch64.so.1` and
+`/lib/ld-linux-armhf.so.3`), and with no `/dev/dri` the 32-bit client is
+correctly unusable, so arm64 is selected.
+
+**Tooling — measured.** `python3` 3.11.8, `timeout`, `nproc`, `flock`, `fbset`,
+`unzip`, `pidof`, `setsid`, `killall` are all present, and unlike Knulli
+**`readelf` is present**. `weston` and `sway` are absent. ImageMagick
+(`convert` 7.1.1) and `fbv` are available, which is what the framebuffer rung of
+the message ladder uses.
+
+**Time — measured.** `date` is busybox 1.36.1 and **does not support `%N`**:
+`date +%s%3N` returns the literal `1787598189%3N`. The launcher's guard rejects
+the non-numeric result and falls back to seconds×1000, so timings are correct
+but quantised to one second. Anything that needs sub-second resolution on this
+firmware must not be derived from `date`.
+
+**Filesystem — hazard, measured once.** The reference unit's ext4 root was
+corrupt: `EXT4-fs error … htree_dirblock_to_tree … Directory block failed
+checksum` on the inode for `/usr/lib/python3.11/site-packages`. `readdir` there
+returns `EBADMSG`, so every `python3` import that scans `sys.path` fails and the
+port cannot install or launch a version. This is a damaged card rather than a
+firmware trait, and it is recorded because the port must report it as such
+instead of surfacing it later as an unrelated metadata failure.
 
 ---
+
 
 ## dArkOS / ArkOS family — no reference device
 

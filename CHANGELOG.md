@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+- **muOS is a reference device now, and the port could not start on it.** An
+  RG34XX-SP running muOS 2601.0 (JACARANDA) — the same hardware as the Knulli
+  reference, so the pair is a controlled comparison — showed the port opening to
+  a black screen and dropping back to the menu. Nothing had crashed. Two
+  separate faults stacked into one dead end:
+
+  - **PortMaster resolved to a stub.** On muOS `/roms/ports/PortMaster` holds
+    `control.txt` and nothing else; its first act is to point `controlfolder` at
+    the real 35 MB install under `/mnt/mmc/MUOS/PortMaster`. The launcher threw
+    that redirect away — the line existed to stop *other* CFWs rewriting
+    `controlfolder` at a bare ROMs directory — so every later lookup ran against
+    a directory with no runtimes in it. The LOVE menu was reported missing while
+    `runtimes/love_11.5/love.aarch64` sat there working, which meant the one
+    route a player has to install an APK was gone. The redirect is now followed
+    when, and only when, the target carries PortMaster payload the holder lacks.
+  - **The message saying so was invisible.** `show_msg` writes to `/dev/tty1`.
+    muOS binds no framebuffer console: `/proc/consoles` lists only `ttyS0` and
+    the sole vtconsole is `(S) dummy device`, so `/dev/tty1` is writable and
+    never reaches the panel. "No Minecraft version installed. Copy your own APK
+    into…" was printed correctly and shown to nobody.
+
+  `show_msg` is now a ladder. The console keeps first place wherever it is
+  really rendered, so both existing reference devices are on the path they were
+  verified on. Where it is not rendered the launcher draws a LOVE frame, and
+  failing that paints `/dev/fb0` directly using ImageMagick and the port's own
+  font, which depends on no runtime at all (FS-11). Stopping the muOS frontend
+  to draw is always paired with restarting it: `frontend.sh` is a supervisor
+  started by init that nothing respawns, so an unpaired stop leaves the device
+  black until it is rebooted.
+
+- **A broken interpreter now says it is broken.** The reference unit's ext4 root
+  is corrupt — `EXT4-fs error … Directory block failed checksum` on the inode
+  for `/usr/lib/python3.11/site-packages` — so `readdir` there returns EBADMSG
+  and every `python3` import that scans `sys.path` fails. The port needs Python
+  to install an APK and to resolve a version, so this is fatal, but it used to
+  surface much later as "Legacy version metadata backfill failed". The launcher
+  and the self test now check the interpreter up front and name the cause,
+  pointing at `e2fsck` and the kernel log rather than at the port.
+
+- **Two stderr captures fed `eval`.** `version_env.py` and `release_select.py`
+  were captured with `2>&1` and evaluated. muOS's Python writes a
+  `sitecustomize` warning on every run while still exiting 0, so the noise
+  became shell: measured, the assignments still landed but four "not found"
+  errors were printed and `$@` was clobbered. Both now keep the streams apart
+  and read stderr only when the interpreter actually failed.
+
+- **The muOS platform fixture was wrong where it mattered.** It had been
+  constructed rather than captured, and gave the device `/dev/dri` and the
+  `kmsdrm` backend. The hardware exposes no DRM node at all and correctly
+  resolves to `mali`; it also reports its model as the bare SoC string
+  `sun50iw9` rather than a product name, which is why the `h700` profile has to
+  match on the compatible. Replaced with the captured values, and
+  `docs/CFW-CONTRACTS.md` promotes the muOS contract from assumed to measured —
+  including that muOS *does* ship `/usr/share/pipewire/client.conf`, so the
+  dArkOS cause behind FS-6 does not apply there.
+
+  Two things the capture did **not** establish, recorded in `docs/FAILSAFES.md`
+  so nobody reads more into it: no rung of the failsafe ladder ran in a real
+  session, because that unit cannot launch the game at all; and busybox `date`
+  has no `%N`, so `date +%s%3N` returns a literal `1787598189%3N` and every
+  millisecond timing on muOS is quantised to one second.
+
+- **`mcpe_pipewire_client_usable` now honours `MCPE_PROBE_ROOT`.** Its fallback
+  paths answered for the build host, so on any machine with PipeWire installed —
+  muOS among them — the negative case could never be observed and
+  `tests/test_audio.sh` failed. Behaviour on a device is unchanged.
+
 - **The frame cap is now keyed to the game version, and 40 is gone.** Bedrock
   1.16.221.01 and older default to 50 fps, everything newer to 30. The cap the
   port shipped was the worst value available on the RG34XX-SP's 59.156 Hz

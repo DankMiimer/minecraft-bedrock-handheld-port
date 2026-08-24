@@ -44,6 +44,22 @@ esac
 # mapping line the 32-bit SDL client and the LOVE menu use.
 XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 PM_DIR="$(printf '\120\157\162\164\115\141\163\164\145\162')"
+# A PortMaster control.txt may legitimately redirect controlfolder at a fuller
+# install than the directory holding it. muOS ships exactly that: the entry at
+# /roms/ports/PortMaster is a stub containing control.txt and nothing else,
+# whose first act is to point controlfolder at the real install under
+# /mnt/mmc/MUOS/PortMaster. Other CFWs instead rewrite controlfolder at a bare
+# ROMs directory that has no runtime in it, and there the root we found is the
+# authoritative one. Tell the two apart by looking for payload: adopt the
+# redirect only when the target carries PortMaster content the stub lacks.
+mcpe_pm_payload_score() {
+  local root="$1" score=0 marker
+  [ -d "$root" ] || { printf '0\n'; return; }
+  for marker in runtimes libs funcs.txt device_info.txt PortMaster.sh; do
+    [ -e "$root/$marker" ] && score=$((score + 1))
+  done
+  printf '%s\n' "$score"
+}
 for cf in "/opt/system/Tools/$PM_DIR" "/opt/tools/$PM_DIR" \
           "$XDG_DATA_HOME/$PM_DIR" "/userdata/system/.local/share/$PM_DIR" \
           "/storage/roms/ports/$PM_DIR" "/roms/ports/$PM_DIR" \
@@ -51,15 +67,18 @@ for cf in "/opt/system/Tools/$PM_DIR" "/opt/tools/$PM_DIR" \
           "/mnt/mmc/MUOS/$PM_DIR" "/mnt/sdcard/MUOS/$PM_DIR" \
           "/mnt/mmc/ROMS/Ports/$PM_DIR" "/mnt/sdcard/ROMS/Ports/$PM_DIR"; do
   if [ -f "$cf/control.txt" ]; then
-    # Some CFW control.txt files rewrite controlfolder to the ROMs directory,
-    # even though the runtime that we just found lives in cf.  Preserve the
-    # authoritative root so later runtime discovery cannot silently drift.
     PM_CONTROL_ROOT="$cf"
     controlfolder="$PM_CONTROL_ROOT"
     source "$cf/control.txt" 2>/dev/null || true
-    [ -f "$cf/device_info.txt" ] && source "$cf/device_info.txt" 2>/dev/null || true
-    [ -n "${CFW_NAME:-}" ] && [ -f "$cf/mod_${CFW_NAME}.txt" ] &&
-      source "$cf/mod_${CFW_NAME}.txt" 2>/dev/null || true
+    if [ -n "${controlfolder:-}" ] && [ "$controlfolder" != "$cf" ] &&
+       [ -d "$controlfolder" ] &&
+       [ "$(mcpe_pm_payload_score "$controlfolder")" -gt "$(mcpe_pm_payload_score "$cf")" ]; then
+      PM_CONTROL_ROOT="$controlfolder"
+    fi
+    [ -f "$PM_CONTROL_ROOT/device_info.txt" ] &&
+      source "$PM_CONTROL_ROOT/device_info.txt" 2>/dev/null || true
+    [ -n "${CFW_NAME:-}" ] && [ -f "$PM_CONTROL_ROOT/mod_${CFW_NAME}.txt" ] &&
+      source "$PM_CONTROL_ROOT/mod_${CFW_NAME}.txt" 2>/dev/null || true
     controlfolder="$PM_CONTROL_ROOT"
     break
   fi
@@ -129,6 +148,7 @@ mcpe_startup_mark() {
 }
 # shellcheck disable=SC1091
 source "$GAMEDIR/lib/common.sh" || { echo "Missing common runtime helpers."; exit 1; }
+source "$GAMEDIR/lib/message.sh" || { echo "Missing message helpers."; exit 1; }
 # The breadcrumb is opened before anything that can hang, and the launcher log
 # is not truncated until after the capability probe, so these two files are the
 # only record a device leaves when it locks up during startup.
@@ -153,6 +173,15 @@ source "$GAMEDIR/lib/platform.sh" || exit 1
 source "$GAMEDIR/lib/failsafe.sh" || exit 1
 MCPE_PORT_VERSION="$(cat "$GAMEDIR/PORT_VERSION" 2>/dev/null || echo unknown)"
 export MCPE_PORT_VERSION
+
+# A broken interpreter makes every later stage fail for reasons that look
+# unrelated, so establish it here where the message can still be shown.
+if ! MCPE_PYTHON_FAULT="$(mcpe_python_health)"; then
+  mcpe_report_set python "broken: $(printf '%s' "$MCPE_PYTHON_FAULT" | tr '
+' ' ' | cut -c1-160)"
+  show_msg "This device cannot run Python."            "The port needs it to install and start a version."            "$(mcpe_python_health_hint "$MCPE_PYTHON_FAULT")"
+  exit 1
+fi
 mcpe_stage probe
 mcpe_apply_platform_profile "$CONFDIR/resolved_host.env" || { echo "Host capability probe failed."; exit 1; }
 mcpe_startup_mark "device profile ready"
@@ -198,6 +227,10 @@ export PM_DIR
 # SHOW_MSG_SLEEP overrides the read pause for quick progress notes.
 show_msg() {
   echo "$*"
+  # The console rung: correct wherever fbcon is bound to the panel, which is
+  # what both reference devices do. Kept first and unchanged so those firmwares
+  # keep the exact path they were verified on.
+  local wrote_tty=0
   if ! pidof sway >/dev/null 2>&1 && [ -w /dev/tty1 ]; then
     {
       clear
@@ -207,9 +240,19 @@ show_msg() {
       printf '  %s\n' "$@"
       echo
       echo "  ==================================================="
-    } > /dev/tty1 2>/dev/null
-    sleep "${SHOW_MSG_SLEEP:-6}"
+    } > /dev/tty1 2>/dev/null && wrote_tty=1
   fi
+  if mcpe_console_is_visible; then
+    [ "$wrote_tty" = 1 ] && sleep "${SHOW_MSG_SLEEP:-6}"
+    return 0
+  fi
+  # The console is not rendered on this firmware, so the text above went
+  # nowhere a player can see it. Draw the same lines instead.
+  MCPE_MSG_LOVE_TXT="${MCPE_MSG_LOVE_TXT:-${MENU_LOVE_TXT:-}}" \
+    mcpe_msg_love "$@" && return 0
+  mcpe_msg_framebuffer "$@" && return 0
+  [ "$wrote_tty" = 1 ] && sleep "${SHOW_MSG_SLEEP:-6}"
+  return 0
 }
 
 # The standard build intentionally has no RGDS dual-screen payload. Its only
@@ -1146,8 +1189,14 @@ if [ -z "$MCVER" ] && [ -n "$SETTINGS_VERSION" ] &&
 fi
 MCVER="${MCVER:-$(latest_installed_version)}"
 export MCVER_OVERRIDE="$MCVER"
-VERSION_ENV="$(python3 "$GAMEDIR/version_env.py" "$GAMEDIR" "$GAMEDIR/versions/$MCVER" 2>&1)" || {
-  echo "Version metadata validation failed: $VERSION_ENV"
+# muOS's python3 writes a sitecustomize/usercustomize warning to stderr on
+# every single run while still exiting 0 (measured on Jacaranda 2601.0,
+# "OSError: [Errno 74] Bad message"). Folding stderr into the value handed to
+# eval turns that noise into shell commands, so keep the two streams apart and
+# read stderr only when the interpreter actually failed.
+VERSION_ENV_ERR="$GAMEDIR/logs/version_env.err"
+VERSION_ENV="$(python3 "$GAMEDIR/version_env.py" "$GAMEDIR" "$GAMEDIR/versions/$MCVER" 2>"$VERSION_ENV_ERR")" || {
+  echo "Version metadata validation failed: $(cat "$VERSION_ENV_ERR" 2>/dev/null)"
   exit 1
 }
 eval "$VERSION_ENV"

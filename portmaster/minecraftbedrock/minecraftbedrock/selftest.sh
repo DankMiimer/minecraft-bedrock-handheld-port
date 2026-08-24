@@ -56,6 +56,18 @@ case "$MCPE_CFW" in
       "its contract in docs/CFW-CONTRACTS.md is assumed, not measured" ;;
 esac
 
+# ------------------------------------------------------------------- python
+head_ "python"
+if PY_FAULT="$(mcpe_python_health)"; then
+  ok "python3 usable" "$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null)"
+else
+  bad "python3 cannot import the standard library"       "$(printf '%s' "$PY_FAULT" | tr '
+' ' ' | cut -c1-120)"
+  mcpe_python_health_hint "$PY_FAULT" | while IFS= read -r hint_line; do
+    say "       $hint_line"
+  done
+fi
+
 # ------------------------------------------------------------- capabilities
 head_ "device"
 mcpe_probe_platform "$GAMEDIR/logs/selftest-host.env" 2>/dev/null
@@ -126,7 +138,8 @@ for cf in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
           /userdata/system/.local/share/PortMaster /storage/roms/ports/PortMaster \
           /roms/ports/PortMaster /roms/tools/PortMaster \
           /mnt/mmc/MUOS/PortMaster /mnt/sdcard/MUOS/PortMaster; do
-  [ -f "$cf/control.txt" ] && { pm="$cf"; break; }
+  # Follow a stub control.txt to the tree that actually holds the runtimes.
+  [ -f "$cf/control.txt" ] && { pm="$(mcpe_resolve_pm_root "$cf")"; break; }
 done
 [ -n "$pm" ] && ok "PortMaster found" "$pm" || bad "PortMaster control.txt not found" "the port cannot resolve device settings"
 

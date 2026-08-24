@@ -47,19 +47,36 @@ source "$TMP/h700.env"
 # Batocera upstream everywhere except OS_NAME.
 [ "$MCPE_CFW" = knulli ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
-# No muOS reference device; this fixture is constructed, not captured.
+# Captured from a reference RG34XX-SP on muOS 2601.0 JACARANDA (2026-08-24).
+# This fixture previously guessed, and guessed wrong in the way that matters:
+# it gave the device /dev/dri and expected the kmsdrm backend. The hardware is
+# the same H700 as the Knulli reference and exposes no DRM node at all, so the
+# correct answer is the mali backend. It also reports its model as the bare SoC
+# string "sun50iw9" rather than a product name, which is why the h700 profile
+# has to match on the compatible rather than on the model.
 fixture muOS
-printf 'Anbernic RG34XX-SP H700\0' >"$TMP/root/proc/device-tree/model"
-printf 'allwinner,h700\0' >"$TMP/root/proc/device-tree/compatible"
-mkdir -p "$TMP/root/sys/class/drm/card0-DSI-1"
-echo connected >"$TMP/root/sys/class/drm/card0-DSI-1/status"
-echo 720x480 >"$TMP/root/sys/class/drm/card0-DSI-1/modes"
-touch "$TMP/root/dev/dri/card0" "$TMP/root/dev/mali0"
+cat >"$TMP/root/etc/os-release" <<'OSREL'
+NAME=MustardOS
+VERSION="2601.0 (JACARANDA)"
+ID=muos
+VERSION_ID=2601.0
+PRETTY_NAME="MustardOS 2601.0 (JACARANDA)"
+OSREL
+printf 'sun50iw9\0' >"$TMP/root/proc/device-tree/model"
+printf 'allwinner,h616\0arm,sun50iw9p1\0' >"$TMP/root/proc/device-tree/compatible"
+mkdir -p "$TMP/root/sys/class/graphics/fb0"
+printf '720,960\n' >"$TMP/root/sys/class/graphics/fb0/virtual_size"
+touch "$TMP/root/dev/mali0" "$TMP/root/dev/disp" "$TMP/root/dev/fb0"
+rmdir "$TMP/root/dev/dri" 2>/dev/null || true
 MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none \
-  mcpe_probe_platform "$TMP/muos.env"
+  MCPE_TEST_FB_MODE=720x480 mcpe_probe_platform "$TMP/muos.env"
 source "$TMP/muos.env"
 [ "$MCPE_HOST_PROFILE" = h700 ] &&
-  [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = kmsdrm ] && [ "$MCPE_DRM_MODE" = 720x480 ]
+  [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = mali ] && [ "$MCPE_FB_MODE" = 720x480 ]
+[ "$MCPE_HAS_DRM" = 0 ] || { echo "muOS reference device exposes no DRM node" >&2; exit 1; }
+# The panel is 720x480 while fb0 reports a 720x960 virtual size, so the visible
+# height must come from the mode rather than from virtual_size.
+[ "$MCPE_ACTIVE_HEIGHT" = 480 ] || { echo "muOS panel height must ignore virtual_size" >&2; exit 1; }
 [ "$MCPE_CFW" = muos ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
 # Captured from the reference RGDS on ROCKNIX (2026-08-23).
