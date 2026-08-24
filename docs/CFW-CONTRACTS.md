@@ -172,6 +172,20 @@ to hold the panel: the supervisor relaunches it immediately. Every stop must be
 paired with `setsid /opt/muos/script/mux/frontend.sh launcher` with the port's
 environment unset.
 
+The exception is the case that matters most, because it is the normal one. muOS
+starts a port from inside that same loop — the loop calls `launch.sh`, which
+calls `ext-general.sh`, which calls the port script — so during a launch
+`frontend.sh` is an **ancestor of the port and blocked**, and `muxlaunch` has
+already exited. Nothing of the frontend is on the panel, `pidof frontend.sh`
+notwithstanding. Stopping it there gains no visibility and costs the port its
+own display: the restore starts a second, unrelated `frontend.sh` with `PPid 1`
+whose `muxlaunch` draws over the running port and takes its input. Measured on
+the reference device while a sign-in window was open. Before touching the
+frontend, walk `/proc/<pid>/status` up from the port and leave it alone if
+`frontend.sh` is on that chain — muOS returns to its menu by itself when the
+port exits. `/proc/<pid>/comm` reads `frontend.sh` for it and `muxlaunch` for
+the drawing child, so both are matchable by name.
+
 **Graphics — measured.** No `/dev/dri` at all. `/dev/mali0` and `/dev/disp` are
 present, so the capability probe must select the `mali` backend — the same
 answer as Knulli on the same silicon. `fbset` reports `720x480` visible with a

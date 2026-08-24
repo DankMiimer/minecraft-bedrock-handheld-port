@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **On muOS, a second frontend appeared on top of the running port.** Any
+  launcher message drew it: the message ladder stops muOS's frontend before
+  drawing, and `pidof frontend.sh` matches even when that supervisor is the
+  port's own blocked ancestor — muOS starts ports from inside its frontend
+  loop, so `frontend.sh` is alive but waiting and `muxlaunch` is not running at
+  all. The ladder killed the ancestor, drew the message, and then "restored"
+  the frontend by starting a fresh one, which promptly drew over the port and
+  took its input. The player saw it beside the Google sign-in window, with the
+  sign-in page visible but only the muOS menu responding.
+
+  The ladder now walks up `/proc` first and leaves a `frontend.sh` that
+  launched this port alone; nothing of it is on the panel while it waits, and
+  muOS returns to its own menu when the port exits. A frontend that really is
+  drawing — a port started over SSH or from a shell — is still stopped and
+  restored exactly as before.
+
 - **The muOS sign-in window came up black.** With the helper finally alive, Qt
   rendered frames and swapped them, and the page inside stayed empty:
   QtWebEngine's renderer could not create its shared-memory file. In `/dev/shm`

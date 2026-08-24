@@ -43,9 +43,33 @@ mcpe_console_is_visible() {
 # it stopped is how a device ends up on a black screen until it is rebooted.
 # Every stop below is paired with a restore, including on an interrupted draw.
 MCPE_MSG_STOPPED_FRONTEND=0
+
+# ...but a frontend.sh that is *waiting for this port* is not one of them. muOS
+# runs a port from inside that same loop -- launch.sh starts the port script and
+# the loop blocks until it returns -- so the supervisor is an ancestor of this
+# process, and while it waits none of it is on the panel: muxlaunch exited
+# before launch.sh ran. Stopping it therefore hides nothing, and the paired
+# restore starts a *second* frontend that draws over the port and takes its
+# input, which is exactly what appeared beside the Google sign-in window. Leave
+# it alone; muOS returns to its own menu when the port exits.
+mcpe_msg_frontend_awaits_us() {
+  local probe="${MCPE_PROBE_ROOT:-}" pid="${MCPE_PROBE_PID:-$$}" hops=0 parent
+  while [ "$hops" -lt 32 ]; do
+    [ -r "$probe/proc/$pid/comm" ] || return 1
+    [ "$(cat "$probe/proc/$pid/comm" 2>/dev/null)" = frontend.sh ] && return 0
+    parent="$(awk '/^PPid:/ { print $2; exit }' "$probe/proc/$pid/status" 2>/dev/null)"
+    case "$parent" in ''|0|1) return 1 ;; esac
+    [ "$parent" != "$pid" ] || return 1
+    pid="$parent"
+    hops=$((hops + 1))
+  done
+  return 1
+}
+
 mcpe_msg_quiet_frontend() {
   MCPE_MSG_STOPPED_FRONTEND=0
   mcpe_is_cfw muos || return 0
+  mcpe_msg_frontend_awaits_us && return 0
   pidof frontend.sh >/dev/null 2>&1 || pidof muxplore >/dev/null 2>&1 ||
     pidof muxlaunch >/dev/null 2>&1 || return 0
   MCPE_MSG_STOPPED_FRONTEND=1

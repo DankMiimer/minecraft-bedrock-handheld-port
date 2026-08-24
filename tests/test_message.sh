@@ -41,6 +41,50 @@ printf 'tty0                 -WU (EC    )    4:1\n' >"$TMP/vt/proc/consoles"
 MCPE_PROBE_ROOT="$TMP/vt" mcpe_console_is_visible ||
   fail "a VT kernel console means the panel shows the console"
 
+# --- who owns the muOS panel --------------------------------------------------
+# muOS runs a port from inside frontend.sh's loop, so that supervisor is an
+# ancestor of the port and is blocked until it returns. Killing it to draw a
+# message and then restoring it puts a second frontend over the running port,
+# which is what a player saw beside the Google sign-in window.
+mkdir -p "$TMP/tree/proc/1" "$TMP/tree/proc/900" "$TMP/tree/proc/910"          "$TMP/tree/proc/920" "$TMP/tree/proc/930"
+printf 'init
+' >"$TMP/tree/proc/1/comm"
+printf 'PPid:	0
+' >"$TMP/tree/proc/1/status"
+printf 'frontend.sh
+' >"$TMP/tree/proc/900/comm"
+printf 'PPid:	1
+' >"$TMP/tree/proc/900/status"
+printf 'launch.sh
+' >"$TMP/tree/proc/910/comm"
+printf 'PPid:	900
+' >"$TMP/tree/proc/910/status"
+printf 'Minecraft Bedrock.sh
+' >"$TMP/tree/proc/920/comm"
+printf 'PPid:	910
+' >"$TMP/tree/proc/920/status"
+MCPE_PROBE_ROOT="$TMP/tree" MCPE_PROBE_PID=920 mcpe_msg_frontend_awaits_us ||
+  fail "a frontend.sh that launched this port must be left running"
+
+# A port started outside that loop -- over SSH, or from a shell -- has no such
+# ancestor, and there the frontend really is on the panel and really must stop.
+printf 'sshd
+' >"$TMP/tree/proc/930/comm"
+printf 'PPid:	1
+' >"$TMP/tree/proc/930/status"
+mkdir -p "$TMP/tree/proc/940"
+printf 'Minecraft Bedrock.sh
+' >"$TMP/tree/proc/940/comm"
+printf 'PPid:	930
+' >"$TMP/tree/proc/940/status"
+MCPE_PROBE_ROOT="$TMP/tree" MCPE_PROBE_PID=940 mcpe_msg_frontend_awaits_us &&
+  fail "a port with no frontend.sh ancestor must still be able to stop it"
+
+# A truncated or unreadable tree must answer "not an ancestor" rather than
+# looping: being wrong that way only costs the old behaviour.
+MCPE_PROBE_ROOT="$TMP/tree" MCPE_PROBE_PID=99999 mcpe_msg_frontend_awaits_us &&
+  fail "an unreadable process tree must not report a frontend ancestor"
+
 # --- PortMaster root resolution ----------------------------------------------
 # muOS ships a stub holding only control.txt, which redirects at the real
 # install. Taking the stub leaves the port with no runtimes and therefore no
