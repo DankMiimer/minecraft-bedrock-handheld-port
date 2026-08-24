@@ -87,12 +87,23 @@
 - The startup watchdog no longer costs a frame's worth of work every second.
   It never disarms unless frame metrics are on -- which they are not by default
   -- so its tick ran for the whole session, and the tick spawned four processes
-  (`cat`, `awk`, a command substitution, `wc`) to read two numbers. Measured on
-  the reference RG34XX-SP over 500 ticks: 21.1 ms of wall time and 2.4 ms of
-  CPU each, against 25 ms per rendered frame. Reading `/proc/pid/stat` in the
-  shell and detecting log growth with an mtime sentinel does the same job in
-  0.45 ms with no process at all. Behaviour is unchanged, and the same tests
-  pass against both versions.
+  (`cat`, `awk`, and `wc` twice) to read two numbers. Reading `/proc/pid/stat`
+  in the shell and detecting log growth with an mtime sentinel does the same
+  job with no process at all.
+
+  Re-measured on the reference RG34XX-SP, 500 ticks of each against a 400 KB
+  log, frontend resident, governor on schedutil:
+
+  | | wall | cpu | `execve` | `clone` |
+  | --- | --- | --- | --- | --- |
+  | old tick | 28.8 ms | 2.46 ms | 5 (bash, cat, awk, wc, wc) | 6 |
+  | new tick | 0.61 ms | 0.60 ms | 1 (bash) | 0 |
+
+  Roughly a 47x cut in wall time, against 25 ms per rendered frame. An earlier
+  pass recorded 21.1 ms against 0.45 ms without stating its log size; the ratio
+  reproduces exactly but the absolute numbers do not, and `wc -c` scales with
+  the log, which is the likely difference. Behaviour is unchanged, and the same
+  tests pass against both versions.
 - The shutdown watchdog greps the client log once every two seconds rather than
   every second. Bounding the read with `tail -c` was tried and measured no
   better (5.4 ms against 5.3 ms on a 420 KB log) because the second process

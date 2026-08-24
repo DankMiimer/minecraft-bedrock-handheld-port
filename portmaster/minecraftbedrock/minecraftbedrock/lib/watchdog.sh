@@ -42,12 +42,20 @@ mcpe_watchdog_pid=""
 # watchdog only disarms early when frame metrics are on, which they are not by
 # default -- and the obvious spelling of it is not cheap.
 #
-# Measured on the reference RG34XX-SP, 500 steady-state ticks of each: the old
-# tick (`$(cat /proc/pid/stat | awk ...)` plus `wc -c` on the log) costs 21.1 ms
-# of wall time and 2.4 ms of CPU and spawns four processes; the same tick with
-# no subprocess at all costs 0.45 ms and 0.44 ms and spawns none. On a device
-# rendering a frame every 25 ms, four process creations per second is churn the
-# render thread can be made to wait behind.
+# Measured on the reference RG34XX-SP, 500 steady-state ticks of each, against
+# a 400 KB log with the frontend resident and the governor on schedutil:
+#
+#   old tick  28.8 ms wall  2.46 ms cpu   5 execve (bash, cat, awk, wc, wc), 6 clone
+#   new tick   0.61 ms wall  0.60 ms cpu   1 execve (bash), 0 clone
+#
+# So four programs and six forks a second become none, for roughly a 47x cut in
+# wall time. On a device rendering a frame every 25 ms, four process creations
+# per second is churn the render thread can be made to wait behind.
+#
+# An earlier pass recorded 21.1 ms against 0.45 ms without stating the log size
+# it used. The ratio reproduces exactly; the absolute numbers do not, and `wc -c`
+# wall time scales with the log, which is the likely difference. Conditions are
+# stated above so the next re-measurement has something to match.
 mcpe_proc_cpu_ticks() { # pid -> sets mcpe_cpu_ticks
   local stat rest
   mcpe_cpu_ticks=0
