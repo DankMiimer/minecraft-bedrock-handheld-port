@@ -13,11 +13,16 @@ stores or transmits account credentials through a third-party server.
 `credential-artifacts.txt` (every path that can hold account data) are the
 manifests `scripts/check_downloader_policy.py` enforces them against.
 
-Prototype support is deliberately gated to 64-bit H700 devices running Knulli.
+Prototype support is gated to 64-bit H700 devices running Knulli, Batocera or
+muOS. muOS joined on 2026-08-24, verified on an RG34XX-SP running 2601.0
+JACARANDA -- the same hardware as the Knulli reference device.
 The first use reuses a compatible launcher runtime already present on the device
 or downloads a pinned 141 MiB upstream AppImage and extracts its Qt WebEngine
 files (about 550 MiB). A pinned Debian Qt virtual-keyboard plugin provides text
-entry. Knulli's existing PortMaster Mesa package exposes GLX to XWayland, while
+entry. Mesa exposes GLX to XWayland: Knulli and Batocera already ship that
+package through PortMaster, and where PortMaster does not carry it -- muOS has
+an empty `libs/` -- the same pinned runtime is downloaded and verified against
+`compat/runtime-index.json`, exactly as the Weston package already is. While
 PortMaster's Weston/Crusty/GL4ES runtime presents the Qt interface through the
 H700's OpenGL ES display stack. The bundled compatibility shim only bridges
 Qt's XCB GLX capability probe; it does not implement or intercept rendering.
@@ -54,7 +59,7 @@ generated from the upstream architecture-specific version databases by
 excluded. Catalog builds are experimental unless explicitly labelled tested
 and are never selected automatically. ARM32 downloads are for transfer to an
 armhf R36S-class setup—the browser prototype itself still runs only on a
-64-bit H700/Knulli host.
+64-bit H700 host on Knulli, Batocera or muOS.
 
 `bin/gplaydl` and `bin/gplayver` are ARM64 builds of
 `minecraft-linux/Google-Play-API` commit

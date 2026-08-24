@@ -724,7 +724,7 @@ menu_do_download() { # version-code[:arm64|armhf]
     return
   fi
   if [ "${MCPE_DOWNLOADER_SUPPORTED:-0}" != 1 ]; then
-    MCPE_MENU_STATUS="Downloader prototype requires RG34XXSP/H700 + Knulli"
+    MCPE_MENU_STATUS="Downloader prototype requires an H700 device on Knulli/Batocera/muOS"
     return
   fi
   SHOW_MSG_SLEEP=1 show_msg "Opening the optional Google Play downloader..." \

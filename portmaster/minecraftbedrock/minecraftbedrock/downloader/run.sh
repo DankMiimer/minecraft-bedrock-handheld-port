@@ -113,11 +113,18 @@ trap 'exit 143' HUP INT TERM
 is_supported() {
   case "$(uname -m 2>/dev/null)" in aarch64|arm64) ;; *) return 1 ;; esac
   [ "${MCPE_HOST_PROFILE:-h700}" = h700 ] || return 1
-  if [ -r /etc/os-release ]; then
-    grep -Eqi 'knulli|batocera' /etc/os-release || return 1
-  else
-    return 1
-  fi
+  # The launcher resolves the firmware once and exports it, so prefer that over
+  # re-reading os-release. muOS joined the list on 2026-08-24: it is the same
+  # H700 hardware as the Knulli reference, and it reaches the same Mali display
+  # stack -- the only thing it lacked was PortMaster's Mesa package, which
+  # ensure_mesa now fetches for itself.
+  case "${MCPE_CFW:-}" in
+    knulli|batocera|muos) return 0 ;;
+    ?*) return 1 ;;
+  esac
+  # No launcher in front of us: fall back to reading the firmware directly.
+  [ -r /etc/os-release ] || return 1
+  grep -Eqi 'knulli|batocera|muos|mustardos' /etc/os-release
 }
 
 safe_remove_tree() {
@@ -265,23 +272,33 @@ ensure_system_xkb_link() {
 
 ensure_mesa() {
   local squash="${MESA_SQUASH:-}" candidate
-  progress 56 active "Preparing browser graphics" "Checking Knulli's Mesa and XWayland support."
+  progress 56 active "Preparing browser graphics" "Checking Mesa and XWayland support."
   [ -f "$MESA_DIR/lib/aarch64-linux-gnu/libGLX_mesa.so.0" ] && return 0
   mkdir -p "$MESA_DIR" || return 1
   if grep -qs " $MESA_DIR " /proc/mounts 2>/dev/null; then
-    log "The PortMaster Mesa runtime is mounted but incomplete. Reboot and try again."
+    log "The Mesa runtime is mounted but incomplete. Reboot and try again."
     return 1
   fi
   if [ -z "$squash" ]; then
     for candidate in \
       /userdata/system/.local/share/PortMaster/libs/mesa_pkg_0.1.squashfs \
-      "${controlfolder:-/nonexistent}/libs/mesa_pkg_0.1.squashfs"
+      "${controlfolder:-/nonexistent}/libs/mesa_pkg_0.1.squashfs" \
+      "${controlfolder:-/nonexistent}/libs/mesa_pkg_0.1.aarch64.squashfs"
     do
       if [ -f "$candidate" ]; then squash="$candidate"; break; fi
     done
   fi
+  # Knulli and Batocera ship this package through PortMaster. muOS does not --
+  # its PortMaster libs directory is empty -- so fetch the same pinned runtime
+  # the Weston step already downloads, verified against compat/runtime-index.json.
+  if [ -z "$squash" ]; then
+    squash="$(bash "$GAMEDIR/ensure_runtime.sh" mesa_pkg_0.1.aarch64)" || {
+      log "The Mesa support package is missing and could not be downloaded."
+      return 1
+    }
+  fi
   [ -n "$squash" ] && [ -f "$squash" ] || {
-    log "Knulli's PortMaster Mesa support package is missing."
+    log "The Mesa support package is missing."
     return 1
   }
   ${ESUDO:-} mount "$squash" "$MESA_DIR" >>"$LOG" 2>&1 || return 1
@@ -487,7 +504,7 @@ download_version() {
   valid_download_request "$code" "$abi" || {
     log "Unsupported prototype request: version code $code / $abi"; return 2;
   }
-  is_supported || { log "On-device download is currently limited to RG34XXSP/H700 on Knulli."; return 2; }
+  is_supported || { log "On-device download is currently limited to H700 devices on Knulli, Batocera or muOS."; return 2; }
   [ -x "$BIN_DIR/gplaydl" ] || { log "The ARM64 downloader helper is missing."; return 1; }
   progress 2 active "Starting Google Play downloader" "Checking the optional components and saved session."
   rm -f "$RESULT_FILE" "$RESULT_FILE.new"

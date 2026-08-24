@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **The Google Play downloader now runs on muOS.** It was gated to Knulli and
+  Batocera, and behind that gate sat a real dependency rather than an arbitrary
+  restriction: the Qt WebEngine sign-in window needs Mesa to provide GLX to
+  XWayland, and `ensure_mesa` only ever looked for `mesa_pkg_0.1.squashfs` in
+  PortMaster's `libs/`. That is the filename Batocera and Knulli install
+  locally. muOS ships an empty `libs/`, and the firmware itself has no Mesa, no
+  Xwayland and no gbm — only Mali EGL/GLESv2 — so the package was genuinely
+  absent rather than merely misnamed.
+
+  Upstream publishes it as `mesa_pkg_0.1.aarch64.squashfs`, which the port had
+  never asked for. Its `lib/aarch64-linux-gnu/libGLX_mesa.so.0` is exactly the
+  file the GLX step probes for, so it is now pinned in
+  `compat/runtime-index.json` by SHA-256 and size and fetched by
+  `ensure_runtime.sh` — the same verified path the Weston package already uses,
+  from the same host, so the downloader's network allowlist is unchanged and
+  `scripts/check_downloader_policy.py` still passes.
+
+  Measured on an RG34XX-SP running muOS 2601.0 JACARANDA: both squashfs images
+  mount on loop devices, `libGLX_mesa.so.0` resolves, the GL bridge links, and
+  `Xwayland` comes from the Weston package. The gate now reads the firmware the
+  launcher already resolved (`MCPE_CFW`) instead of re-grepping `os-release`,
+  and falls back to reading the firmware directly when the downloader is run
+  without the launcher in front of it.
+
 - **muOS is a reference device now, and the port could not start on it.** An
   RG34XX-SP running muOS 2601.0 (JACARANDA) — the same hardware as the Knulli
   reference, so the pair is a controlled comparison — showed the port opening to

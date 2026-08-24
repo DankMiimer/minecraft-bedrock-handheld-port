@@ -203,6 +203,18 @@ correctly unusable, so arm64 is selected.
 (`convert` 7.1.1) and `fbv` are available, which is what the framebuffer rung of
 the message ladder uses.
 
+**Optional Google Play downloader — measured.** muOS meets the prototype's
+requirements: aarch64, the `h700` profile, working squashfs loop mounts,
+symlink support on the exfat card, and `gptokeyb`/`gptokeyb2` present in
+PortMaster. The one thing it lacks is Mesa. Knulli and Batocera get
+`mesa_pkg_0.1.squashfs` through PortMaster; muOS ships an empty `libs/`, and
+the firmware itself has no Mesa, no Xwayland and no gbm -- only Mali EGL/GLESv2.
+Upstream publishes the same package as `mesa_pkg_0.1.aarch64.squashfs`, whose
+`lib/aarch64-linux-gnu/libGLX_mesa.so.0` is exactly what the GLX step probes
+for, so `ensure_mesa` downloads and verifies it the way `ensure_weston` already
+does. Both squashfs images mount cleanly on `/dev/loop0` and `/dev/loop1`, and
+`Xwayland` comes from the Weston package at `/tmp/weston/bin/Xwayland`.
+
 **Time — measured.** `date` is busybox 1.36.1 and **does not support `%N`**:
 `date +%s%3N` returns the literal `1787598189%3N`. The launcher's guard rejects
 the non-numeric result and falls back to seconds×1000, so timings are correct

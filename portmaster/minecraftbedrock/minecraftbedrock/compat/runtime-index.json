@@ -4,12 +4,31 @@
     {
       "id": "weston_pkg_0.2.aarch64",
       "architecture": "aarch64",
-      "backends": ["mali", "x11", "wayland"],
+      "backends": [
+        "mali",
+        "x11",
+        "wayland"
+      ],
       "api": "westonpack-0.2",
       "filename": "weston_pkg_0.2.aarch64.squashfs",
       "url": "https://raw.githubusercontent.com/PortsMaster/PortMaster-New/main/runtimes/weston_pkg_0.2.aarch64.squashfs",
       "sha256": "0bccaeebc11296bb1fe4278c9677cb82965c5a04bcd63745fa09d78228bc1a93",
       "size": 55398400,
+      "license": "see PortMaster runtime metadata"
+    },
+    {
+      "id": "mesa_pkg_0.1.aarch64",
+      "architecture": "aarch64",
+      "backends": [
+        "mali",
+        "x11",
+        "wayland"
+      ],
+      "api": "mesapack-0.1",
+      "filename": "mesa_pkg_0.1.aarch64.squashfs",
+      "url": "https://raw.githubusercontent.com/PortsMaster/PortMaster-New/main/runtimes/mesa_pkg_0.1.aarch64.squashfs",
+      "sha256": "e4ba1c3c8124bed276993a60e93795c0c6d3b2f0f56b6654a10edb054e771fe7",
+      "size": 57966592,
       "license": "see PortMaster runtime metadata"
     }
   ]
