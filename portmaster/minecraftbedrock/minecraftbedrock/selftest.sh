@@ -2,9 +2,11 @@
 # Answer "will this port work on my device?" without installing an APK or
 # starting Minecraft.
 #
-# muOS and dArkOS have no reference device in this project, so their contracts
-# in docs/CFW-CONTRACTS.md are assumptions. This exists so a reporter can turn
-# "it crashes" into a structured answer before anyone guesses.
+# dArkOS has no reference device in this project, so its contract in
+# docs/CFW-CONTRACTS.md is an assumption. This exists so a reporter can turn
+# "it crashes" into a structured answer before anyone guesses. It is also what
+# produced the muOS contract: everything that firmware's row claims, apart from
+# the behaviour of a running game, came from one run of this script.
 #
 # Read-only apart from its own report file. Output is short, redacted with the
 # same filter as the support bundle, and meant to be pasted into an issue.
@@ -52,7 +54,7 @@ case "$MCPE_CFW" in
          "reported as '$MCPE_CFW'; per-firmware behaviour falls back to generic" ;;
 esac
 case "$MCPE_CFW" in
-  muos|arkos) warn "firmware has no reference device" \
+  arkos) warn "firmware has no reference device" \
       "its contract in docs/CFW-CONTRACTS.md is assumed, not measured" ;;
 esac
 
