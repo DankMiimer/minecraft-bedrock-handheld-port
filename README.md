@@ -76,7 +76,28 @@ The archive supplies launch entries under both `roms/ports/` and `ports/` so
 the supported firmware layouts find the same payload. Refresh the Ports list,
 then launch **Minecraft Bedrock** once. This creates the shared data folders.
 
-### 2. Download your owned Bedrock APKs on Windows
+### 2. Get your owned Bedrock APKs
+
+There are two routes. Pick the first one if your device can use it.
+
+#### On the device itself — no PC needed
+
+Open **Get APK from Google Play** in the launcher menu. It signs you in on
+Google's own page, downloads the build you choose, validates it and installs
+it, all on the handheld. You need Wi-Fi, about 1.5 GB of free space for the
+one-time browser runtime, and the Google account that owns Minecraft.
+
+This is a prototype and it is limited to **64-bit H700 devices on muOS, Knulli
+or Batocera** — an RG34XX-SP, RG35XX-H/Plus/2024 and relatives. The tile is
+greyed out on anything else, which is not a bug: the sign-in browser needs a
+graphics path only those devices have been proven on. Everyone else uses the
+helper below.
+
+Verified end to end on an RG34XX-SP running muOS 2601.0 JACARANDA on
+2026-08-25: sign-in, download of the 1.16.221.01 split set, install, and a
+clean play session with working controls and sound.
+
+#### On a PC — the helper
 
 On a Windows PC, use the helper —
 [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get):
@@ -143,6 +164,8 @@ library hash, not from filenames. Exact status and evidence are in
 - **Versions** — select or remove installed game versions without deleting
   worlds.
 - **Install APK** — install a validated full APK or complete split set.
+- **Get APK from Google Play** — download your own purchase on the device.
+  64-bit H700 devices on muOS, Knulli or Batocera only; greyed out elsewhere.
 - **Settings** — configure FPS cap, render distance, client ABI, UI scale,
   VSync, performance tuning, and FPS logging.
 - **Backup** — archive and restore profiles, worlds, and launcher settings.

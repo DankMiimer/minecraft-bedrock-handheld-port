@@ -272,6 +272,17 @@ skipping it. This kernel is 4.9 and has **no `CONFIG_USER_NS`** at all
 (`/proc/<pid>/ns/user` does not exist), which is worth knowing before reading
 anything else about Chromium's sandbox on this firmware.
 
+**A full session — measured.** On 2026-08-25 an RG34XX-SP on muOS 2601.0 signed
+in to Google on the device, downloaded the 1.16.221.01 arm64 split set through
+the optional downloader, installed it and played. `logs/boot-report.txt`:
+`failsafe=rung=0 (tuned) floor=0 pinned=0`, `graphics=backend=mali
+compositor=none`, `audio=backend=pipewire alsa=1 pulse=0 pipewire=1`,
+`exit_status=0 after 488s (success)`, and the next launch still at rung 0. The
+client reported `Mali-G31`, `OpenGL ES 3.2`, its render thread pinned to core 3
+with the rest confined to cores 0-1. Controls and sound both worked, reported
+by the player at the device. This firmware is therefore measured for behaviour,
+not only for capability.
+
 **Controller — measured.** The gamepad is `/dev/input/event1`, named
 **`muOS-Keys`** — a `gpio-keys-polled` node, not the `Anbernic RG34XX-SP
 Controller` that Knulli exposes for the same hardware. Anything that finds this

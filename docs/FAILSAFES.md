@@ -59,33 +59,46 @@ Every rung above 0 is announced on screen and written to
 
 ## Status
 
-Reviewed 2026-08-24 against v2.0.0-rc.11 on three reference devices
+Reviewed 2026-08-25 against v2.0.0-rc.11 on three reference devices
 (RG34XX-SP/Knulli, RG DS/ROCKNIX, RG34XX-SP/muOS). **Nothing has been removed
 yet.**
 
 A muOS reference device arrived on 2026-08-24 and closed the *capability* half
 of the dependency this register was waiting on: identity, graphics backend,
-panel geometry, audio stack, ABI and runtime availability are now measured
-there rather than assumed. It did **not** close the *behavioural* half. That
-unit could not launch Minecraft at all — its ext4 root is corrupt, so every
-`python3` import that scans `sys.path` fails and no version can be installed —
-so no rung of this ladder was exercised in a real session on muOS. Rows whose
-criteria say "a device reached first frame" are therefore unchanged.
+panel geometry, audio stack, ABI and runtime availability. On **2026-08-25 it
+closed the behavioural half too.** After its filesystem was repaired and four
+faults were fixed on the way through — the PortMaster stub, an invisible
+message, the Crusty SDL library, and the sign-in browser's renderer, controller
+and second frontend — a player signed in to Google on the device, downloaded
+the 1.16.221.01 split set, installed it and played. From `logs/boot-report.txt`
+for that session:
 
-What that run did establish is that the ladder was previously unreachable on
-muOS for a different reason: the port resolved PortMaster to a stub directory,
-found no LOVE runtime, and then reported "no version installed" to `/dev/tty1`
-on a firmware that renders no console. The player saw a black screen. Both are
-fixed, and the second is why FS-11 exists.
+    cfw=muos (explicit, CFW_NAME=muOS, os=muOS)
+    graphics=backend=mali compositor=none
+    audio=backend=pipewire alsa=1 pulse=0 pipewire=1
+    failsafe=rung=0 (tuned) floor=0 pinned=0
+    bedrock=1.16.221.01 code=971622101 abi=arm64
+    exit_status=0 after 488s (success)
+    failsafe_next=rung 0 on the next launch
+
+Sound and controls both worked, reported by the player at the device. So the
+rows below now separate cleanly into what muOS has answered and what still
+needs a firmware nobody here owns.
+
+What the earlier run established is that the ladder was previously unreachable
+on muOS for a different reason: the port resolved PortMaster to a stub
+directory, found no LOVE runtime, and then reported "no version installed" to
+`/dev/tty1` on a firmware that renders no console. The player saw a black
+screen. Both are fixed, and the second is why FS-11 exists.
 
 | ID | Status | What is still missing |
 |---|---|---|
 | FS-1 | Not evidenced | Both reference devices run a build the in-client guard covers, so they launch with `offline=0` and never exercise this fallback. It needs a report from an affected build — armhf 1.16.x, or muOS on a version the guard misses. |
 | FS-2 | Partly evidenced | The `h700` and `rgds` affinity profiles ran at rung 0 with pinning active, drawing 2572 and 3101 frames and exiting cleanly. The `rk3326` and `generic` profiles have no device. Full removal also needs affinity chosen by measured capability rather than device-model match. |
-| FS-3 | Partly evidenced | Performance mode was active at rung 0 across a 21-minute ROCKNIX session and repeated Knulli launches, all clean. That is stability evidence for two firmwares, not a thermal pass. Still none for muOS — the reference unit never reached a session — or for dArkOS. |
+| FS-3 | Partly evidenced | Performance mode was active at rung 0 across a 21-minute ROCKNIX session, repeated Knulli launches, and now an 8-minute muOS session (`CPU=performance GPU-min=648000000`, render thread pinned to core 3, exit 0). Three firmwares, all clean — stability evidence, still not a thermal pass. None for dArkOS. |
 | FS-4 | Partly evidenced | The capability probe picked `mali` on Knulli, `wayland` on ROCKNIX and `mali` on muOS, all three confirmed correct on hardware — muOS exposes no `/dev/dri` at all, which the previous invented fixture had wrong. Three of four firmwares, but none of the three has exercised the rung 2 override itself. |
 | FS-5 | Partly evidenced | The Crusty context hand-off worked at rung 0 on both reference devices, on the libmali and the Sway path. Untested on the ArkOS/KMSDRM family. |
-| FS-6 | Half discharged | `lib/audio.sh` runs on both launch paths and refuses PipeWire with no client config, which is the dArkOS cause from issue #1. Knulli and ROCKNIX resolve the Pulse path correctly. muOS is now measured and matches the reported shape — PipeWire with **no** Pulse socket, native socket at `/run/pipewire-0` — and it **does** ship `/usr/share/pipewire/client.conf`, so the dArkOS cause does not apply there and OpenAL may be offered PipeWire. The triage selects that path correctly; it has not yet been heard. Needs a physical dArkOS, and a muOS device that can actually play. |
+| FS-6 | Half discharged | `lib/audio.sh` runs on both launch paths and refuses PipeWire with no client config, which is the dArkOS cause from issue #1. Knulli and ROCKNIX resolve the Pulse path correctly. muOS resolves the shape it was predicted to have — PipeWire with **no** Pulse socket at `/run/pipewire-0`, `/usr/share/pipewire/client.conf` present, so OpenAL is offered PipeWire — and on 2026-08-25 that path was **heard**: `audio=backend=pipewire alsa=1 pulse=0 pipewire=1`, sound working in a real session. What is still missing is the firmware the rung was written for: a physical dArkOS. |
 | FS-7 | Mostly discharged | The watchdog now reports a stall within the same run, and `window`/`first-frame` were recorded on both devices under rc.11. A reached-first-frame breadcrumb no longer counts as a startup failure. What remains is a client that spins forever and a device that loses power, neither of which the watchdog can see. |
 | FS-8 | Permanent mechanism | Terminal state of the ladder. Its *reachability* is the thing to drive to zero; it was never reached on either device. |
 | FS-9 | Partly evidenced | Both reference devices reached first frame at the tuned profile under rc.11 (11 s and 8 s), so the clamp was never needed there. Removal still needs a physical acceptance pass for the armhf preset, which has no device. |
@@ -94,11 +107,12 @@ fixed, and the second is why FS-11 exists.
 
 ### What would move this the most
 
-One volunteer on **dArkOS** running **Self test**, and one on **muOS with a
-healthy filesystem** who can get as far as playing. The muOS capture on
-2026-08-24 answered every question the self test can answer without launching;
-what none of these rows can be closed by is a device that never started the
-game. FS-1, FS-2, FS-3, FS-5 and FS-9 all need a real session.
+One volunteer on **dArkOS** running **Self test**. That is now the only
+outstanding ask: muOS answered its half on 2026-08-25 by playing, which is what
+none of these rows could be closed by a device that never started the game.
+FS-1, FS-2, FS-5 and FS-9 still need sessions on firmwares or builds nobody
+here owns — an armhf 1.16.x for the resolver guard, the `rk3326` and `generic`
+affinity profiles, the ArkOS/KMSDRM display path, and an armhf acceptance pass.
 
 ## Startup supervision (Phase 2, F2)
 

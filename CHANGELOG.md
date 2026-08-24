@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Minecraft Bedrock now runs on muOS, start to finish, with no PC involved.**
+  On 2026-08-25 an RG34XX-SP running muOS 2601.0 JACARANDA signed in to Google
+  on the device, downloaded the 1.16.221.01 arm64 split set, installed it and
+  played, with working controls and sound. The session ran at failsafe rung 0
+  with performance mode active and exited cleanly after 488 seconds. muOS is now
+  a firmware this port is *measured* on for behaviour, not only for capability,
+  and the README tells players the on-device route exists.
+
+  Every fault between the muOS tile and that session is fixed, and each is
+  listed separately below: the PortMaster stub redirect, the launcher message no
+  console rendered, the downloader gate and its missing Mesa package, the absent
+  `libcom_err.so.2`, the SDL library Crusty never resolved, the sign-in
+  browser's renderer capabilities, the second frontend the message ladder
+  started over the running port, and the controller the sign-in window could not
+  find.
+
 - **The muOS sign-in window took no input.** The page rendered and the buttons
   did nothing. The helper reads the gamepad straight from `/dev/input` — it has
   to, because Qt's on-screen keyboard needs in-process navigation signals that
