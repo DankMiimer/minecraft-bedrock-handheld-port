@@ -661,8 +661,13 @@ menu_do_install() {
 
 refresh_downloader_menu_state() {
   export MCPE_DOWNLOADER_SUPPORTED=0 MCPE_DOWNLOADER_SESSION=0 MCPE_DOWNLOADER_RUNTIME=0
+  # Keep this firmware list identical to is_supported() in downloader/run.sh.
+  # They are separate gates -- this one only decides whether the menu tile is
+  # selectable, run.sh decides whether the download may proceed -- and when they
+  # disagreed the tile stayed greyed out no matter what run.sh thought.
+  # tests/test_cfw_contracts.py asserts the two lists match.
   if [ "${MCPE_HOST_ARCH:-}" = aarch64 ] && [ "${MCPE_HOST_PROFILE:-}" = h700 ] &&
-     mcpe_is_cfw knulli batocera; then
+     mcpe_is_cfw knulli batocera muos; then
     export MCPE_DOWNLOADER_SUPPORTED=1
   fi
   [ -s "$MCPE_SHARED_ROOT/downloader/playdl.conf" ] &&

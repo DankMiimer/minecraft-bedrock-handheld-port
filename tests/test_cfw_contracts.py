@@ -262,3 +262,32 @@ def test_a_broken_interpreter_is_reported_as_such():
     assert "mcpe_python_health" in read(PAYLOAD / "selftest.sh")
     # A filesystem fault must be named as a firmware problem.
     assert "e2fsck" in common
+
+
+def test_the_two_downloader_gates_agree_on_firmware():
+    """The menu tile and the downloader itself must allow the same firmwares.
+
+    They are separate checks: the launcher decides whether the tile is
+    selectable, run.sh decides whether a download may start. When muOS was
+    added to run.sh alone the tile stayed greyed out and told the player the
+    prototype was Knulli-only, which was no longer true.
+    """
+    launcher = read(ROOT / "portmaster/minecraftbedrock/Minecraft Bedrock.sh")
+    run = read(PAYLOAD / "downloader/run.sh")
+
+    block = launcher.split("refresh_downloader_menu_state()", 1)[1].split(chr(10) + "}", 1)[0]
+    line = next(l for l in block.splitlines() if "mcpe_is_cfw" in l)
+    menu_gate = set(line.split("mcpe_is_cfw", 1)[1].replace(";", " ").replace("then", " ").split())
+
+    supported = run.split("is_supported()", 1)[1].split(chr(10) + "}", 1)[0]
+    case_line = next(l for l in supported.splitlines() if ") return 0 ;;" in l)
+    run_gate = set(case_line.split(")", 1)[0].strip().split("|"))
+
+    assert menu_gate == run_gate, (
+        "menu tile allows %s but the downloader allows %s" % (sorted(menu_gate), sorted(run_gate)))
+    assert "muos" in menu_gate, menu_gate
+
+    # The player-facing strings must not still claim Knulli only.
+    menu_lua = read(PAYLOAD / "menu/main.lua")
+    assert "Knulli prototype only" not in menu_lua
+    assert "RG34XXSP/H700 + Knulli" not in menu_lua
