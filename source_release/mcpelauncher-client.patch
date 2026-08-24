@@ -505,11 +505,15 @@ index 01e728c..401d2b7 100644
 +// RG34XX-SP, idle with the frontend resident: freeram 484 MB against a
 +// MemAvailable of 1643 MB out of 1979 MB total, because 1179 MB of it is
 +// buffers and page cache the kernel would hand back on demand. The port's own
-+// asset prewarm in weston_launch.sh drives freeram lower still, by
-+// design. Reporting that as free memory is what makes Bedrock take its
-+// low-memory path -- dropping caches and rebuilding chunks it just built -- on
-+// a device that is not short of memory at all. MemAvailable is the kernel's
-+// own answer to the question Bedrock is asking.
++// asset prewarm in weston_launch.sh drives freeram lower still, by design. In
++// a loaded world it reaches 33 MB against 1078 MB available. MemAvailable is
++// the kernel's own answer to the question Bedrock is asking.
++//
++// Measured caveat: an A/B against the pre-change client on the 2 GB reference
++// device found no frame-rate difference and no stutter on either side, so the
++// old figure was wrong without being costly there -- peak RSS was 632 MB,
++// far from either limit. This is a correctness fix whose performance effect,
++// if any, belongs to smaller devices where the budget actually binds.
 +static long long mcpeAvailableBytes() {
 +    using Clock = std::chrono::steady_clock;
 +    // Reading /proc/meminfo costs far more than the single sysinfo() call it

@@ -47,15 +47,26 @@
   `getMemoryLimit` now reports `MCPE_GAME_MEMORY_BUDGET_MB` -- the machine less
   what the firmware, the frontend, Weston and the launcher already hold -- and
   `getFreeMemory` reports `MemAvailable` instead of `sysinfo()`'s `freeram`.
-  The old answer was wrong in a way that costs frames: Linux keeps every idle
-  page in the page cache, so on the reference device, idle with the frontend
-  resident, freeram reads 484 MB against a MemAvailable of 1643 MB out of
-  1979 MB total -- 1179 MB of the difference is buffers and page cache the
-  kernel would hand back on demand -- and the port's own asset prewarm drives
-  freeram lower still by design. Bedrock was being told it was nearly out of
-  memory on a device with 1.6 GB available, which is what its cache-dropping
-  path exists to react to. **Needs a client rebuild to take effect**; the shell-side tiers do
-  not.
+  The old answer was factually wrong: Linux keeps every idle page in the page
+  cache, so `freeram` is not "memory the game may have". On the reference
+  device, idle with the frontend resident, freeram reads 484 MB against a
+  MemAvailable of 1643 MB of 1979 MB total; in a loaded world it reads **33 MB
+  against 1078 MB available**. Bedrock was being told it had 33 MB left on a
+  device with a gigabyte free.
+
+  **It did not cost frames, though -- measured, not assumed.** A/B on the
+  reference RG34XX-SP, same world and spot, 192-block render distance, 85s
+  in-world windows on each client: 32.0 fps new against 31.9 fps old, 0.00%
+  stutter frames and zero major faults on *both*. The old client was fed the
+  33 MB figure and simply did not act on it. Peak RSS was 632 MB, which never
+  approaches either limit (1584 MB new, 1979 MB old), so `getMemoryLimit` does
+  not bind on a 2 GB device either.
+
+  The change is kept because reporting 33 MB when 1078 MB is available is
+  wrong regardless, and because the numbers suggest where it *would* bind: a
+  1 GB device gets a ~640 MB budget, right at the 632 MB working set measured
+  here. That case is untested -- there is no 1 GB reference device in this
+  tree. **Needs a client rebuild to take effect**; the shell-side tiers do not.
 - Fixed: the one-time arm64 preset overwrote the explicit pins on the launch
   that seeded a profile. `tune_game_options` documents two tiers -- pins always
   win, guardrails only edit keys the game already wrote -- but wrote the pins
