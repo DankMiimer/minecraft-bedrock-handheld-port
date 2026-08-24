@@ -123,22 +123,26 @@ mcpe_apply_memory_profile() { # abi
 # into a coin flip between them, which is what reads as judder.
 #
 # Measured on the RG34XX-SP's 59.156 Hz panel (superflat, stationary,
-# 1.16.221.01, ~16k frames per window, vsync off):
+# 1.16.221.01, vsync off, one 60-90s window per cap):
 #
-#   cap 60 -> 57.5 fps  1.03 intervals  94% held one refresh   hold stdev 0.24
-#   cap 40 -> 37.9 fps  1.56 intervals  44/56 split            hold stdev 0.50
-#   cap 30 -> 29.0 fps  2.04 intervals  92% held two refreshes hold stdev 0.29
+#   cap 60 -> 57.5 fps  1.03 intervals  1x94% 2x6%    hold stdev 0.24
+#   cap 50 -> 47.0 fps  1.26 intervals  1x74% 2x26%   hold stdev 0.44
+#   cap 40 -> 37.9 fps  1.56 intervals  1x44% 2x56%   hold stdev 0.50
+#   cap 30 -> 29.0 fps  2.04 intervals  2x92%         hold stdev 0.29
 #
 # 40 sat almost exactly halfway between two multiples -- the worst value
 # available on this panel -- so it is no longer the default anywhere. Every cap
-# also came in 4-5% under its target; that is limiter overhead, not lost frames
-# (p99 stayed inside the cap's own interval in all three windows).
+# came in 4-6% under its target; that is limiter overhead, not lost frames
+# (p99 stayed inside the cap's own interval in every window).
 #
 # 1.16.221.01 and older render cheaply enough to hold a high cap, and there the
-# responsiveness is worth pacing less even than 30's: 50 is roughly 1.2
-# intervals, better than 40 but short of a clean divisor, and this panel has
-# none between 29.6 and 59.2. Newer builds are heavier, so they take the cap
-# that stays binding -- and therefore evenly paced -- once load rises.
+# responsiveness is worth pacing less even than 30's. 50 buys 18 fps over 30
+# for a 74/26 hold split instead of 92% steady, and its frame-to-frame jitter
+# is actually the second lowest of the four (2.48ms against 30's 2.30ms and
+# 40's 3.31ms) -- the renderer is steady, it is the scanout cadence that is
+# not. There is no clean divisor between 29.6 and 59.2 on this panel, so that
+# trade is unavoidable at this frame rate. Newer builds are heavier, so they
+# take the cap that stays binding -- and therefore evenly paced -- under load.
 #
 # armhf/R36S is not part of this split: its 10 fps cap is a throughput limit on
 # a much weaker device, not a cadence choice.

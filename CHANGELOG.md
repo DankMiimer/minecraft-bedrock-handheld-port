@@ -14,6 +14,7 @@
   | cap | achieved | frame time | intervals | holds | hold stdev | jitter |
   | --- | --- | --- | --- | --- | --- | --- |
   | 60 | 57.5 fps | 17.38 ms | 1.03 | 1x94% 2x6% | 0.24 | 2.61 ms |
+  | 50 | 47.0 fps | 21.29 ms | 1.26 | 1x74% 2x26% | 0.44 | 2.48 ms |
   | 40 | 37.9 fps | 26.41 ms | 1.56 | 1x44% 2x56% | 0.50 | 3.31 ms |
   | 30 | 29.0 fps | 34.48 ms | 2.04 | 2x92% | 0.29 | 2.30 ms |
 
@@ -24,10 +25,14 @@
   target, which is limiter overhead. 30 is also the cap that stays *binding*,
   and therefore evenly paced, once load rises past what superflat asks for --
   60 only looks good here because this scene lets the device hit it. Older
-  builds render cheaply enough to hold a higher cap, and 50 (~1.2 intervals)
-  trades some evenness for responsiveness; this panel has no clean divisor
-  between 29.6 and 59.2. The player's own FPS cap setting still wins over both
-  defaults, and armhf/R36S keeps its throughput-bound 10.
+  builds render cheaply enough to hold a higher cap, and 50 trades evenness for
+  responsiveness: it buys 18 fps over 30 for a 74/26 hold split instead of 92%
+  steady, while its frame-to-frame jitter is the second lowest of the four
+  (2.48 ms against 30's 2.30 ms and 40's 3.31 ms) -- the renderer is steady, it
+  is the scanout cadence that is not. This panel has no clean divisor between
+  29.6 and 59.2, so that trade is unavoidable at this frame rate. The player's
+  own FPS cap setting still wins over both defaults, and armhf/R36S keeps its
+  throughput-bound 10.
 - The port now **measures how much memory the device has** and tells the game.
   Four tiers -- 512 MB, 1 GB, 2 GB, 3 GB -- chosen from `MemTotal`, with the
   boundaries between the fittings rather than on them, because the kernel only
