@@ -130,6 +130,18 @@ mcpe_apply_memory_profile() { # abi
 #   cap 40 -> 37.9 fps  1.56 intervals  1x44% 2x56%   hold stdev 0.50
 #   cap 30 -> 29.0 fps  2.04 intervals  2x92%         hold stdev 0.29
 #
+# Repeated in a generated world at the shipped 80-block render distance, which
+# is what players actually run, and the result is the same within noise:
+#
+#   cap 50 -> 46.2 fps  1.28 intervals  1x73% 2x27%   hold stdev 0.44
+#   cap 30 -> 28.9 fps  2.04 intervals  2x91%         hold stdev 0.30
+#
+# So the cap still binds under real terrain load at 80 blocks, and the choice
+# between these two is a real one. It stops mattering once the scene outruns
+# the cap: at 192 blocks the same world is GPU-bound at 32 fps and lands on
+# 1.85 intervals whatever the cap says (2x84%, hold stdev 0.37). A cap can
+# only place frames while the device can beat it.
+#
 # 40 sat almost exactly halfway between two multiples -- the worst value
 # available on this panel -- so it is no longer the default anywhere. Every cap
 # came in 4-6% under its target; that is limiter overhead, not lost frames

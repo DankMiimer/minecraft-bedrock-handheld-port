@@ -30,7 +30,15 @@
   steady, while its frame-to-frame jitter is the second lowest of the four
   (2.48 ms against 30's 2.30 ms and 40's 3.31 ms) -- the renderer is steady, it
   is the scanout cadence that is not. This panel has no clean divisor between
-  29.6 and 59.2, so that trade is unavoidable at this frame rate. The player's
+  29.6 and 59.2, so that trade is unavoidable at this frame rate.
+
+  Re-measured in a generated world at the shipped 80-block render distance, to
+  check the superflat result was not an artefact of an unusually light scene.
+  It was not -- 50 gives 46.2 fps at 1.28 intervals (73/27, hold stdev 0.44)
+  and 30 gives 28.9 fps at 2.04 intervals (91% steady, hold stdev 0.30), both
+  within noise of the superflat pair. The cap stops mattering only once the
+  scene outruns it: at 192 blocks the same world is GPU-bound at 32 fps and
+  lands on 1.85 intervals whatever the cap says. The player's
   own FPS cap setting still wins over both defaults, and armhf/R36S keeps its
   throughput-bound 10.
 - The port now **measures how much memory the device has** and tells the game.
