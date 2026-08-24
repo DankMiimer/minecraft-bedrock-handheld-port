@@ -163,7 +163,7 @@ local SCHEMA = {
     key = "fps_cap", label = "FPS cap", widget = "slider",
     values = fpsValues,
     names  = fpsNames,
-    help   = "Auto uses 10 on low-memory R36S; 30-40 suits H700.",
+    help   = "Auto: 50 on 1.16.221.01 and older, 30 on newer, 10 on R36S.",
   },
   {
     key = "render_distance", label = "Render distance", widget = "slider",
@@ -179,10 +179,10 @@ local SCHEMA = {
     help   = "Auto picks per device. 32-bit needs /dev/dri (R36S-class).",
   },
   {
-    key = "ui_scale", label = "UI scale",
-    values = {"auto", "1", "2", "3"},
-    names  = {"Auto", "Small (1)", "Normal (2)", "Large (3)"},
-    help   = "Game interface density. Lower = smaller UI elements.",
+    key = "ui_zoom", label = "UI zoom",
+    values = {"off", "1.25", "1.5"},
+    names  = {"Off", "1.25x", "1.5x (softest)"},
+    help   = "Renders smaller and lets the panel enlarge it. Works on 1.21.",
   },
   {
     key = "vsync", label = "VSync",
@@ -284,7 +284,7 @@ local HELP = {
   {t = "Game will not start",
    d = "Check log.txt in ports/minecraftbedrock. 1.26+ Play APKs cannot work."},
   {t = "Stutters or low FPS",
-   d = "Set FPS cap 30-40 and render distance 3-4 chunks in Settings."},
+   d = "Set FPS cap 30 and render distance 3-4 chunks in Settings."},
   {t = "No sound",
    d = "Raise the device volume, then relaunch the port once."},
   {t = "Wrong buttons in game",

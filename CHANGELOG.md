@@ -1,5 +1,112 @@
 # Changelog
 
+## Unreleased
+
+- **The frame cap is now keyed to the game version, and 40 is gone.** Bedrock
+  1.16.221.01 and older default to 50 fps, everything newer to 30. The cap the
+  port shipped was the worst value available on the RG34XX-SP's 59.156 Hz
+  panel. Even with VSync off the panel only swaps on a refresh boundary, so
+  what reaches the eye is the whole number of refresh intervals each frame is
+  held for; a cap landing between two multiples turns every frame into a coin
+  flip between them. Measured on the reference device, superflat, stationary,
+  ~16k frames per window:
+
+  | cap | achieved | frame time | intervals | holds | hold stdev | jitter |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 60 | 57.5 fps | 17.38 ms | 1.03 | 1x94% 2x6% | 0.24 | 2.61 ms |
+  | 40 | 37.9 fps | 26.41 ms | 1.56 | 1x44% 2x56% | 0.50 | 3.31 ms |
+  | 30 | 29.0 fps | 34.48 ms | 2.04 | 2x92% | 0.29 | 2.30 ms |
+
+  40 sat almost exactly halfway between one and two refreshes, doubling the
+  hold spread and raising frame-to-frame jitter 44% against 30. p99 stayed
+  inside each cap's own interval in all three windows, so these are limiter
+  cadence differences, not dropped frames; every cap also came in 4-5% under
+  target, which is limiter overhead. 30 is also the cap that stays *binding*,
+  and therefore evenly paced, once load rises past what superflat asks for --
+  60 only looks good here because this scene lets the device hit it. Older
+  builds render cheaply enough to hold a higher cap, and 50 (~1.2 intervals)
+  trades some evenness for responsiveness; this panel has no clean divisor
+  between 29.6 and 59.2. The player's own FPS cap setting still wins over both
+  defaults, and armhf/R36S keeps its throughput-bound 10.
+- The port now **measures how much memory the device has** and tells the game.
+  Four tiers -- 512 MB, 1 GB, 2 GB, 3 GB -- chosen from `MemTotal`, with the
+  boundaries between the fittings rather than on them, because the kernel only
+  counts what the firmware's carveouts leave behind: the reference RG34XX-SP
+  reports 1980 MB for its 2 GB, and the R36S about 500 for its 512. The tier
+  sizes the texture streaming budget (`gfx_max_dequeued_textures_per_frame`,
+  2/8/16/16) and, on 3 GB, the render distance. The 2 GB row is exactly what
+  the port already shipped, since that is the device the profile was validated
+  on; 80 blocks stays the floor on the smaller tiers because Bedrock clamps any
+  request below it straight back up.
+- The client no longer answers every Android memory question with physical RAM.
+  `getMemoryLimit` now reports `MCPE_GAME_MEMORY_BUDGET_MB` -- the machine less
+  what the firmware, the frontend, Weston and the launcher already hold -- and
+  `getFreeMemory` reports `MemAvailable` instead of `sysinfo()`'s `freeram`.
+  The old answer was wrong in a way that costs frames: Linux keeps every idle
+  page in the page cache, so on the reference device, idle with the frontend
+  resident, freeram reads 484 MB against a MemAvailable of 1643 MB out of
+  1979 MB total -- 1179 MB of the difference is buffers and page cache the
+  kernel would hand back on demand -- and the port's own asset prewarm drives
+  freeram lower still by design. Bedrock was being told it was nearly out of
+  memory on a device with 1.6 GB available, which is what its cache-dropping
+  path exists to react to. **Needs a client rebuild to take effect**; the shell-side tiers do
+  not.
+- Fixed: the one-time arm64 preset overwrote the explicit pins on the launch
+  that seeded a profile. `tune_game_options` documents two tiers -- pins always
+  win, guardrails only edit keys the game already wrote -- but wrote the pins
+  first, so the preset file's own `gfx_viewdistance`, `gfx_max_framerate` and
+  `gfx_vsync` landed on top of them. Demonstrated on the reference device:
+  `MCPE_RENDER_DISTANCE=96` produced `gfx_viewdistance:80` on a fresh profile.
+  It was invisible while every device was pinned to the preset's own values and
+  became visible the moment the memory tier gave devices different ones.
+
+- The startup watchdog no longer costs a frame's worth of work every second.
+  It never disarms unless frame metrics are on -- which they are not by default
+  -- so its tick ran for the whole session, and the tick spawned four processes
+  (`cat`, `awk`, a command substitution, `wc`) to read two numbers. Measured on
+  the reference RG34XX-SP over 500 ticks: 21.1 ms of wall time and 2.4 ms of
+  CPU each, against 25 ms per rendered frame. Reading `/proc/pid/stat` in the
+  shell and detecting log growth with an mtime sentinel does the same job in
+  0.45 ms with no process at all. Behaviour is unchanged, and the same tests
+  pass against both versions.
+- The shutdown watchdog greps the client log once every two seconds rather than
+  every second. Bounding the read with `tail -c` was tried and measured no
+  better (5.4 ms against 5.3 ms on a 420 KB log) because the second process
+  costs more than the skipped read saves; the period is the part that helps.
+- `tests/test_watchdog.sh` builds its fake client from `bash` rather than
+  `/bin/sleep`. On every firmware this port targets `/bin/sleep` is a symlink
+  into a multi-call `coreutils` binary, which refuses to run under an argv[0]
+  it does not recognise, so the fixture exited instantly and every case in the
+  file failed on the reference device.
+
+- A **UI zoom** setting makes 1.21.51.01 usable on a small panel. Measurements
+  on the reference RG34XX-SP show that build takes its UI scale from the real
+  render surface alone: the client `scale` setting, `MCPE_REPORTED_DISPLAY_SCALE`,
+  `gfx_guiscale_offset`, `gfx_pixeldensity`, `gfx_resizableui` and the
+  `upscaling_*` keys all leave the rendered UI pixel-identical, because 1.21
+  never asks for the reported DPI at all. Rendering at two thirds of the panel
+  and letting the display scaler enlarge it gives a 1.5x larger UI for 55%
+  fewer pixels, and is now one row in the launcher menu with a gentler 1.25x
+  step beside it. `docs/UI-SCALING.md` records the matrix and the method.
+- The smaller-than-native framebuffer path no longer trusts `fbset`. It
+  reported success for 600x400 and 360x240, which do not survive a session on
+  this graphics stack, so the port claimed a mode it was not running and would
+  have restored one it never set. Sizes must now be multiples of 16, which is
+  what separates the modes that hold from the ones that do not, and the
+  geometry is read back before the mode is believed.
+- The **UI scale** row now says it applies to 1.16 only, rather than silently
+  doing nothing on the newer build.
+- **menu+L3** takes a screenshot while the game runs, written as a PNG to
+  `ports/minecraftbedrock/screenshots/`. There is no compositor screenshot key
+  on the framebuffer path, so a small watcher reads the evdev nodes alongside
+  the client. Pads whose printed labels do not match the `BTN_` names their
+  driver sends get a layout entry: on the RG34XX-SP the labels sit one place
+  off, L3 arrives as `0x139`, and one press of MENU emits both `0x138` and
+  `0x162`, so a chord named after the kernel would have watched for buttons
+  that pad never sends. Confirmed on the device. Override the chord with
+  `MCPE_SCREENSHOT_COMBO=menu+r3`, name new hardware with
+  `MCPE_SCREENSHOT_DEBUG=1`, disable with `MCPE_SCREENSHOTS=0`.
+
 ## v2.0.0-rc.11 (testing)
 
 Cross-firmware reliability work. Knulli and ROCKNIX were verified on reference

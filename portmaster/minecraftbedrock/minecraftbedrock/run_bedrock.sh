@@ -109,13 +109,29 @@ fi
 echo "ABI: $ABI (version has: 64=$V_HAS64 32=$V_HAS32, usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE, mem=${MEM_KB}kB)"
 mcpe_stage abi
 mcpe_report_set abi "$ABI (installed: 64=$V_HAS64 32=$V_HAS32; usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE; override=${MCPE_ABI_OVERRIDE:-none})"
+# Device memory. Resolved before the ABI presets so the measured tier is what
+# their ${VAR:-default} expansions see, and exported so the client can answer
+# Android's memory questions with this device's real budget instead of with
+# physical RAM.
+mcpe_apply_memory_profile "$ABI"
+echo "Memory: ${MCPE_HOST_MEMORY_MB} MB total, tier ${MCPE_MEMORY_TIER}, game budget ${MCPE_GAME_MEMORY_BUDGET_MB:-unset} MB"
+mcpe_report_set memory_tier "${MCPE_MEMORY_TIER} (${MCPE_HOST_MEMORY_MB} MB total; game budget ${MCPE_GAME_MEMORY_BUDGET_MB:-unset} MB)"
+# Whether the cap below came from the player or from the preset, recorded
+# before the preset's ${VAR:-default} expansion erases the difference.
+FPS_CAP_SOURCE=preset
+[ -n "${MCPE_MAX_FPS:-}" ] && FPS_CAP_SOURCE=player
 if [ "$ABI" = armhf ]; then
   mcpe_apply_r36s_defaults "$ABI"
   echo "R36S performance preset: ${MCPE_MAX_FPS} fps, render request ${MCPE_RENDER_DISTANCE} blocks, VSync ${MCPE_VSYNC}"
   export PORT_32BIT=Y
 else
-  mcpe_apply_arm64_defaults "$ABI"
-  echo "Arm64 handheld preset: ${MCPE_MAX_FPS} fps, render distance ${MCPE_RENDER_DISTANCE} blocks, VSync ${MCPE_VSYNC}, UI scale ${MCPE_UI_DENSITY_SCALE}"
+  # The frame cap is version-keyed, so the preset needs the marketing version
+  # rather than the directory name. An unreadable one is not fatal: the preset
+  # falls back to the cap for newer builds, which is the conservative choice.
+  MCVER_NAME="$(mcpe_version_name "$MCVER_OVERRIDE" || true)"
+  mcpe_apply_arm64_defaults "$ABI" "$MCVER_NAME"
+  echo "Arm64 handheld preset: ${MCPE_MAX_FPS} fps (version ${MCVER_NAME:-unknown}), render distance ${MCPE_RENDER_DISTANCE} blocks, VSync ${MCPE_VSYNC}, Ore UI density ${MCPE_UI_DENSITY_SCALE}"
+  mcpe_report_set fps_cap "${MCPE_MAX_FPS} (version ${MCVER_NAME:-unknown}; chosen by ${FPS_CAP_SOURCE})"
 fi
 if command -v pm_platform_helper >/dev/null 2>&1; then
   if [ "$ABI" = armhf ]; then
@@ -174,7 +190,6 @@ export GAMEWINDOW_EGLUT_CRUSTY_CONTEXT="${GAMEWINDOW_EGLUT_CRUSTY_CONTEXT:-1}"
 # linux-gamepad polls the pad.
 export GAMEWINDOW_EGLUT_FORCE_FOCUS="${GAMEWINDOW_EGLUT_FORCE_FOCUS:-1}"
 
-export MCPE_REPORTED_DISPLAY_SCALE="${MCPE_REPORTED_DISPLAY_SCALE:-1}"
 export MCPE_DISABLE_AUTO_COMPACTION="${MCPE_DISABLE_AUTO_COMPACTION:-0}"
 
 # Thread layout measured on a 4x Cortex-A53 (H700): render thread on core 3,
@@ -248,7 +263,7 @@ set_kv() {
   fi
 }
 set_kv enable_imgui "${IMGUI:-false}"   # imgui's GL loader crashes on this path
-set_kv scale "${MCPE_UI_DENSITY_SCALE:-2}"
+set_kv scale "${MCPE_UI_DENSITY_SCALE:-1}"
 
 # --- Game options ---------------------------------------------------------------
 # Two tiers: explicit pins (menu settings / env: render distance, FPS cap,
@@ -273,23 +288,37 @@ tune_game_options() {
         echo "$1:$2" >> "$options_file"
       fi
     }
+    # Guardrails and the one-time preset run *before* the pins. The preset file
+    # carries gfx_viewdistance, gfx_max_framerate and gfx_vsync of its own, so
+    # with the pins written first it overwrote them on the launch that seeded
+    # the profile — invisible while every device was pinned to the preset's
+    # own values, and wrong the moment the memory tier or a caller asks for
+    # something else.
+    if [ "${MCPE_PERFORMANCE_OPTIONS:-1}" = 1 ]; then
+      if [ "${MCPE_ARM64_HANDHELD_PRESET:-0}" = 1 ]; then
+        mcpe_apply_arm64_game_options "$options_file" \
+          "$GAMEDIR/defaults/arm64-handheld-options.txt" || {
+            echo "Could not apply arm64 handheld game defaults: $options_file" >&2
+            return 1
+          }
+      fi
+      # Multithreaded renderer OFF does not submit static chunk draws on this
+      # EGLUT/crusty/libmali stack — keep it ON.
+      set_option gfx_multithreaded_renderer "${MCPE_MULTITHREADED_RENDERER:-1}"
+      set_option dev_file_watcher 0
+      set_option content_log_file 0
+      set_option content_log_gui 0
+    fi
     [ -n "${MCPE_RENDER_DISTANCE:-}" ] && pin_option gfx_viewdistance "$MCPE_RENDER_DISTANCE"
     [ -n "${MCPE_MAX_FPS:-}" ] && pin_option gfx_max_framerate "$MCPE_MAX_FPS"
     [ -n "${MCPE_VSYNC:-}" ] && pin_option gfx_vsync "$MCPE_VSYNC"
-    [ "${MCPE_PERFORMANCE_OPTIONS:-1}" = 1 ] || continue
-    if [ "${MCPE_ARM64_HANDHELD_PRESET:-0}" = 1 ]; then
-      mcpe_apply_arm64_game_options "$options_file" \
-        "$GAMEDIR/defaults/arm64-handheld-options.txt" || {
-          echo "Could not apply arm64 handheld game defaults: $options_file" >&2
-          return 1
-        }
-    fi
-    # Multithreaded renderer OFF does not submit static chunk draws on this
-    # EGLUT/crusty/libmali stack — keep it ON.
-    set_option gfx_multithreaded_renderer "${MCPE_MULTITHREADED_RENDERER:-1}"
-    set_option dev_file_watcher 0
-    set_option content_log_file 0
-    set_option content_log_gui 0
+    # Streaming budget from the memory tier. Not a key the in-game settings
+    # expose, so pinning it every launch takes nothing away from the player.
+    [ -n "${MCPE_TEXTURE_DEQUEUE:-}" ] &&
+      pin_option gfx_max_dequeued_textures_per_frame "$MCPE_TEXTURE_DEQUEUE"
+    # A pin whose guard is false leaves a non-zero status behind; the loop body
+    # must not end on it.
+    :
   done < <(find "$games_root" -name options.txt 2>/dev/null)
 }
 tune_game_options "$MCPE_DATA_ROOT_OVERRIDE/mcpelauncher/games"

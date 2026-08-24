@@ -1041,6 +1041,15 @@ apply_settings() {
         SETTINGS_VERSION="$v"
         continue
         ;;
+      ui_zoom)
+        # Carries a decimal point, so it is validated before the generic
+        # alphanumeric strip below would flatten "1.5" into "15".
+        v="${v//[!0-9.]/}"
+        case "$v" in
+          1.25|1.5) [ -z "${MCPE_UI_ZOOM:-}" ] && export MCPE_UI_ZOOM="$v" ;;
+        esac
+        continue
+        ;;
     esac
     v="${v//[!A-Za-z0-9]/}"
     case "$k" in
@@ -1055,10 +1064,6 @@ apply_settings() {
       abi)
         case "$v" in arm64|armhf)
           [ -z "${MCPE_ABI_OVERRIDE:-}" ] && export MCPE_ABI_OVERRIDE="$v" ;;
-        esac ;;
-      ui_scale)
-        case "$v" in 1|2|3)
-          [ -z "${MCPE_UI_DENSITY_SCALE:-}" ] && export MCPE_UI_DENSITY_SCALE="$v" ;;
         esac ;;
       vsync)
         case "$v" in 0|1)

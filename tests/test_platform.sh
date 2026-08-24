@@ -263,4 +263,47 @@ mcpe_stage abi
 [ "$(cut -f1 <"$TMP/stagedir/stage.txt")" = client-exec ] ||
   { echo "a child process could not advance the breadcrumb" >&2; exit 1; }
 
+# --- UI zoom target -----------------------------------------------------------
+# 1.21-era Bedrock ignores every reported-size and DPI knob, so "UI zoom" has to
+# shrink the real surface. Both steps were measured on the RG34XX-SP: 480x320
+# and 576x384 hold through a session, and both are 16-aligned.
+source "$ROOT/portmaster/minecraftbedrock/minecraftbedrock/lib/common.sh"
+
+[ "$(mcpe_zoom_target 720 480 1.5)" = "480 320" ] ||
+  { echo "1.5x zoom did not resolve 720x480 to 480x320" >&2; exit 1; }
+[ "$(mcpe_zoom_target 720 480 1.25)" = "576 384" ] ||
+  { echo "1.25x zoom did not resolve 720x480 to 576x384" >&2; exit 1; }
+mcpe_fb_mode_aligned $(mcpe_zoom_target 720 480 1.25) ||
+  { echo "the 1.25x target is not 16-aligned" >&2; exit 1; }
+mcpe_fb_mode_aligned $(mcpe_zoom_target 720 480 1.5) ||
+  { echo "the 1.5x target is not 16-aligned" >&2; exit 1; }
+[ "$(mcpe_zoom_target 720 480 1)" = "720 480" ] ||
+  { echo "zoom off changed the panel size" >&2; exit 1; }
+[ "$(mcpe_zoom_target 720 480)" = "720 480" ] ||
+  { echo "missing zoom argument changed the panel size" >&2; exit 1; }
+# A panel whose target is not 16-aligned must be caught by the gate rather than
+# quietly stretched onto a size this stack cannot hold.
+[ "$(mcpe_zoom_target 640 480 1.5)" = "426 320" ] ||
+  { echo "1.5x zoom did not keep the exact ratio on a 640x480 panel" >&2; exit 1; }
+! mcpe_fb_mode_aligned $(mcpe_zoom_target 640 480 1.5) ||
+  { echo "an unaligned zoom target was accepted" >&2; exit 1; }
+# An unknown factor must not invent a mode.
+[ "$(mcpe_zoom_target 720 480 2)" = "720 480" ] ||
+  { echo "an unsupported zoom factor was not ignored" >&2; exit 1; }
+[ "$(mcpe_zoom_target "" "" 1.5)" = " " ] ||
+  { echo "non-numeric panel size was not passed through" >&2; exit 1; }
+
+# fbset reports success for sizes this graphics stack cannot hold, and the
+# kernel's mode list is a log of what was requested rather than a capability
+# list, so alignment is the gate. 480x320 holds on the RG34XX-SP; 600x400 and
+# 360x240 do not, and are exactly the unaligned ones.
+mcpe_fb_mode_aligned 480 320 ||
+  { echo "a 16-aligned size was rejected" >&2; exit 1; }
+! mcpe_fb_mode_aligned 600 400 ||
+  { echo "600x400 was accepted despite not holding on hardware" >&2; exit 1; }
+! mcpe_fb_mode_aligned 360 240 ||
+  { echo "360x240 was accepted despite desynchronising the framebuffer" >&2; exit 1; }
+! mcpe_fb_mode_aligned "" "" ||
+  { echo "an empty size was accepted" >&2; exit 1; }
+
 echo "platform fixture tests passed"

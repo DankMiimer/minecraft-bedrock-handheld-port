@@ -196,6 +196,29 @@ mcpe_json_string() { # file key
   sed -n 's/^[[:space:]]*"'"$2"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" 2>/dev/null | head -1
 }
 
+# The marketing version ("1.16.221.01") of an installed version directory,
+# whose own name also carries the version code and ABI
+# ("1.16.221.01-971622101-arm64"). version.json is authoritative; the directory
+# name is the fallback for payloads extracted before this tree wrote metadata.
+# Prints nothing when neither yields a dotted-numeric version, which callers
+# read as "unknown" rather than guessing.
+mcpe_version_name() { # version_dir_name [versions_root]
+  local dir="${1:-}" root="${2:-$GAMEDIR/versions}" name=""
+  [ -n "$dir" ] || return 1
+  [ -f "$root/$dir/version.json" ] &&
+    name="$(mcpe_json_string "$root/$dir/version.json" version_name)"
+  if [ -z "$name" ]; then
+    case "$dir" in
+      *-*-arm64|*-*-armhf) name="${dir%-*-*}" ;;
+      *) name="$dir" ;;
+    esac
+  fi
+  case "$name" in
+    ''|*[!0-9.]*) return 1 ;;
+  esac
+  printf '%s\n' "$name"
+}
+
 mcpe_load_edition() {
   local manifest="${1:-$GAMEDIR/edition.json}"
   [ -f "$manifest" ] || { echo "missing edition manifest: $manifest" >&2; return 1; }
@@ -275,4 +298,36 @@ mcpe_select_utf8_locale() {
   # Do not invent an unsupported locale. Byte-oriented C is safer than a
   # broken locale name and is recorded in diagnostics for the device report.
   export LANG=C LC_CTYPE=C LC_ALL=C MCPE_LOCALE_RESOLVED=C
+}
+
+# --- UI zoom target -----------------------------------------------------------
+# Newer Bedrock builds (measured on 1.21.51.01) derive their entire UI scale
+# from the real render surface: the reported screen size, the reported DPI and
+# gfx_guiscale_offset are all ignored. Rendering below the panel and letting
+# the display scaler enlarge the result is the only lever that still moves
+# their UI, so the "UI zoom" setting picks a smaller surface here.
+#
+# The exact ratio is kept rather than nudged onto a convenient size: this stack
+# only holds surfaces whose sides are multiples of 16, and stretching a panel
+# onto a size it does not divide into would distort the picture rather than
+# rescue it. The caller checks alignment and verifies the mode really took.
+mcpe_zoom_target() { # panel_w panel_h zoom -> "width height"
+  local w="$1" h="$2" zoom="${3:-1}"
+  case "$w$h" in *[!0-9]*|"") printf '%s %s\n' "$w" "$h"; return 0 ;; esac
+  case "$zoom" in
+    1.25) printf '%s %s\n' "$((w * 4 / 5))" "$((h * 4 / 5))" ;;
+    1.5) printf '%s %s\n' "$((w * 2 / 3))" "$((h * 2 / 3))" ;;
+    *) printf '%s %s\n' "$w" "$h" ;;
+  esac
+}
+
+# Is this surface size safe for the Mali/disp2 path? fbset alone proves
+# nothing: every size tested here survives the call while the device is idle,
+# yet 600x400 is back at the panel size once the game has a surface, and
+# 360x240 leaves the framebuffer geometry and the rendered content disagreeing.
+# Both are the sizes that are not multiples of 16; 480x320 is, and holds.
+mcpe_fb_mode_aligned() { # width height
+  local w="$1" h="$2"
+  case "$w$h" in *[!0-9]*|"") return 1 ;; esac
+  [ "$((w % 16))" = 0 ] && [ "$((h % 16))" = 0 ]
 }

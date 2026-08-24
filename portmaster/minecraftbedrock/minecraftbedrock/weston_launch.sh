@@ -33,6 +33,7 @@ GPU_MIN_ORIGINAL=""
 LAUNCH_PIPE_PID=""
 SHUTDOWN_WATCH_PID=""
 CLIENT_PIDS_BEFORE=""
+SCREENSHOT_WATCH_PID=""
 
 # --- Display-session detection --------------------------------------------------
 # sway compositor (ROCKNIX): the game nests under sway as a wayland client;
@@ -269,6 +270,7 @@ cleanup() {
   [ "$CLEANED_UP" = 0 ] || return
   CLEANED_UP=1
   [ -n "$SHUTDOWN_WATCH_PID" ] && kill "$SHUTDOWN_WATCH_PID" 2>/dev/null || true
+  [ -n "$SCREENSHOT_WATCH_PID" ] && kill "$SCREENSHOT_WATCH_PID" 2>/dev/null || true
   if [ -n "$LAUNCH_PIPE_PID" ] && kill -0 "$LAUNCH_PIPE_PID" 2>/dev/null; then
     kill "$LAUNCH_PIPE_PID" 2>/dev/null || true
   fi
@@ -332,19 +334,48 @@ read -r FB_ORIG_W FB_ORIG_H < <(fbset 2>/dev/null |
 FB_ORIG_W="${FB_ORIG_W:-640}" FB_ORIG_H="${FB_ORIG_H:-480}"
 export DISPLAY_WIDTH="${MCPE_DISPLAY_WIDTH:-${DISPLAY_WIDTH:-$FB_ORIG_W}}"
 export DISPLAY_HEIGHT="${MCPE_DISPLAY_HEIGHT:-${DISPLAY_HEIGHT:-$FB_ORIG_H}}"
+# UI magnification: 1.21-era Bedrock derives its whole UI scale from the real
+# render surface and ignores the reported screen size, the reported DPI and
+# gfx_guiscale_offset alike, so rendering below the panel and letting the
+# display scaler enlarge it is the only lever left. Measured on
+# 1.21.51.01/RG34XX-SP: 720x480 -> 480x320 is a 1.5x larger UI for 55% fewer
+# pixels. Skipped when something already asked for a non-panel surface -- the
+# platform profile exports MCPE_DISPLAY_WIDTH/HEIGHT for the active mode, so
+# "unset" is not a usable test for "nobody chose a size".
+if [ "$DISPLAY_WIDTH" = "$FB_ORIG_W" ] && [ "$DISPLAY_HEIGHT" = "$FB_ORIG_H" ] &&
+   [ "${MCPE_UI_ZOOM:-1}" != 1 ]; then
+  read -r DISPLAY_WIDTH DISPLAY_HEIGHT < <(
+    mcpe_zoom_target "$FB_ORIG_W" "$FB_ORIG_H" "$MCPE_UI_ZOOM")
+  export DISPLAY_WIDTH DISPLAY_HEIGHT
+  echo "UI zoom ${MCPE_UI_ZOOM}x requests ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
+fi
 FBMODE_CHANGED=0
 # Optional smaller-than-native mode (bigger UI + lower GPU load) on displays
 # whose scaler upscales the fb (verified on Allwinner disp2). Not applicable
 # under a DRM compositor (sway).
 if [ "$SWAY_MODE" = 0 ] &&
    { [ "$DISPLAY_WIDTH" != "$FB_ORIG_W" ] || [ "$DISPLAY_HEIGHT" != "$FB_ORIG_H" ]; }; then
-  if fbset -xres "$DISPLAY_WIDTH" -yres "$DISPLAY_HEIGHT" \
-       -vxres "$DISPLAY_WIDTH" -vyres $((DISPLAY_HEIGHT * 2)) 2>/dev/null; then
-    FBMODE_CHANGED=1
-    echo "fb mode set to ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} (panel upscales)"
-  else
-    echo "fbset ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} failed; staying native"
+  # fbset exits 0 for sizes this stack cannot actually hold: 600x400 reverts
+  # to the panel size once the game has a surface, and 360x240 desynchronises
+  # the geometry from the rendered content. Both are unaligned; require
+  # multiples of 16, and keep the read-back as a second gate.
+  if ! mcpe_fb_mode_aligned "$DISPLAY_WIDTH" "$DISPLAY_HEIGHT"; then
+    echo "fb mode ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} is not 16-aligned and does not hold on this stack; staying native"
     export DISPLAY_WIDTH="$FB_ORIG_W" DISPLAY_HEIGHT="$FB_ORIG_H"
+  else
+    fbset -xres "$DISPLAY_WIDTH" -yres "$DISPLAY_HEIGHT" \
+      -vxres "$DISPLAY_WIDTH" -vyres $((DISPLAY_HEIGHT * 2)) 2>/dev/null
+    read -r FB_NOW_W FB_NOW_H < <(fbset 2>/dev/null |
+      awk '/geometry/ {print $2, $3; exit}')
+    if [ "$FB_NOW_W" = "$DISPLAY_WIDTH" ] && [ "$FB_NOW_H" = "$DISPLAY_HEIGHT" ]; then
+      FBMODE_CHANGED=1
+      echo "fb mode set to ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} (panel upscales)"
+    else
+      echo "fb mode ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} not accepted (panel reports ${FB_NOW_W:-?}x${FB_NOW_H:-?}); staying native"
+      fbset -xres "$FB_ORIG_W" -yres "$FB_ORIG_H" \
+        -vxres "$FB_ORIG_W" -vyres $((FB_ORIG_H * 2)) 2>/dev/null || true
+      export DISPLAY_WIDTH="$FB_ORIG_W" DISPLAY_HEIGHT="$FB_ORIG_H"
+    fi
   fi
 fi
 export WESTON_HEADLESS_WIDTH="$DISPLAY_WIDTH"
@@ -406,6 +437,14 @@ SDL3_AUDIO_ENV=()
 # "Invoking stop activity callbacks" on H700. Waiting forever strands ES and
 # makes the handheld look frozen. This watcher is inactive during gameplay and
 # starts its grace period only after that definitive shutdown marker appears.
+#
+# The scan runs for the whole session, so its period is a real cost, not a
+# rounding error. Measured on the reference RG34XX-SP: one `grep -q` over the
+# client log costs 3.5 ms at 35 KB and 5.3 ms at 420 KB, nearly all of it the
+# fork rather than the read -- bounding the read with `tail -c 65536 | grep`
+# measured 5.4 ms, no better, because the second process costs more than the
+# 355 KB it saves. Halving the rate is what actually helps, and it costs at
+# most one extra second against a grace period of fifteen.
 shutdown_watchdog() {
   local launch_pid="$1" grace="${MCPE_SHUTDOWN_GRACE_SECONDS:-15}" i pid
   case "$grace" in ''|*[!0-9]*) grace=15 ;; esac
@@ -428,11 +467,20 @@ shutdown_watchdog() {
       done
       return 0
     fi
-    sleep 1
+    sleep 2
   done
 }
 
 : > "$LOG"
+# Screenshot chord. Reads the pad's evdev nodes alongside the client -- there
+# is no compositor screenshot key on the framebuffer path. Never allowed to
+# break a launch.
+if [ "${MCPE_SCREENSHOTS:-1}" = 1 ] && command -v python3 >/dev/null 2>&1 &&
+   [ -f "$GAMEDIR/screenshot_watch.py" ]; then
+  MCPE_SCREENSHOT_DIR="${MCPE_SCREENSHOT_DIR:-$GAMEDIR/screenshots}" \
+    python3 "$GAMEDIR/screenshot_watch.py" >>"$LOG" 2>&1 &
+  SCREENSHOT_WATCH_PID=$!
+fi
 CLIENT_PIDS_BEFORE="$(pidof mcpelauncher-client 2>/dev/null || true)"
 (
   set -o pipefail

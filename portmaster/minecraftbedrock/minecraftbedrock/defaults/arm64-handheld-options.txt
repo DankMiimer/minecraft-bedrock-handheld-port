@@ -1,6 +1,11 @@
 # Captured from the physically validated RG34XXSP/Knulli 1.16.221.01 profile.
 # Only portable, user-visible handheld options belong here; never add account,
 # identity, skin, language, entitlement, world, or save-counter state.
+#
+# Applied once per profile, then recorded with a marker file. gfx_viewdistance,
+# gfx_max_framerate and gfx_vsync are re-pinned from the launcher on every run
+# afterwards, so the values here are only the first-launch seed -- the frame cap
+# in particular is version-keyed and resolved in lib/performance.sh.
 gfx_viewdistance=80
 gfx_particleviewdistance=0
 gfx_viewbobbing=1
@@ -18,7 +23,7 @@ gfx_vsync=0
 gfx_async_texture_loads=1
 gfx_show_async_texture_loads=0
 gfx_max_dequeued_textures_per_frame=16
-gfx_max_framerate=40
+gfx_max_framerate=30
 gfx_fullscreen=0
 gfx_guiscale_offset=0
 gfx_splitscreen_guiscale_offset=0
