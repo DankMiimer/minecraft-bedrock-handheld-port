@@ -21,6 +21,13 @@
 # True when a write to the active VT can reach the panel. Both probes must fail
 # before we conclude otherwise, because being wrong here means drawing over a
 # firmware that was rendering the console perfectly well.
+# mcpe_meminfo_kb / mcpe_proc_ppid / mcpe_fb_geometry live in common.sh. Load it
+# here too so this file stays usable on its own, the way platform.sh does.
+if ! type mcpe_meminfo_kb >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+fi
+
 mcpe_console_is_visible() {
   # MCPE_PROBE_ROOT is honoured so the fixtures can assert both answers without
   # a device, the same way abi.sh and platform.sh do.
@@ -57,7 +64,7 @@ mcpe_msg_frontend_awaits_us() {
   while [ "$hops" -lt 32 ]; do
     [ -r "$probe/proc/$pid/comm" ] || return 1
     [ "$(cat "$probe/proc/$pid/comm" 2>/dev/null)" = frontend.sh ] && return 0
-    parent="$(awk '/^PPid:/ { print $2; exit }' "$probe/proc/$pid/status" 2>/dev/null)"
+    parent="$(mcpe_proc_ppid "$probe/proc/$pid/status" 2>/dev/null)"
     case "$parent" in ''|0|1) return 1 ;; esac
     [ "$parent" != "$pid" ] || return 1
     pid="$parent"
@@ -140,7 +147,8 @@ mcpe_msg_framebuffer() {
   # virtual_size is taller than the panel wherever the driver double-buffers
   # (720x960 for a 720x480 panel on H700), so take the visible height from
   # fbset and fall back to the virtual one only when fbset is absent.
-  height="$(fbset 2>/dev/null | awk '/geometry/ {print $3; exit}')"
+  height="$(mcpe_fb_geometry | { read -r _ h _ _; printf '%s
+' "${h:-}"; })"
   case "${height:-}" in ''|*[!0-9]*) height="$virtual_height" ;; esac
 
   local scratch="${MCPE_MSG_SCRATCH:-${TMPDIR:-/tmp}}/mcpe-msg.$$.bgra"
