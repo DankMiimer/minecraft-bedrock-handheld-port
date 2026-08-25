@@ -1,5 +1,123 @@
 # Changelog
 
+## v2.0.0
+
+The first stable 2.x release, and the first one whose compatibility claims are
+each attached to a device that did the thing. Everything below is the summary a
+player needs; the fifteen release-candidate entries under it are the record of
+how it got here and stay as they were written.
+
+### What is claimed, and what is not
+
+Three firmwares have a physical reference device behind them: **Knulli** and
+**muOS** on an Anbernic RG34XX-SP, and **ROCKNIX** on an Anbernic RG DS. Each
+was captured read-only and then played, and `TESTING.md` says which of the
+fifteen acceptance rows each one has actually passed and on what date.
+
+Three things are shipped without that evidence, and say so rather than hiding
+in the version number:
+
+- The **RGDS second-screen companion is experimental** and in early
+  development. One device on one firmware is the whole of the evidence behind
+  it. Its `edition.json` declares `stability: experimental`, the launcher
+  announces it at startup, and the store description and READMEs lead with it.
+  The game itself behaves as it does in the standard edition; everything on the
+  lower screen is the experimental part.
+- The **32-bit armhf path for R36S/RK3326 devices** is built, fixture-tested,
+  and carries the four fixes that came out of the one field report there has
+  ever been — but no 32-bit device has run it.
+- The **ArkOS family** — ArkOS, dArkOS, DarkOS RE — is **not supported**. Its
+  code paths ship because they cost nothing and issue #1's log paid for them,
+  but nothing in them has been observed on hardware. The port reports itself as
+  `unverified` there, in the boot report and in the self test.
+
+### Two editions, one set of your files
+
+The port is now two products from one core. The **standard edition** is a
+lightweight single-screen package for aarch64 and armhf. The **RGDS edition**
+is a separate arm64 package for the Anbernic RG DS. They share only what is
+yours — APKs, installed versions, worlds and profiles, backups — under
+`ports/minecraftbedrock-data/`, and keep their own code, logs, runtime, caches
+and update channel. Updating one cannot overlay the other.
+
+The first 2.x launch migrates a 1.x install into that layout. It inventories
+both locations first, refuses an ambiguous collision instead of choosing
+destructively, writes a recovery manifest, and keeps rollback state until the
+first clean exit.
+
+### Getting the game onto the device
+
+You still supply your own legally owned Android copy; no game files are
+included or distributed.
+
+- **Get APK from Google Play**, on the device itself. Sign in on Google's own
+  page with a controller-driven on-screen keyboard, pick a build you own,
+  download, validate and install it — no PC. It is a prototype and is limited
+  to 64-bit H700 devices on muOS, Knulli or Batocera; the tile is greyed out
+  elsewhere. Verified end to end on muOS 2601.0 on 2026-08-25.
+- **mcbedrock-get**, for a PC, as a Windows bundle and an x86_64 Linux
+  AppImage. It sets up its own WSL environment from one button on Windows.
+- **Install APK**, from files you copied yourself. A full APK, an APKM/APKS/
+  XAPK bundle, or a complete split set.
+
+Every route ends at the same installer, which validates package identity,
+version, signing data, dependencies and ABI before publishing anything. Installs
+are locked and journaled, a power-interrupted commit is rolled back on the next
+attempt, and a mixed or incomplete set never overwrites what you have.
+PairIP/new-ABI 1.26 packages are rejected before installation.
+
+### Knowing which Bedrock version to use
+
+Versions are identified from Android metadata and the native library's hash,
+not from filenames, and the registry in `COMPATIBILITY.md` is generated from
+that data. **1.16.221.01** is the recommended default because its UI scales
+cleanly on these screens. The exact original **1.21.51.01** is the newest tested
+build without RenderDragon; the later reupload that reused that version name
+turned RenderDragon back on and is marked not recommended by fingerprint rather
+than by name.
+
+### When something goes wrong
+
+This is where most of the 2.0 work went, and it is all aimed at turning a frozen
+console into something you can report.
+
+- **A launch-stage breadcrumb** that survives a hard power-off, so the next
+  start can say where the last one stopped.
+- **A startup watchdog** that detects a stalled launch — a stall, not a
+  deadline, so a slow first launch on a cold card is not killed — writes
+  `logs/hang-report.txt`, terminates it, and restores the frontend.
+- **A failsafe ladder.** A launch that fails to start drops the next one to a
+  conservative profile, then a minimal one, then to a diagnostic run that
+  collects a support bundle instead of starting the game. It climbs back on its
+  own, never degrades silently, and every rung is registered in
+  `docs/FAILSAFES.md` with the evidence required to delete it.
+- **A self test** that checks the device without starting Minecraft and without
+  needing anything installed, and prints a short redacted report. It is the
+  first thing the issue template asks for.
+- **A boot report** — firmware, profile, backend, panel, audio, ABI, version
+  and active failsafes in one block — written to the log on every exit,
+  including the ones that happen before the game is reached.
+- **Support bundles** that are redacted before they leave the device. The
+  filter no longer eats Bedrock version strings, which are shaped like IP
+  addresses and had been silently deleted from every bundle ever produced.
+
+### Underneath
+
+One capability probe decides graphics backend, audio backend, panel geometry,
+ABI, gamepads and touch by measurement rather than by firmware name, and one
+resolver decides which firmware this is — replacing four that had drifted apart.
+Per-firmware behaviour is written down in `docs/CFW-CONTRACTS.md` with every
+clause marked measured or assumed, and asserted by fixtures captured from real
+devices rather than from plausible guesses.
+
+### Release materials
+
+Deterministic archives built twice and compared byte for byte, SPDX SBOMs for
+both editions, a source bundle with the launcher patches, published checksums
+for every file, and an automated scan that rejects any archive containing game
+content, worlds, profiles or credentials. `DOWNLOADER-POLICY.md` states what the
+Google Play route may and may not do, and a checker enforces it in CI.
+
 ## v2.0.0-rc.15 (testing)
 
 Small corrections and the plan that follows them. The sign-in browser's renderer

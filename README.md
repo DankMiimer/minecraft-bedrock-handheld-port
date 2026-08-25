@@ -10,9 +10,13 @@ settings.](docs/rg34xxsp-and-rgds-lan.jpg)
 
 Run a legally owned Android copy of Minecraft Bedrock natively on supported
 ARM Linux handhelds through PortMaster and the open-source minecraft-linux
-launcher. This is a testing release: supported combinations are documented,
-but the final R36S and revised RGDS physical acceptance checks are still
-pending. Nothing in rc.15 is promoted to stable or newly labelled Validated.
+launcher. This is the first stable 2.x release. Knulli, muOS and ROCKNIX each
+have a physical reference device behind them; the 32-bit R36S/RK3326 path and
+the ArkOS family have none, and the RGDS second-screen companion is
+experimental. What is measured and what is merely built is set out in
+[TESTING.md](TESTING.md) — nothing here is labelled Validated that a device has
+not done, and the physical acceptance matrix for the armhf path remains
+pending.
 
 > **No game files are included.** You must supply your own official Minecraft
 > Bedrock Android APK or complete split-APK set.
@@ -20,26 +24,48 @@ pending. Nothing in rc.15 is promoted to stable or newly labelled Validated.
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
 
-## Download v2.0.0-rc.15
+## Download v2.0.0
 
 Download an install archive from the release
 assets, not GitHub's automatically generated **Source code** archives.
 
 | Download | Who needs it |
 |---|---|
-| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/minecraftbedrock-standard-v2.0.0-rc.15.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
-| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/minecraftbedrock-rgds-v2.0.0-rc.15.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
-| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/mcbedrock-get-windows-v2.0.0-rc.15.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
-| [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/mcbedrock-get-linux-x86_64-v2.0.0-rc.15.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
-| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/minecraftbedrock-source-v2.0.0-rc.15.zip) | Maintainers and license compliance; not an install archive |
-| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/minecraftbedrock-standard-v2.0.0-rc.15.spdx.json) | Machine-readable contents of the standard archive |
-| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/minecraftbedrock-rgds-v2.0.0-rc.15.spdx.json) | Machine-readable contents of the RGDS archive |
-| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/RELEASE_NOTES.md) | Short packaged release summary |
-| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.15/SHA256SUMS.txt) | Verifies every published file |
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-standard-v2.0.0.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-rgds-v2.0.0.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway; arm64 only. Adds the second-screen companion, which is in early development |
+| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/mcbedrock-get-windows-v2.0.0.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
+| [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/mcbedrock-get-linux-x86_64-v2.0.0.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
+| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-source-v2.0.0.zip) | Maintainers and license compliance; not an install archive |
+| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-standard-v2.0.0.spdx.json) | Machine-readable contents of the standard archive |
+| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-rgds-v2.0.0.spdx.json) | Machine-readable contents of the RGDS archive |
+| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/RELEASE_NOTES.md) | Short packaged release summary |
+| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/SHA256SUMS.txt) | Verifies every published file |
 
-Use the **standard edition** unless you own an RG DS and specifically want the
-dual-screen companion. The standard edition intentionally redirects RGDS users
-to the separate RGDS package instead of silently installing experimental code.
+Use the **standard edition** unless you own an RG DS and specifically want to
+help test the dual-screen companion. The standard edition intentionally
+redirects RGDS users to the separate RGDS package instead of silently
+installing experimental code.
+
+## Supported firmware
+
+| Firmware | Status |
+|---|---|
+| **Knulli** | Tested on an Anbernic RG34XX-SP |
+| **muOS** | Tested on an Anbernic RG34XX-SP (2601.0 JACARANDA) |
+| **ROCKNIX** | Tested on an Anbernic RG DS |
+| Batocera | Should work — Knulli is a derivative — but untested |
+| ArkOS / dArkOS / DarkOS RE | **Not supported in this release.** The code paths are present but no device has ever run them |
+
+The port detects what it is running on and adapts by measured capability rather
+than by firmware name, so an unlisted system may well work. It will tell you
+what it found, and **Self test** in the launcher menu reports it without needing
+Minecraft installed. If you get it running somewhere not listed, a self-test
+paste in an issue is exactly what moves a firmware up this table.
+
+The same caveat applies to the **32-bit armhf path** for R36S/RK3326-class
+devices: it is built, tested against host fixtures, and carries the fixes that
+came out of the one field report there has ever been, but no 32-bit device has
+run it. Treat it as untested rather than broken, and please report what happens.
 
 ## What you need
 
@@ -207,11 +233,23 @@ ports/minecraftbedrock-data/
 Their code, logs, runtime, caches, update channel, and temporary state remain
 separate. Updating one edition cannot overlay the other.
 
+### The RGDS second-screen companion is experimental
+
 The RGDS edition adds a five-tab lower-screen companion with HUD, Chat, Items,
 Input, and Settings pages, live status, a local-world terrain map, touch
-routing, on-screen keyboard supervision, and SELECT screen swapping. Its
-supported host is RGDS on ROCKNIX/Sway. Non-ROCKNIX RGDS systems are
-experimental.
+routing, on-screen keyboard supervision, and SELECT screen swapping.
+
+**It is in early development.** It works on the one RG DS it was built against,
+running ROCKNIX/Sway, and that is the whole of the evidence behind it. The
+companion is a lot of new machinery — a daemon on the lower panel, a telemetry
+bridge patched into the game client, a terrain worker reading the world
+database, and touch routing across two panels — and any of it can be wrong on a
+device or a firmware revision that has not been tried. Non-ROCKNIX RGDS systems
+are not supported at all.
+
+The game itself runs the same way it does in the standard edition. What is
+experimental is everything on the lower screen. Reports are welcome and are how
+this gets better; if you want a dependable install, use the standard edition.
 
 When you join a world hosted by another device, Bedrock does not store that
 host's LevelDB world database locally. RGDS therefore keeps live status but

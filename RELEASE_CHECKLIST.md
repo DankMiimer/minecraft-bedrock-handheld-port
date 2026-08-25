@@ -1,8 +1,8 @@
 # Release checklist
 
 The canonical package tree is `portmaster/minecraftbedrock/`; RGDS stable
-helpers live in `bottomscreen/release/`. Do not release from `staging/`, device
-dumps, or extracted archives.
+helpers live in `bottomscreen/release/`. Do not release from device dumps or
+extracted archives.
 
 Before tagging:
 
@@ -47,10 +47,38 @@ Before tagging:
    `GETTING-BEDROCK-APKS.md` agree on edition names, shared APK path, ABI,
    recommended version, Windows bundle name, and legal disclaimer. Validate
    every local link and every release-asset URL.
+10. **Install the built archive on every reachable reference device before
+    publishing, not after.** Extract the actual zip — not a deployed code tree
+    — run **Self test** on each device, and record its summary line in the
+    release notes. Any device that could not be included is named in the notes
+    as excluded rather than left to be inferred. rc.14 was published without
+    ever being installed on muOS because the card had died; the notes disclosed
+    it, which was honest and backwards. Ten minutes here would have caught the
+    rc.12 false "Weston runtime missing" warning before players saw it.
 
 Publish stable/testing assets only after their required gates pass. Keep code
 rollback directories and migration recovery manifests until the first clean
 launch on each migrated installation.
+
+## After publishing
+
+1. **Set the release as Latest, and confirm it.** `releases/latest` is what the
+   repository's own release page and every deep link resolve to. Every
+   prerelease must carry the prerelease flag or GitHub hands that badge to the
+   newest tag that does not — which is how rc.9 held it while rc.10 through
+   rc.15 were published behind it.
+2. **Update `release-index.json` for both channels.** A fresh install defaults
+   to `stable`, so a stable row is required or **Update port** fails for
+   everyone who never changed the setting. Add a `testing` row for the same
+   version, pointing at the same asset, URL and SHA-256: the payload's own
+   `edition.json` records the channel it was built with, but `update_port.sh`
+   writes the *device's* channel back after a successful update and checks only
+   the edition id in the downloaded payload, so a testing-channel device
+   updates onto the stable archive and stays on testing. Building the same
+   version twice with different `--channel` values would produce two archives
+   with different SHA-256, which doubles the assets for no benefit.
+3. Download every published asset and verify its SHA-256 against
+   `SHA256SUMS.txt` before committing the index that points at it.
 
 **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 MOJANG OR MICROSOFT. No game files are included.**

@@ -8,8 +8,11 @@ This repository builds two products from one shared, versioned core:
 * minecraftbedrock-standard-vX.Y.Z.zip
   Lightweight single-screen PortMaster package for arm64 and armhf.
 * minecraftbedrock-rgds-vX.Y.Z.zip
-  Separate arm64 RGDS dual-screen package. ROCKNIX/Sway is the supported
-  configuration; other RGDS environments are experimental.
+  Separate arm64 RGDS dual-screen package, shipped as EXPERIMENTAL. The
+  second-screen companion is early development with one reference device
+  (an RG DS on ROCKNIX/Sway) behind it; other RGDS environments are
+  unsupported. Its edition.json declares stability=experimental and the
+  launcher announces it at startup.
 
 The current source version is in VERSION. Release manifests, archive names,
 release notes, checksums, SPDX SBOMs, and release-index entries are generated
@@ -57,6 +60,12 @@ CPU-core-name heuristics. The resolver covers Wayland/Sway, Mesa KMSDRM, H700
 proprietary Mali/Weston, and X11 fallback paths, plus display modes, audio,
 controller, touch, permissions, and active resolution.
 
+Firmware scope for 2.0: Knulli, muOS and ROCKNIX each have a physical
+reference device. The ArkOS family (ArkOS, dArkOS, DarkOS RE) does not and
+never has, so it is out of scope for this release -- its code paths ship
+unverified, mcpe_cfw_support() reports them as such, and docs/CFW-CONTRACTS.md
+marks every clause assumed.
+
 Compatibility labels are evidence based:
 
 * Validated: passed the physical reference matrix.
@@ -76,9 +85,12 @@ current companion clears any prior map and displays REMOTE WORLD / MAP
 UNAVAILABLE while keeping live position and status telemetry. It never reuses
 another world's terrain.
 
-The testing RC artifacts produced locally are not a claim of completed physical
-validation or stable promotion. See portmaster/minecraftbedrock/README.md and
-COMPATIBILITY.md for the user-facing contract.
+Locally produced artifacts are not a claim of completed physical validation.
+2.0.0 is published from CI-built, twice-compared archives that were installed
+and self-tested on every reachable reference device first; anything that could
+not be verified that way says so in TESTING.md rather than being implied by the
+version number. See portmaster/minecraftbedrock/README.md and COMPATIBILITY.md
+for the user-facing contract.
 
 Build and verify
 ----------------

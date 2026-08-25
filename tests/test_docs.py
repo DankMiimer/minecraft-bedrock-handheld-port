@@ -10,6 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PUBLIC = (ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGED = (ROOT / "portmaster" / "minecraftbedrock" / "README.md").read_text(encoding="utf-8")
 APK_GUIDE = (ROOT / "GETTING-BEDROCK-APKS.md").read_text(encoding="utf-8")
+MAINTAINER = (ROOT / "README.txt").read_text(encoding="utf-8")
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 for label, text in (("README.md", PUBLIC), ("packaged README", PACKAGED), ("APK guide", APK_GUIDE)):
@@ -33,8 +34,14 @@ for asset in (
     "SHA256SUMS.txt",
 ):
     assert asset in PUBLIC, f"public README lacks release asset {asset}"
-assert "R36S" in PUBLIC and "RGDS" in PUBLIC and "pending" in PUBLIC
-assert "R36S" in PACKAGED and "RGDS" in PACKAGED and "pending" in PACKAGED
+# 2.0.0 is stable, but not uniformly: the armhf/R36S matrix has no device and
+# the RGDS companion is experimental. Both READMEs must keep saying so, and
+# must not have quietly become a blanket claim.
+for label, text in (("README.md", PUBLIC), ("packaged README", PACKAGED)):
+    assert "R36S" in text and "RGDS" in text and "pending" in text, label
+    assert "experimental" in text.lower(), f"{label}: RGDS caveat lost"
+for label, text in (("README.md", PUBLIC), ("README.txt", MAINTAINER)):
+    assert "ArkOS" in text, f"{label}: the unsupported firmware family is unnamed"
 assert "cannot download from Google Play" not in (PUBLIC + PACKAGED + APK_GUIDE)
 assert "unfinished Windows downloader" not in (PUBLIC + PACKAGED + APK_GUIDE)
 
