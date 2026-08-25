@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **`docs/CODING-FOR-MUOS.md`, and `tools/capture-muos.sh` that produces it.**
+  Ten rules for changing this port against a firmware nobody may have to hand,
+  each backed by a measurement from the RG34XX-SP reference device rather than
+  by recollection: the PortMaster stub redirect, the invisible console, the
+  frontend supervisor that becomes your own ancestor during a launch, the
+  Mali-only graphics stack and the card node westonwrap leaves behind, PipeWire
+  with no Pulse socket, the `muOS-Keys` gamepad and its measured button order,
+  the missing 64-bit `libcom_err.so.2`, and what busybox cannot do (`tar -z`,
+  `date +%N`). Written on the day the device was about to be handed back to
+  Knulli, so the facts survive the hardware going away.
+
+## Unreleased
+
 - **A `/dev/dri/card0` that no driver is behind no longer counts as DRM.**
   PortMaster's `westonwrap.sh` runs `mknod /dev/dri/card0 c 226 0` on firmwares
   that have no DRM at all, and the node outlives the run, so after one use of
