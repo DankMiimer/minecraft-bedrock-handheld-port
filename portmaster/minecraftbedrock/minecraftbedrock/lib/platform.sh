@@ -52,7 +52,7 @@ mcpe_probe_platform() { # output env file
   local touch_count=0 portmaster_mapping=0
   local probe_root="${MCPE_PROBE_ROOT:-}"
   arch="${MCPE_TEST_ARCH:-$(uname -m 2>/dev/null || echo unknown)}"
-  mem="$(awk '/MemTotal/{print $2; exit}' "$probe_root/proc/meminfo" 2>/dev/null || echo 0)"
+  mem="$(mcpe_meminfo_kb "$probe_root/proc/meminfo" || echo 0)"
   model="$(tr -d '\000' <"$probe_root/proc/device-tree/model" 2>/dev/null || true)"
   compatible="$(tr '\000' ',' <"$probe_root/proc/device-tree/compatible" 2>/dev/null || true)"
   os_name="${CFW_NAME:-}"

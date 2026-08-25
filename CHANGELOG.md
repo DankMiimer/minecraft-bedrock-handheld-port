@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **The launch path no longer needs busybox's regex engine.** Memory size,
+  panel geometry and the frontend-ancestry walk went through `awk '/re/'`, and
+  Weston cleanup through `pkill -f`. On the muOS reference device every busybox
+  regex path began dying with SIGILL, and the visible result was a boot report
+  reading `memory_kb=0` with `memory_tier=unknown`, plus `wp_weston` and the
+  client left running after the game exited. All three lookups now read the file
+  in-shell (`mcpe_meminfo_kb`, `mcpe_proc_ppid`, `mcpe_fb_geometry` in
+  `lib/common.sh`), and the Weston kill tries name-matching `killall` before the
+  regex `pkill`. Verified on that device with its `awk` still crashing: memory
+  reads 2027140 kB where it read 0. A contract test keeps these lookups
+  regex-free.
+
 - **`docs/CODING-FOR-MUOS.md`, and `tools/capture-muos.sh` that produces it.**
   Ten rules for changing this port against a firmware nobody may have to hand,
   each backed by a measurement from the RG34XX-SP reference device rather than

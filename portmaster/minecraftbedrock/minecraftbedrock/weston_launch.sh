@@ -280,7 +280,10 @@ cleanup() {
   terminate_session_clients
   [ -n "$LAUNCH_PIPE_PID" ] && wait "$LAUNCH_PIPE_PID" 2>/dev/null || true
   "$WESTON_DIR/westonwrap.sh" cleanup 2>/dev/null || true
-  $ESUDO pkill -9 -f wp_weston 2>/dev/null || true
+  # killall matches the process name and pkill -f matches a regex, which
+  # SIGILLs on a device whose busybox regex is broken -- leaving Weston
+  # running after the game exits. Try the regex-free one first.
+  { $ESUDO killall -9 wp_weston || $ESUDO pkill -9 -f wp_weston; } 2>/dev/null || true
   if [ "${FBMODE_CHANGED:-0}" = 1 ] && [ -n "${FB_ORIG_W:-}" ]; then
     fbset -xres "$FB_ORIG_W" -yres "$FB_ORIG_H" \
       -vxres "$FB_ORIG_W" -vyres $((FB_ORIG_H * 2)) 2>/dev/null || true
@@ -315,7 +318,7 @@ stop_emulationstation
 sleep 1
 enable_performance_mode
 prewarm_gameplay_assets
-$ESUDO pkill -9 -f wp_weston 2>/dev/null
+{ $ESUDO killall -9 wp_weston || $ESUDO pkill -9 -f wp_weston; } 2>/dev/null
 "$WESTON_DIR/westonwrap.sh" cleanup 2>/dev/null || true
 
 # Mount the Weston runtime.
@@ -329,8 +332,7 @@ fi
 
 export WP_32BIT=0
 # Panel size: honour CFW-provided DISPLAY_WIDTH/HEIGHT, else probe fbset.
-read -r FB_ORIG_W FB_ORIG_H < <(fbset 2>/dev/null |
-  awk '/geometry/ {print $2, $3; exit}')
+read -r FB_ORIG_W FB_ORIG_H _ _ < <(mcpe_fb_geometry)
 FB_ORIG_W="${FB_ORIG_W:-640}" FB_ORIG_H="${FB_ORIG_H:-480}"
 export DISPLAY_WIDTH="${MCPE_DISPLAY_WIDTH:-${DISPLAY_WIDTH:-$FB_ORIG_W}}"
 export DISPLAY_HEIGHT="${MCPE_DISPLAY_HEIGHT:-${DISPLAY_HEIGHT:-$FB_ORIG_H}}"
@@ -365,8 +367,7 @@ if [ "$SWAY_MODE" = 0 ] &&
   else
     fbset -xres "$DISPLAY_WIDTH" -yres "$DISPLAY_HEIGHT" \
       -vxres "$DISPLAY_WIDTH" -vyres $((DISPLAY_HEIGHT * 2)) 2>/dev/null
-    read -r FB_NOW_W FB_NOW_H < <(fbset 2>/dev/null |
-      awk '/geometry/ {print $2, $3; exit}')
+    read -r FB_NOW_W FB_NOW_H _ _ < <(mcpe_fb_geometry)
     if [ "$FB_NOW_W" = "$DISPLAY_WIDTH" ] && [ "$FB_NOW_H" = "$DISPLAY_HEIGHT" ]; then
       FBMODE_CHANGED=1
       echo "fb mode set to ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} (panel upscales)"

@@ -288,6 +288,52 @@ def test_the_two_downloader_gates_agree_on_firmware():
     assert "RG34XXSP/H700 + Knulli" not in menu_lua
 
 
+def test_the_launch_path_does_not_depend_on_busybox_regex():
+    """Memory, panel geometry and the ancestry walk must not need a regex.
+
+    On the muOS reference device every busybox regex path started dying with
+    SIGILL (awk //, pgrep, pkill -f) while plain field access, grep and sed kept
+    working. The game still launched, but the boot report said memory_kb=0 and
+    Weston was left running after the client exited, because both lookups went
+    through awk '/re/'. None of these needs a regex, so none of them may use one.
+
+    Deliberately not covered: the path-safety check in the launcher and the
+    controller-config comment filters. Both fail closed or degrade to a
+    fallback, so a broken regex engine cannot turn them into a wrong answer.
+    """
+    files = {
+        "lib/common.sh": read(PAYLOAD / "lib/common.sh"),
+        "lib/platform.sh": read(PAYLOAD / "lib/platform.sh"),
+        "lib/message.sh": read(PAYLOAD / "lib/message.sh"),
+        "lib/performance.sh": read(PAYLOAD / "lib/performance.sh"),
+        "run_bedrock.sh": read(PAYLOAD / "run_bedrock.sh"),
+        "weston_launch.sh": read(PAYLOAD / "weston_launch.sh"),
+    }
+    for name, text in files.items():
+        assert "awk '/" not in text, f"{name} still matches with an awk regex"
+        assert 'awk "/' not in text, f"{name} still matches with an awk regex"
+        assert "pgrep" not in text, f"{name} uses pgrep, whose pattern is a regex"
+
+    common = files["lib/common.sh"]
+    for helper in ("mcpe_meminfo_kb", "mcpe_proc_ppid", "mcpe_fb_geometry"):
+        assert f"{helper}()" in common, f"{helper} must live in common.sh"
+    # The helpers read the file in-shell; a pipe into another tool would just
+    # move the dependency.
+    assert 'while read -r key value rest' in common
+
+    # Files that use the helpers but are also sourced on their own must load
+    # common.sh themselves, or they break exactly where they are needed most.
+    for name in ("lib/message.sh", "lib/performance.sh"):
+        assert "type mcpe_meminfo_kb" in files[name], f"{name} must guard-source common.sh"
+
+    # Weston cleanup: the regex-free kill has to come first.
+    weston = files["weston_launch.sh"]
+    assert "killall -9 wp_weston" in weston
+    for line in weston.splitlines():
+        if "pkill -9 -f wp_weston" in line:
+            assert line.index("killall -9 wp_weston") < line.index("pkill -9 -f wp_weston"),                 "killall must be tried before the regex-matching pkill"
+
+
 # This block must stay at the end of the file. It collects tests out of
 # globals(), so anything defined below it does not exist yet when it runs --
 # five contract tests were appended after it and silently never executed.

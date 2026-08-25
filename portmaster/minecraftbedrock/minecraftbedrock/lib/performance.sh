@@ -17,9 +17,16 @@
 #
 # 3 GB has no reference device in this tree yet; its row is derived from the
 # 2 GB one rather than measured, and is deliberately the smallest step.
+# mcpe_meminfo_kb / mcpe_proc_ppid / mcpe_fb_geometry live in common.sh. Load it
+# here too so this file stays usable on its own, the way platform.sh does.
+if ! type mcpe_meminfo_kb >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+fi
+
 mcpe_memory_mb() { # [mem_kb] -> MiB, 0 when the host would not say
   local kb="${1:-${MCPE_HOST_MEMORY_KB:-}}"
-  [ -n "$kb" ] || kb="$(awk '/MemTotal/{print $2; exit}' /proc/meminfo 2>/dev/null)"
+  [ -n "$kb" ] || kb="$(mcpe_meminfo_kb 2>/dev/null)"
   case "$kb" in ''|*[!0-9]*) kb=0 ;; esac
   printf '%s\n' "$((kb / 1024))"
 }

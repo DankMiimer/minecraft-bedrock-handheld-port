@@ -165,6 +165,53 @@ mcpe_stage_begin() { # [logdir]
   mcpe_stage boot
 }
 
+# --- Regex-free field lookups -------------------------------------------------
+# Everything below reads a key out of a whitespace-separated file, which awk
+# does in one expression -- and which is exactly what stopped working on the
+# muOS reference device on 2026-08-25, where every busybox regex path dies with
+# SIGILL while plain field access, grep and sed are fine. The launch path then
+# reported memory_kb=0 and left Weston running after the game exited. None of
+# these lookups needs a regex, so none of them uses one: the shell reads the
+# file itself and there is no second process to fail. See
+# docs/CODING-FOR-MUOS.md, rule 9.
+
+mcpe_meminfo_kb() { # [meminfo path] -> total KB, nonzero status when unreadable
+  local file="${1:-/proc/meminfo}" key value rest
+  [ -r "$file" ] || return 1
+  while read -r key value rest; do
+    if [ "$key" = "MemTotal:" ]; then
+      printf '%s
+' "$value"
+      return 0
+    fi
+  done <"$file"
+  return 1
+}
+
+mcpe_proc_ppid() { # <status path> -> parent pid
+  local file="$1" key value rest
+  [ -r "$file" ] || return 1
+  while read -r key value rest; do
+    if [ "$key" = "PPid:" ]; then
+      printf '%s
+' "$value"
+      return 0
+    fi
+  done <"$file"
+  return 1
+}
+
+mcpe_fb_geometry() { # -> "WIDTH HEIGHT VWIDTH VHEIGHT" as fbset reports them
+  local key a b c d rest
+  fbset 2>/dev/null | while read -r key a b c d rest; do
+    if [ "$key" = "geometry" ]; then
+      printf '%s %s %s %s
+' "$a" "$b" "$c" "$d"
+      break
+    fi
+  done
+}
+
 # --- Boot report ---------------------------------------------------------------
 # Everything a device report needs, in one block, accumulated as each value is
 # resolved and printed once before the game starts. These facts were previously

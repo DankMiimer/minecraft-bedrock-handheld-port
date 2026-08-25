@@ -56,7 +56,7 @@ ARMHF_USABLE=0
 if [ -f "$BIN32" ] && mcpe_loader_present armhf && [ -e /dev/dri/card0 ]; then
   ARMHF_USABLE=1
 fi
-MEM_KB="$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+MEM_KB="$(mcpe_meminfo_kb || echo 0)"
 ABI="${MCPE_ABI_OVERRIDE:-}"
 case "$ABI" in
   "") ;;
