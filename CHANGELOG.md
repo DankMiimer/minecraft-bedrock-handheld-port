@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-rc.13 (testing)
+
+Diagnostics, not gameplay: rc.12's self test reported a runtime as missing on
+the firmware that downloads it for itself, and five of the contract tests
+guarding this month's muOS work turned out never to have executed. The port
+itself is unchanged from rc.12.
 
 - **The self test told muOS players a runtime was missing when it was mounted.**
   It looked for the Weston package only in PortMaster's own `libs/` and
