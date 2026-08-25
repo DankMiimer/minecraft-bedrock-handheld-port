@@ -74,12 +74,26 @@ from the reference device on 2026-08-26 before it went back to Knulli, and
 profile, backend, DRM, memory, panel height, both ABI loaders, the gamepad
 handler and touch count all match what the running device reported.
 
-One concrete blocker turned up while building it. **Audio detection ignores
-`MCPE_PROBE_ROOT`**: ALSA is probed under the fixture root, but PipeWire and
-Pulse are detected with `pidof` and `-S` against absolute paths, so the fixture
-resolves `alsa` where the device resolves `pipewire`. `MCPE_TEST_AUDIO` can
-paper over it, but supplying the answer proves nothing. Making that path
-probe-root aware is a prerequisite for covering audio from a fixture at all.
+**Done so far.** `tests/test_selftest_runs.sh` executes `selftest.sh` against
+that fixture in a throwaway GAMEDIR and asserts on the report: no hard failure,
+**nothing on stderr**, the captured firmware named rather than the build host's,
+a summary line, audio resolved from the capture, the no-version case reported as
+a warning rather than a failure, and no sign the game was started. Verified by
+mutation — reverting the audio fix below makes it fail and name the reason.
+
+The blocker that surfaced while building the fixture is **fixed**: audio
+detection ignored `MCPE_PROBE_ROOT`, so a capture resolved `alsa` where the
+device resolved `pipewire`. Under a probe root the captured marker's existence
+now stands in for a live socket or a running daemon, while real hardware keeps
+the stricter `-S` and `pidof` tests — checked against the Knulli and ROCKNIX
+devices, both unchanged at `pulse` with `alsa=1 pulse=1 pipewire=1`.
+
+**Still to do here:** captures for the other firmwares. Only muOS has one, and
+`tools/capture-muos.sh` is muOS-shaped; ROCKNIX and Knulli are both reachable
+and would each take minutes. PortMaster is found through a hardcoded list of
+absolute paths, so the execution test supplies a stub via `XDG_DATA_HOME`
+rather than production code gaining a test-only override — worth revisiting if
+more of the runtimes section should be covered.
 
 Build a fixture tree per firmware from `tools/capture-muos.sh` output, run
 `selftest.sh` against it with `MCPE_PROBE_ROOT`, and assert on the *report*: the

@@ -34,6 +34,7 @@ for patch in source_release/*.patch; do git apply --recount --numstat "$patch" >
 bash tests/test_migration.sh
 bash tests/test_performance.sh
 bash tests/test_platform.sh
+bash tests/test_selftest_runs.sh
 bash tests/test_abi.sh
 bash tests/test_failsafe_apply.sh
 bash tests/test_audio.sh
