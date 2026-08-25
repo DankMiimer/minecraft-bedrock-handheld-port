@@ -47,6 +47,23 @@ source "$TMP/h700.env"
 # Batocera upstream everywhere except OS_NAME.
 [ "$MCPE_CFW" = knulli ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
+# The same muOS device once the optional downloader has run. PortMaster's
+# westonwrap mknods /dev/dri/card0 on a firmware that has no DRM at all, and
+# the node outlives the run, so this is that device's normal state rather than
+# an exotic one. Captured 2026-08-25: a card node present, /sys/class/drm empty.
+fixture muOS
+printf 'ID=muos\nNAME=MustardOS\n' >"$TMP/root/etc/os-release"
+printf 'sun50iw9\0' >"$TMP/root/proc/device-tree/model"
+printf 'allwinner,h616\0arm,sun50iw9p1\0' >"$TMP/root/proc/device-tree/compatible"
+touch "$TMP/root/dev/mali0" "$TMP/root/dev/disp" "$TMP/root/dev/fb0"
+touch "$TMP/root/dev/dri/card0"
+MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none   MCPE_TEST_FB_MODE=720x480 mcpe_probe_platform "$TMP/muos-after-weston.env"
+source "$TMP/muos-after-weston.env"
+[ "$MCPE_HAS_DRM" = 0 ] || {
+  echo "a mknod'd card node with no /sys/class/drm entry is not DRM" >&2; exit 1; }
+[ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = mali ] || {
+  echo "muOS must still resolve mali after westonwrap leaves a card node" >&2; exit 1; }
+
 # Captured from a reference RG34XX-SP on muOS 2601.0 JACARANDA (2026-08-24).
 # This fixture previously guessed, and guessed wrong in the way that matters:
 # it gave the device /dev/dri and expected the kmsdrm backend. The hardware is

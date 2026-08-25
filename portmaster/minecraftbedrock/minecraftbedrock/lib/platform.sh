@@ -65,7 +65,14 @@ mcpe_probe_platform() { # output env file
   else compositor="${WAYLAND_DISPLAY:+wayland}"
   fi
   [ -n "$compositor" ] || { [ -n "${DISPLAY:-}" ] && compositor=x11 || compositor=none; }
-  ls "$probe_root"/dev/dri/card* >/dev/null 2>&1 && has_drm=1
+  # A card node on its own is not evidence of DRM. PortMaster's westonwrap
+  # mknods /dev/dri/card0 on firmwares that have none -- measured on muOS,
+  # where it survives until reboot and /sys/class/drm stays empty -- so require
+  # the kernel to list the card as well. Measured both ways: that muOS device
+  # answers 0 with the synthetic node present, and an RG DS on ROCKNIX with a
+  # real card0 and two DSI connectors still answers 1.
+  ls "$probe_root"/dev/dri/card* >/dev/null 2>&1 &&
+    ls "$probe_root"/sys/class/drm/card* >/dev/null 2>&1 && has_drm=1
   { [ -e "$probe_root/dev/mali" ] || [ -e "$probe_root/dev/mali0" ] || ls "$probe_root"/usr/lib*/libmali*.so* >/dev/null 2>&1; } && has_mali=1
   { ls "$probe_root"/usr/lib*/dri/*_dri.so >/dev/null 2>&1 || ls "$probe_root"/usr/lib*/libEGL_mesa.so* >/dev/null 2>&1; } && has_mesa=1
   { [ -e "$probe_root/lib/ld-linux-aarch64.so.1" ] || [ -e "$probe_root/usr/lib/ld-linux-aarch64.so.1" ] || [ "$arch" = aarch64 ]; } && has_arm64_loader=1
