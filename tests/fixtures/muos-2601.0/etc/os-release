@@ -1,0 +1,9 @@
+NAME=MustardOS
+VERSION="2601.0 (JACARANDA)"
+ID=muos
+VERSION_ID=2601.0
+PRETTY_NAME="MustardOS 2601.0 (JACARANDA)"
+ANSI_COLOR="1;33"
+HOME_URL="https://muos.dev/"
+SUPPORT_URL="https://community.muos.dev/"
+BUILD_ID=bc38efa0

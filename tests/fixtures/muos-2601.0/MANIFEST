@@ -1,0 +1,43 @@
+Captured from an Anbernic RG34XX-SP running muOS 2601.0 JACARANDA
+(BUILD_ID=bc38efa0) with the port at v2.0.0-rc.15.
+
+Real content: etc/os-release, proc/{consoles,device-tree/*,meminfo,cpuinfo},
+sys/class/vtconsole/vtcon0/name, sys/class/graphics/fb0/virtual_size,
+sys/class/input/event*/device/{name,phys}, reference/*.
+
+Empty markers, because device nodes cannot be copied and the probe only tests
+for existence and permissions: everything under dev/, run/pipewire-0,
+usr/share/pipewire/client.conf, and the loader/library paths under lib/ and
+usr/lib*/.
+
+sys/class/drm/ is present and empty because this firmware exposes no DRM at all.
+
+Contains no credential material. Nothing from the downloader state directory,
+no tokens, no account identifiers.
+
+--- What this fixture reproduces ---
+
+Run through mcpe_probe_platform with MCPE_PROBE_ROOT pointing here, plus
+MCPE_TEST_ARCH=aarch64, MCPE_TEST_COMPOSITOR=none and MCPE_TEST_FB_MODE=720x480
+(fbset is a live tool, not a file), it answers exactly as the device did:
+
+  MCPE_CFW=muos, confidence explicit    MCPE_HOST_PROFILE=h700
+  MCPE_GRAPHICS_BACKEND_RESOLVED=mali   MCPE_HAS_DRM=0
+  MCPE_HAS_MALI=1                       MCPE_HOST_MEMORY_KB=2027140
+  MCPE_ACTIVE_HEIGHT=480                both ABI loaders present
+  gamepad handlers include js0/event1   MCPE_TOUCH_COUNT=0
+
+--- What it cannot reproduce, and why ---
+
+**Audio.** ALSA detection reads $probe_root/dev/snd, but PipeWire and Pulse are
+detected with `pidof` and `-S` on absolute paths (/run/pipewire-0 and
+$XDG_RUNTIME_DIR/pipewire-0), which ignore MCPE_PROBE_ROOT entirely. So this
+fixture resolves audio=alsa where the device resolves pipewire. The only lever a
+test has is MCPE_TEST_AUDIO, which supplies the answer rather than deriving it,
+so it proves nothing. Making that path probe-root aware is the prerequisite for
+covering audio from a fixture at all.
+
+**Anything needing a live kernel interface**: ioctls on input nodes, a real
+socket, a Mali driver, a compositor. Device entries here are empty regular
+files, so -e/-r/-w succeed as they do against the real nodes, and nothing more.
+

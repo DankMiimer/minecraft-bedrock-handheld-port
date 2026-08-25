@@ -1,0 +1,6 @@
+dev_dri: present
+sys_class_drm_entries: 0
+run_pulse: absent
+usr_lib_libcom_err_so_2: absent
+usr_lib_dri: absent
+xwayland: absent
