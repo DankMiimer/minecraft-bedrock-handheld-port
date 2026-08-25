@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-rc.12 (testing)
+
+muOS becomes a firmware this port is measured on for behaviour, not only for
+capability. An RG34XX-SP running muOS 2601.0 JACARANDA now signs in to Google
+on the device, downloads a Bedrock build, installs it and plays, with working
+controls and sound. Everything below in this release came out of getting there.
 
 - **Minecraft Bedrock now runs on muOS, start to finish, with no PC involved.**
   On 2026-08-25 an RG34XX-SP running muOS 2601.0 JACARANDA signed in to Google

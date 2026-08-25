@@ -12,7 +12,7 @@ Run a legally owned Android copy of Minecraft Bedrock natively on supported
 ARM Linux handhelds through PortMaster and the open-source minecraft-linux
 launcher. This is a testing release: supported combinations are documented,
 but the final R36S and revised RGDS physical acceptance checks are still
-pending. Nothing in rc.5 is promoted to stable or newly labelled Validated.
+pending. Nothing in rc.12 is promoted to stable or newly labelled Validated.
 
 > **No game files are included.** You must supply your own official Minecraft
 > Bedrock Android APK or complete split-APK set.
@@ -20,22 +20,22 @@ pending. Nothing in rc.5 is promoted to stable or newly labelled Validated.
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
 
-## Download v2.0.0-rc.11
+## Download v2.0.0-rc.12
 
 Download an install archive from the release
 assets, not GitHub's automatically generated **Source code** archives.
 
 | Download | Who needs it |
 |---|---|
-| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-standard-v2.0.0-rc.11.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
-| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-rgds-v2.0.0-rc.11.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
-| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/mcbedrock-get-windows-v2.0.0-rc.11.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
-| [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/mcbedrock-get-linux-x86_64-v2.0.0-rc.11.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
-| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-source-v2.0.0-rc.11.zip) | Maintainers and license compliance; not an install archive |
-| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-standard-v2.0.0-rc.11.spdx.json) | Machine-readable contents of the standard archive |
-| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/minecraftbedrock-rgds-v2.0.0-rc.11.spdx.json) | Machine-readable contents of the RGDS archive |
-| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/RELEASE_NOTES.md) | Short packaged release summary |
-| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.11/SHA256SUMS.txt) | Verifies every published file |
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/minecraftbedrock-standard-v2.0.0-rc.12.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/minecraftbedrock-rgds-v2.0.0-rc.12.zip) | Anbernic RG DS on ROCKNIX/Sway; arm64 only |
+| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/mcbedrock-get-windows-v2.0.0-rc.12.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
+| [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/mcbedrock-get-linux-x86_64-v2.0.0-rc.12.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
+| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/minecraftbedrock-source-v2.0.0-rc.12.zip) | Maintainers and license compliance; not an install archive |
+| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/minecraftbedrock-standard-v2.0.0-rc.12.spdx.json) | Machine-readable contents of the standard archive |
+| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/minecraftbedrock-rgds-v2.0.0-rc.12.spdx.json) | Machine-readable contents of the RGDS archive |
+| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/RELEASE_NOTES.md) | Short packaged release summary |
+| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0-rc.12/SHA256SUMS.txt) | Verifies every published file |
 
 Use the **standard edition** unless you own an RG DS and specifically want the
 dual-screen companion. The standard edition intentionally redirects RGDS users

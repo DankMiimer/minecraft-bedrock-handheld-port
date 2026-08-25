@@ -59,9 +59,9 @@ Every rung above 0 is announced on screen and written to
 
 ## Status
 
-Reviewed 2026-08-25 against v2.0.0-rc.11 on three reference devices
-(RG34XX-SP/Knulli, RG DS/ROCKNIX, RG34XX-SP/muOS). **Nothing has been removed
-yet.**
+Reviewed 2026-08-25 against v2.0.0-rc.11 with the rc.12 muOS fixes deployed, on
+three reference devices (RG34XX-SP/Knulli, RG DS/ROCKNIX, RG34XX-SP/muOS).
+**Nothing has been removed yet.**
 
 A muOS reference device arrived on 2026-08-24 and closed the *capability* half
 of the dependency this register was waiting on: identity, graphics backend,
