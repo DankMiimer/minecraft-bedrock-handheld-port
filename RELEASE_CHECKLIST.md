@@ -67,20 +67,36 @@ launch on each migrated installation.
    prerelease must carry the prerelease flag or GitHub hands that badge to the
    newest tag that does not — which is how rc.9 held it while rc.10 through
    rc.15 were published behind it.
-2. **Commit the built `release-index.json` to `main`.** The on-device updater
-   fetches it from `raw.githubusercontent.com/<repo>/main/release-index.json`,
-   so the file in the repository is the published index — the copy inside the
-   build artifact has no effect until it is committed. Do not hand-edit it:
-   the build emits both channels' rows already, because a stable build is run
-   with `--mirror-channel testing`. A fresh install defaults to `stable`, so a
-   stable row is required or **Update port** fails for everyone who never
-   changed the setting; the mirrored testing row carries existing testers onto
-   the same asset instead of stranding them on the last release candidate.
-   Check before committing that there is exactly one row per edition-and-channel
-   pair — `release_select.py` fails on anything else — and that each pair's
-   two rows carry the same asset, URL and SHA-256.
-3. Download every published asset and verify its SHA-256 against
-   `SHA256SUMS.txt` before committing the index that points at it.
+2. **Download every published asset and verify its SHA-256** against the
+   published `SHA256SUMS.txt` — downloaded back from the release, not compared
+   against the local build directory, so the check covers the upload as well as
+   the build.
+3. **Commit the built `release-index.json` to `main`, and only now.** The
+   on-device updater fetches it from
+   `raw.githubusercontent.com/<repo>/main/release-index.json`, so the file in
+   the repository is the published index — the copy inside the build artifact
+   has no effect until it is committed.
+
+   **This step comes last on purpose.** Every row carries an absolute
+   `releases/download/<tag>/` URL and the digest of a file that must already be
+   there. Commit it before the release is published and every device on the
+   channel is pointed at a URL that 404s, on a schedule you do not control;
+   commit it before step 2 and a corrupted upload is published as verified.
+
+   Do not hand-edit it: the build emits both channels' rows already, because a
+   stable build is run with `--mirror-channel testing`. A fresh install defaults
+   to `stable`, so a stable row is required or **Update port** fails for
+   everyone who never changed the setting; the mirrored testing row carries
+   existing testers onto the same asset instead of stranding them on the last
+   release candidate. Check before committing that there is exactly one row per
+   edition-and-channel pair — `release_select.py` fails on anything else — and
+   that each pair's two rows carry the same asset, URL and SHA-256.
+4. **Confirm the updater can actually see the release.** Fetch the raw index URL
+   above and run `release_select.py <index> <edition> <channel>` for every
+   edition and channel; each must resolve to the new version. This is the exact
+   query a device makes, and it is the one that returned
+   `expected one minecraftbedrock.standard/stable release, found 0` for the
+   whole 2.0.0 release-candidate series.
 
 **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 MOJANG OR MICROSOFT. No game files are included.**
