@@ -38,7 +38,7 @@ device" so the assumptions stay legible for whoever eventually measures them.
 | Item | State |
 |---|---|
 | R1 GitHub serves rc.9 as Latest | **Done** — rc.4, rc.7, rc.8 and rc.9 flagged prerelease on 2026-08-25; `releases/latest` now resolves to v1.6, and will resolve to v2.0.0 when it publishes |
-| R2 Update port broken on a default install | Error message fixed; the index rows are a post-publish step |
+| R2 Update port broken on a default install | **Done** — error message fixed, and `build_releases.py --mirror-channel` now emits the stable and testing rows together, verified by the stable build on 2026-08-25 |
 | R3 Compatibility table under-reports | **Done** |
 | R4 Boot report missing from early exits | **Done** |
 | R5 Missing runtime reported as missing game | **Done** |
@@ -97,12 +97,22 @@ build rather than stranded on a channel with nothing in it.
 The mechanism matters, because `stamp_payload` writes the channel into the
 payload's `edition.json`, so building the same version twice with different
 `--channel` values produces two archives with different SHA-256. Publishing both
-would double the assets for no benefit. Build **once** with `--channel stable`,
-then add a `testing` row per edition to `release-index.json` pointing at the
-same asset, URL and SHA-256. `update_port.sh` writes the *device's* channel to
+would double the assets for no benefit. So the release is built **once** with
+`--channel stable`, and the second row is derived rather than rebuilt.
+
+`build_releases.py --mirror-channel testing` does that, and the workflow passes
+it whenever the channel is stable. Both rows are written from a single digest of
+a single file, because hashing the same asset twice is how the two rows would
+come to disagree. `update_port.sh` writes the *device's* channel to
 `config/update_channel` after a successful update, and the only identity it
-checks in the downloaded payload is the edition id, so a testing-channel device
-updates onto the stable archive and stays on testing.
+checks in the downloaded payload is the edition id — the stamped channel is
+exported as `MCPE_DEFAULT_CHANNEL` and never read back — so a testing-channel
+device updates onto the stable archive and stays on testing.
+
+**Done, 2026-08-25.** The stable build produced all four rows, one per
+edition-and-channel pair, which is what `release_select.py` requires. The
+superseded rc.15 testing rows are replaced rather than left behind, so nobody
+on testing is stranded on a release candidate.
 
 The no-release error itself is fixed in the compatibility patch: it now names
 which channel is empty and tells the player to change Update channel in
