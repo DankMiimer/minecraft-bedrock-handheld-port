@@ -1,0 +1,34 @@
+=== device-arm64.conf (no credentials: ABI only) ===
+config.native_platforms = [
+    arm64-v8a
+]
+
+=== boot-report.txt ===
+port_dir=/mnt/union/ROMS/ports
+game_dir=/mnt/mmc/ports/minecraftbedrock
+port_version=2.0.0-rc.15
+edition=minecraftbedrock.standard
+shared_data=/mnt/mmc/ports/minecraftbedrock-data
+cfw=muos (explicit, CFW_NAME=muOS, os=muOS)
+host=arch=aarch64 profile=h700 model=sun50iw9
+memory_kb=2027140
+graphics=backend=mali compositor=none
+panel=720x480 drm=none/none fb=720x480
+audio=backend=pipewire alsa=1 pulse=0 pipewire=1
+loaders=arm64=1 armhf=1
+locale=en_US.UTF-8
+portmaster=control=/mnt/mmc/MUOS/PortMaster mapping=1
+bedrock=1.21.51.01 code=972105101 abi=arm64
+bedrock_status=best_effort renderer=legacy_gles_no_renderdragon recommendation=newest_tested_no_renderdragon
+bedrock_library_sha256=45382be72491ec2cbe5dd4d1262989ad894b8fc611e5cbc16141d04171510927
+patches=edumode=0 http_resolve=0 compaction_available=0
+failsafe=rung=0 (tuned) floor=0 pinned=0
+failsafe_reason=no change
+network=mode=auto offline=0 guarded=0
+abi=arm64 (installed: 64=1 32=0; usable: 64=1 32=1; override=none)
+memory_tier=2g (1979 MB total; game budget 1584 MB)
+fps_cap=30 (version 1.21.51.01; chosen by preset)
+weston_runtime=/mnt/mmc/ports/minecraftbedrock/runtime/weston_pkg_0.2.aarch64.squashfs
+launch=gfx=crusty_x11egl sdl_video=mali sdl_audio=pipewire,alsa alsoft=pipewire,pulse,alsa cores=4 timeout=0
+exit_status=0 after 179s (success)
+failsafe_next=rung 0 on the next launch

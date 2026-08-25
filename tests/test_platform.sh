@@ -340,4 +340,34 @@ mcpe_fb_mode_aligned 480 320 ||
 ! mcpe_fb_mode_aligned "" "" ||
   { echo "an empty size was accepted" >&2; exit 1; }
 
+# Captured from the reference RG34XX-SP on muOS 2601.0 JACARANDA
+# (BUILD_ID bc38efa0) on 2026-08-26, while the device was still available -- the
+# firmware went back to Knulli afterwards. Every value asserted here was read off
+# the running device first; tests/fixtures/muos-2601.0/MANIFEST records which
+# files are real content, which are existence markers, and what the fixture
+# cannot reproduce.
+FIXTURE="$ROOT/tests/fixtures/muos-2601.0"
+[ -d "$FIXTURE" ] || { echo "the captured muOS fixture is missing" >&2; exit 1; }
+unset CFW_NAME MCPE_CFW_OVERRIDE MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
+MCPE_PROBE_ROOT="$FIXTURE" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none   MCPE_TEST_FB_MODE=720x480 mcpe_probe_platform "$TMP/captured-muos.env"
+source "$TMP/captured-muos.env"
+[ "$MCPE_CFW" = muos ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ] ||
+  { echo "captured muOS fixture must resolve muos explicitly" >&2; exit 1; }
+[ "$MCPE_HOST_PROFILE" = h700 ] && [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = mali ] ||
+  { echo "captured muOS fixture must be h700 on the mali backend" >&2; exit 1; }
+[ "$MCPE_HAS_DRM" = 0 ] && [ "$MCPE_HAS_MALI" = 1 ] ||
+  { echo "captured muOS fixture exposes no DRM and a mali node" >&2; exit 1; }
+[ "$MCPE_HOST_MEMORY_KB" = 2027140 ] ||
+  { echo "captured muOS fixture reports the device's real MemTotal" >&2; exit 1; }
+[ "$MCPE_ACTIVE_HEIGHT" = 480 ] ||
+  { echo "captured muOS panel is 480 tall despite a 720x960 virtual size" >&2; exit 1; }
+[ "$MCPE_HAS_ARM64_LOADER" = 1 ] && [ "$MCPE_HAS_ARMHF_LOADER" = 1 ] ||
+  { echo "captured muOS fixture has both ABI loaders" >&2; exit 1; }
+case "$MCPE_GAMEPAD_EVENTS" in
+  *js0*) ;;
+  *) echo "captured muOS fixture must show the muOS-Keys js0 handler" >&2; exit 1 ;;
+esac
+[ "$MCPE_TOUCH_COUNT" = 0 ] ||
+  { echo "the RG34XX-SP has no touchscreen" >&2; exit 1; }
+
 echo "platform fixture tests passed"
