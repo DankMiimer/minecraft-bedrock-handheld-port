@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-rc.15 (testing)
+
+Small corrections and the plan that follows them. The sign-in browser's renderer
+stops being pinned, the self test stops reading a file a fresh install has not
+got, and the repository gains a ranked plan for the robustness work. No gameplay
+change from rc.14.
 
 - **The sign-in browser's renderer is a default now, not a mandate.**
   `gui-session.sh` exported `QT_QUICK_BACKEND=opengl`,
@@ -15,6 +20,22 @@
   RG DS and each fails inside the pinned Weston/Crusty package, ending with
   `wayland-backend.so: undefined symbol: wl_egl_window_destroy`, which nothing
   on that device defines.
+
+- **The self test guards a file a fresh install does not have.** On a brand new
+  muOS card its first run printed `line 250: .../logs/stage.prev.txt: No such
+  file or directory` into its own report. It has not reproduced since — same
+  card, file absent, whole `logs/` directory removed — so the trigger is not
+  understood and the code says so rather than inventing a mechanism. The read is
+  guarded, which costs nothing and makes the question moot, and a contract test
+  keeps the guard.
+
+- **`docs/ROBUSTNESS-PLAN.md`**, ranking what would prevent the most failure per
+  unit of work: run the self test in CI against captured fixtures instead of
+  grepping it for strings, finish the busybox-independence sweep, cover
+  fresh-install and update/rollback paths, make the downloader survive
+  interruption, verify a release on hardware before publishing rather than
+  after, and prefer measured capability over firmware names. Six questions are
+  left open rather than answered.
 
 ## v2.0.0-rc.14 (testing)
 
