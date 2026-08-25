@@ -9,7 +9,7 @@
 # The real verification target is the RG DS once the port runs there.
 #
 # Run from WSL:  bash device_verify.sh [device_ip]
-# Prereqs: device on + reachable (Knulli Scarab, root/linux),
+# Prereqs: device on + reachable (Knulli Scarab, its own root login),
 #   eglut_build/mcpelauncher-client.arm64.telemetry staged (build of
 #   2026-07-10, sha256 7ab26997dc55a1ae...),
 #   /root/bedrockmap/telemetry_dump.arm64 built.
@@ -24,7 +24,7 @@
 #   entering a world needs a human; menu-only verifies the module loads,
 #   shm appears, and frame stats tick.
 set -e
-IP=${1:-192.168.1.12}
+IP=${1:?usage: device_verify.sh <device-ip> [...]}
 SSH="sshpass -p linux ssh -o StrictHostKeyChecking=accept-new root@$IP"
 LOCAL_BIN=/mnt/c/Programmering/SBC/RG34xxSP/Minecraft_Bedrock_PortMaster/eglut_build/mcpelauncher-client.arm64.telemetry
 DUMP=/root/bedrockmap/telemetry_dump.arm64
