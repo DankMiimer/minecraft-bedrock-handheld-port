@@ -195,11 +195,6 @@ def test_nothing_on_the_launch_path_requires_readelf():
     assert "readelf" not in read(LAUNCHER)
 
 
-if __name__ == "__main__":
-    for name, function in sorted(globals().items()):
-        if name.startswith("test_") and callable(function):
-            function()
-    print("CFW contract tests passed")
 
 
 def test_muos_follows_the_portmaster_redirect():
@@ -291,3 +286,13 @@ def test_the_two_downloader_gates_agree_on_firmware():
     menu_lua = read(PAYLOAD / "menu/main.lua")
     assert "Knulli prototype only" not in menu_lua
     assert "RG34XXSP/H700 + Knulli" not in menu_lua
+
+
+# This block must stay at the end of the file. It collects tests out of
+# globals(), so anything defined below it does not exist yet when it runs --
+# five contract tests were appended after it and silently never executed.
+if __name__ == "__main__":
+    for name, function in sorted(globals().items()):
+        if name.startswith("test_") and callable(function):
+            function()
+    print("CFW contract tests passed")

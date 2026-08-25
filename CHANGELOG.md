@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- **The self test told muOS players a runtime was missing when it was mounted.**
+  It looked for the Weston package only in PortMaster's own `libs/` and
+  `runtimes/` — where Knulli and Batocera install it — and never in the port's
+  own `runtime/` directory, which is where `ensure_runtime.sh` puts it when
+  PortMaster does not carry it. On muOS that warning could never clear. Found by
+  running the self test on a device that had just downloaded, verified and
+  mounted the package. The report now reads 17 ok, 1 warning, 0 failures there.
+
+- **Five CFW contract tests had never run.** `tests/test_cfw_contracts.py`
+  collects its tests out of `globals()` from an `if __name__ == "__main__"`
+  block, and five tests had been appended *after* that block, so they did not
+  exist yet when it executed — including the muOS PortMaster redirect, the
+  message ladder, the frontend pairing rule and the downloader gate parity. The
+  runner moved to the end of the file, with a comment saying why it has to stay
+  there. All fifteen pass; verified by mutation that the previously skipped ones
+  now really execute.
+
 ## v2.0.0-rc.12 (testing)
 
 muOS becomes a firmware this port is measured on for behaviour, not only for

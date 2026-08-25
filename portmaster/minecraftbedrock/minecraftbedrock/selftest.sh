@@ -153,8 +153,13 @@ done
 [ -n "$love" ] && ok "LOVE runtime present" "the launcher menu will work" ||
   warn "LOVE 11.5 runtime missing" "no menu; install it from PortMaster"
 
+# PortMaster's own directories are where Knulli and Batocera install this, but
+# a firmware whose PortMaster does not carry it -- muOS ships an empty libs/ --
+# gets it from ensure_runtime.sh instead, which stores it in the port's own
+# runtime directory. Look there too, or the report tells a muOS player that a
+# package it downloaded, verified and mounted is missing, every single time.
 weston=""
-for w in "$pm"/libs/weston_pkg_0.2* "$pm"/runtimes/weston_pkg_0.2*; do
+for w in "$pm"/libs/weston_pkg_0.2* "$pm"/runtimes/weston_pkg_0.2*          "$GAMEDIR"/runtime/weston_pkg_0.2*; do
   [ -f "$w" ] && { weston="$w"; break; }
 done
 if [ "$have64" = 1 ]; then
