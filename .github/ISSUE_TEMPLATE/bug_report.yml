@@ -18,8 +18,10 @@ body:
     attributes:
       label: Firmware
       description: |
-        Knulli and ROCKNIX have reference devices this port is tested on. muOS and
-        the ArkOS family do not, so reports from those are especially useful.
+        Knulli, ROCKNIX and muOS have reference devices this port was tested on.
+        The ArkOS family does not — it is out of scope for v2.0.0 and its code
+        paths are unverified — so reports from those devices are the most useful
+        ones anybody can send.
       options:
         - Knulli
         - muOS

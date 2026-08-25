@@ -10,7 +10,7 @@
 # and yaw only become meaningful after a human enters a world.
 set -euo pipefail
 
-IP="${1:-192.168.1.22}"
+IP="${1:?usage: rgds_device_verify.sh <device-ip> [...]}"
 MCVER="${2:-1.16.221.01}"
 PASS="${RGDS_PASS:-rocknix}"
 TEST_SECONDS="${RGDS_TELEMETRY_TEST_SECONDS:-75}"

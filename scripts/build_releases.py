@@ -118,8 +118,11 @@ def rgds_metadata(root: pathlib.Path) -> None:
     port["attr"]["title"] = "Minecraft Bedrock RGDS"
     port["attr"]["arch"] = ["aarch64"]
     port["attr"]["desc"] = (
-        "RGDS dual-screen edition with live minimap/status, SELECT screen swapping, "
-        "dual-touch routing and OSK supervision. ROCKNIX/Sway is the validated host. "
+        "EXPERIMENTAL RGDS dual-screen edition, in early development: live "
+        "minimap/status, SELECT screen swapping, dual-touch routing and OSK "
+        "supervision. ROCKNIX/Sway on an RG DS is the only tested host, and the "
+        "second-screen companion has one reference device behind it. Use the "
+        "standard edition unless you want to help test this one. "
         "Requires a legally obtained arm64 Bedrock APK; no game files are included."
     )
     write_text_lf(root / "port.json", json.dumps(port, indent=2) + "\n")
@@ -127,8 +130,12 @@ def rgds_metadata(root: pathlib.Path) -> None:
     readme = readme.replace("# Minecraft Bedrock", "# Minecraft Bedrock RGDS", 1)
     readme = readme.replace(
         "This archive installs an unofficial PortMaster launcher",
-        "This is the separate RGDS dual-screen edition. ROCKNIX/Sway is the "
-        "supported host.\n\nThis archive installs an unofficial PortMaster launcher",
+        "This is the separate RGDS dual-screen edition, and it is "
+        "**experimental**. The second-screen companion is in early development "
+        "on a single reference device (an RG DS on ROCKNIX/Sway), which is also "
+        "the only tested host. The game itself runs the same way it does in the "
+        "standard edition; what is new here is everything on the lower "
+        "screen.\n\nThis archive installs an unofficial PortMaster launcher",
         1,
     )
     write_text_lf(root / "README.md", readme)
@@ -441,11 +448,26 @@ def main() -> int:
         args.out_dir / "release-index.json",
         json.dumps({"schema": 2, "releases": releases}, indent=2) + "\n",
     )
+    # A stable release still has to say what it does not claim. Three things
+    # ship without a device behind them and the notes name all three, because
+    # the version number is not evidence and must not be read as any.
     status = (
-        "Testing channel release. Final R36S and revised RGDS physical acceptance "
-        "checks remain pending; this release adds no stable or newly Validated claims."
+        "Testing channel release. The R36S/armhf physical acceptance matrix "
+        "remains pending; this release adds no stable or newly Validated claims."
         if args.channel == "testing"
-        else "Stable channel release."
+        else (
+            "Stable channel release.\n\n"
+            "Measured on physical reference devices: Knulli and muOS on an "
+            "Anbernic RG34XX-SP, ROCKNIX on an Anbernic RG DS. TESTING.md "
+            "records which acceptance rows each one passed and when.\n\n"
+            "Shipped without that evidence, and saying so: the **RGDS "
+            "second-screen companion is experimental** and in early development "
+            "behind a single device; the **32-bit armhf path** for R36S/RK3326 "
+            "is built and fixture-tested but has never run on a 32-bit device; "
+            "and the **ArkOS family** (ArkOS, dArkOS, DarkOS RE) is **not "
+            "supported** — its code paths ship unverified and the port reports "
+            "itself as such there."
+        )
     )
     helper_note = (
         "\n- The Windows helper sets itself up from one button, installing the "
@@ -464,7 +486,8 @@ def main() -> int:
         f"Channel: `{args.channel}`\n\n{status}\n\n"
         "## Highlights\n\n"
         "- Separate standard and RGDS products; the standard archive contains no "
-        "dual-screen runtime, while RGDS is arm64-only for ROCKNIX/Sway.\n"
+        "dual-screen runtime, while RGDS is arm64-only for ROCKNIX/Sway and its "
+        "second-screen companion is experimental.\n"
         "- Bedrock 1.16.221.01 remains recommended for performance and handheld UI "
         "scaling. The fingerprinted original 1.21.51.01 is the newest tested "
         "alternative; 1.26+ is unsupported.\n"

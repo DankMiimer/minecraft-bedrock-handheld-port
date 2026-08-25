@@ -328,6 +328,109 @@ def test_abi_choice_asks_about_the_loader_not_the_kernel():
     assert 'basename "${LOVE_BINARY:-}"' in launcher
 
 
+def test_the_boot_report_reaches_the_log_on_every_exit():
+    """A report a reporter never sees is not a report.
+
+    mcpe_report_print used to be called once, just before the game started, so
+    every exit before that point -- no version, no LOVE runtime, a broken
+    interpreter, a failed probe -- left logs/boot-report.txt on disk and nothing
+    in logs/launcher.log. launcher.log is the file the issue template asks for
+    and the file reporters paste; issue #10 pasted it twice, without the report.
+    """
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    common = (PAYLOAD / "lib/common.sh").read_text(encoding="utf-8")
+
+    # Armed at the first point the report file exists, before anything can exit.
+    begin = launcher.index('mcpe_report_begin "$GAMEDIR/logs/boot-report.txt"')
+    trap = launcher.index("trap mcpe_report_print EXIT")
+    assert begin < trap, "the report trap must be armed after the report is opened"
+    first_exit = launcher.index("exit 1", trap)
+    assert trap < first_exit, "the report trap must be armed before the first exit"
+
+    # The later frontend trap must not silently replace it.
+    assert "trap 'menu_restore_frontend; mcpe_report_print' EXIT" in launcher
+    assert "trap menu_restore_frontend EXIT" not in launcher
+
+    # And printing twice must not produce two blocks.
+    assert 'MCPE_REPORT_PRINTED:-0' in common
+    assert "MCPE_REPORT_PRINTED=1" in common
+
+
+def test_a_missing_love_runtime_is_not_reported_as_a_missing_game():
+    """Issue #10 selected "the launcher menu never appeared" and was told that
+    no Minecraft version was installed. Both can be true at once, and only one
+    of them is the thing to fix."""
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "MENU_UNAVAILABLE_REASON" in launcher
+    assert "mcpe_report_set menu " in launcher
+    assert "mcpe_report_set menu_searched" in launcher
+    # The paths searched come from one list, so the report cannot drift from
+    # the lookup it is describing.
+    assert launcher.count("love_txt_candidates") >= 3
+    assert launcher.count('"$controlfolder/runtimes/love_11.5/love.txt"') == 1
+    # The no-version message leads with the runtime when that is the cause.
+    no_version = launcher.split("if ! has_installed_version && [ -z \"$MENU_LOVE_TXT\" ]", 1)[1][:1200]
+    assert "LOVE 11.5 runtime was not found" in no_version
+    assert "No Minecraft version installed." in no_version
+
+
+def test_the_port_states_what_this_release_claims_for_the_firmware():
+    """v2.0.0 covers Knulli, muOS and ROCKNIX. The ArkOS family has never had a
+    device, so its paths ship unverified and must say so rather than being read
+    as a supported firmware regressing."""
+    common = (PAYLOAD / "lib/common.sh").read_text(encoding="utf-8")
+    assert "mcpe_cfw_support()" in common
+    support = common.split("mcpe_cfw_support()", 1)[1].split("\n}", 1)[0]
+    assert "knulli|rocknix|muos" in support
+    assert "reference" in support
+    for unclaimed in ("arkos", "batocera"):
+        assert unclaimed in support, unclaimed
+    assert support.count("unverified") >= 3, "every uncovered case must say unverified"
+
+    assert "mcpe_report_set cfw_support" in LAUNCHER.read_text(encoding="utf-8")
+    selftest = (PAYLOAD / "selftest.sh").read_text(encoding="utf-8")
+    assert "mcpe_cfw_support" in selftest, "the self test must report the same answer"
+
+    # The documents have to agree with the code.
+    contracts = (ROOT / "docs/CFW-CONTRACTS.md").read_text(encoding="utf-8")
+    assert "Out of scope for v2.0.0" in contracts
+
+
+def test_the_rgds_edition_declares_itself_experimental():
+    """The second-screen companion is early development on one device. A player
+    picking it should be told by the port, not by a bug."""
+    import json
+
+    rgds = json.loads((ROOT / "bottomscreen/release/edition.json").read_text(encoding="utf-8"))
+    standard = json.loads(
+        (PAYLOAD / "edition.json").read_text(encoding="utf-8")
+    )
+    assert rgds["stability"] == "experimental"
+    assert standard.get("stability", "stable") == "stable"
+
+    common = (PAYLOAD / "lib/common.sh").read_text(encoding="utf-8")
+    assert "MCPE_EDITION_STABILITY" in common
+    # Absent means stable, so an older manifest keeps its meaning.
+    assert 'MCPE_EDITION_STABILITY:-stable' in common
+
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "This edition is EXPERIMENTAL" in launcher
+
+    for document in ("README.md", "README.txt",
+                     "portmaster/minecraftbedrock/README.md"):
+        text = (ROOT / document).read_text(encoding="utf-8").lower()
+        assert "experimental" in text and "rgds" in text, document
+
+
+def test_an_empty_update_channel_tells_the_player_what_to_do():
+    """A fresh install defaults to the stable channel. An index carrying only
+    testing entries then failed with a count, which is not something a player
+    can act on."""
+    selector = (PAYLOAD / "release_select.py").read_text(encoding="utf-8")
+    assert "no {args.channel} release published" in selector
+    assert "change Update channel in Settings" in selector
+
+
 if __name__ == "__main__":
     test_generic_h700_controller_aliases_are_name_disambiguated()
     test_menu_failure_does_not_silently_autoplay()
@@ -341,4 +444,9 @@ if __name__ == "__main__":
     test_both_launch_paths_share_one_audio_triage()
     test_both_launch_paths_are_supervised_during_startup()
     test_abi_choice_asks_about_the_loader_not_the_kernel()
+    test_the_boot_report_reaches_the_log_on_every_exit()
+    test_a_missing_love_runtime_is_not_reported_as_a_missing_game()
+    test_the_port_states_what_this_release_claims_for_the_firmware()
+    test_the_rgds_edition_declares_itself_experimental()
+    test_an_empty_update_channel_tells_the_player_what_to_do()
     print("portability contract tests passed")

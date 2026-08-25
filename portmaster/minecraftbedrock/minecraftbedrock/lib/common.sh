@@ -124,6 +124,27 @@ mcpe_is_cfw() { # id [id...]
   return 1
 }
 
+# --- Release support level -----------------------------------------------------
+# What this release *claims* for the firmware it is running on, which is not the
+# same question as what the code can do there. Knulli, ROCKNIX and muOS were each
+# measured on physical hardware before v2.0.0. The ArkOS family never has been:
+# its code paths are written from the log in issue #1 rather than from a device,
+# so v2.0.0 carries them without claiming them. Reported in the boot report and
+# by the self test, so a report arriving from an unverified firmware is legible
+# as one instead of being read as a regression on a supported one.
+mcpe_cfw_support() { # call after mcpe_resolve_cfw
+  case "${MCPE_CFW:-unknown}" in
+    knulli|rocknix|muos)
+      printf 'reference (measured on physical hardware)\n' ;;
+    arkos)
+      printf 'unverified (ArkOS family has no reference device; not a v2.0 support claim)\n' ;;
+    batocera)
+      printf 'unverified (only the Knulli derivative was measured)\n' ;;
+    *)
+      printf 'unverified (unrecognised firmware)\n' ;;
+  esac
+}
+
 # --- Launch stage breadcrumb --------------------------------------------------
 # A single token, overwritten in place, so a device that is hard-reset or
 # powered off mid-launch still records where it stopped. The previous run's
@@ -232,8 +253,16 @@ mcpe_report_set() { # key value...
   printf '%s=%s\n' "$key" "$*" >>"$MCPE_REPORT_FILE" 2>/dev/null || true
 }
 
+# Printed once per launch, wherever the launcher gets to. The normal path
+# prints it just before the game starts; an early exit -- no version, no LOVE
+# runtime, a broken interpreter, a failed probe -- prints it from the EXIT trap
+# instead. Before that, the report reached logs/boot-report.txt but never
+# logs/launcher.log, and launcher.log is the file the issue template asks for
+# and the file reporters actually paste (issue #10 pasted it twice, without it).
 mcpe_report_print() {
   [ -n "${MCPE_REPORT_FILE:-}" ] && [ -s "$MCPE_REPORT_FILE" ] || return 0
+  [ "${MCPE_REPORT_PRINTED:-0}" = 1 ] && return 0
+  MCPE_REPORT_PRINTED=1
   echo "--- boot report ---"
   sed 's/^/  /' "$MCPE_REPORT_FILE" 2>/dev/null || true
   echo "-------------------"
@@ -274,9 +303,15 @@ mcpe_load_edition() {
   MCPE_PAYLOAD_NAME="$(mcpe_json_string "$manifest" payload)"
   MCPE_DEFAULT_CHANNEL="$(mcpe_json_string "$manifest" channel)"
   MCPE_SHARED_DIRNAME="$(mcpe_json_string "$manifest" shared_data)"
+  # An edition may declare itself experimental. The RGDS dual-screen companion
+  # does: it is early development on a single reference device, and a player
+  # choosing it should be told so rather than discovering it from a bug.
+  # Absent means stable, so older manifests keep their meaning.
+  MCPE_EDITION_STABILITY="$(mcpe_json_string "$manifest" stability)"
+  MCPE_EDITION_STABILITY="${MCPE_EDITION_STABILITY:-stable}"
   [ -n "$MCPE_EDITION_ID" ] && [ -n "$MCPE_PAYLOAD_NAME" ] || return 1
   export MCPE_EDITION_ID MCPE_EDITION_NAME MCPE_PAYLOAD_NAME
-  export MCPE_DEFAULT_CHANNEL MCPE_SHARED_DIRNAME
+  export MCPE_DEFAULT_CHANNEL MCPE_SHARED_DIRNAME MCPE_EDITION_STABILITY
 }
 
 mcpe_is_empty_dir() {

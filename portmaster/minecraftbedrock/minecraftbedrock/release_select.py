@@ -23,8 +23,29 @@ def main() -> int:
             item for item in doc.get("releases", [])
             if item.get("edition") == args.edition and item.get("channel") == args.channel
         ]
+        if not matches:
+            # The default channel for a fresh install is stable, so an index
+            # that only carries testing entries fails here for everyone who
+            # never touched the setting. Name the way out rather than the count.
+            other = "testing" if args.channel == "stable" else "stable"
+            available = sorted({
+                str(item.get("channel"))
+                for item in doc.get("releases", [])
+                if item.get("edition") == args.edition
+            })
+            hint = (
+                f"the {other} channel has one"
+                if other in available
+                else "no channel has one"
+            )
+            raise ValueError(
+                f"no {args.channel} release published for {args.edition} yet "
+                f"({hint}); change Update channel in Settings to switch"
+            )
         if len(matches) != 1:
-            raise ValueError(f"expected one {args.edition}/{args.channel} release, found {len(matches)}")
+            raise ValueError(
+                f"expected one {args.edition}/{args.channel} release, found {len(matches)}"
+            )
         item = matches[0]
         required = ("version", "asset", "url", "sha256", "size", "minimum_updater")
         missing = [key for key in required if key not in item]

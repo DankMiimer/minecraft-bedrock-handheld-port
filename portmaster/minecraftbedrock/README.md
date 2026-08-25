@@ -4,8 +4,12 @@ This archive installs an unofficial PortMaster launcher for a legally owned
 Android copy of Minecraft Bedrock. It runs the native ARM game library through
 the open-source minecraft-linux launcher.
 
-This is a testing release. Final R36S and revised RGDS physical acceptance
-checks remain pending; rc.10 adds no stable or newly Validated claims.
+This is the first stable 2.x release. The R36S/armhf physical acceptance
+matrix remains pending, and the RGDS second-screen companion is experimental.
+
+Firmware scope: Knulli, muOS and ROCKNIX each have a physical reference device.
+The ArkOS family (ArkOS, dArkOS, DarkOS RE) does not, and is not supported by
+this release — its code paths are present but no device has ever run them.
 
 **No game files are included.** Supply your own official full APK, APKM/APKS/
 XAPK bundle, or complete split-APK set.
@@ -98,8 +102,13 @@ Left/Right changes settings.
 The standard archive supports normal single-screen aarch64 and armhf
 PortMaster systems. RGDS users need the separate arm64 RGDS archive for the
 dual-screen companion, touch routing, on-screen keyboard supervision, live
-status, local-world map, and SELECT screen swapping. ROCKNIX/Sway is the
-supported RGDS host.
+status, local-world map, and SELECT screen swapping.
+
+**The RGDS second-screen companion is experimental and in early development.**
+One RG DS on ROCKNIX/Sway is the whole of the evidence behind it, and that is
+also the only supported host. The game itself behaves as it does in the standard
+edition; everything on the lower screen is the experimental part. Use the
+standard edition unless you want to help test this one.
 
 Both editions share only user-owned data:
 
@@ -123,6 +132,7 @@ of overwriting either copy.
 - Xbox/Marketplace behavior is not a supported release gate; local worlds and
   LAN are the primary supported play paths.
 - Versions from 1.18.30 onward stutter badly and have very small menus.
+- The RGDS second-screen companion is experimental; see above.
 - RGDS terrain mapping is available for local worlds only. Remote/LAN worlds
   retain live status but show `REMOTE WORLD / MAP UNAVAILABLE`.
 - Never share APKs, extracted libraries/assets, worlds, profiles, account data,

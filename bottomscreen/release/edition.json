@@ -6,6 +6,7 @@
   "payload": "minecraftbedrock-rgds",
   "entrypoint": "Minecraft Bedrock RGDS.sh",
   "channel": "testing",
+  "stability": "experimental",
   "shared_data": "minecraftbedrock-data",
   "host_abis": [
     "aarch64"

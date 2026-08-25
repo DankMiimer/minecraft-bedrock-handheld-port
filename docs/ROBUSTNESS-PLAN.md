@@ -8,11 +8,10 @@ and, at the end, what nobody has answered yet.
 ## Where this starts from
 
 Three devices are reachable and all run v2.0.0-rc.14: an RG34XX-SP on muOS
-2601.0 (fresh card, `192.168.1.42`), the same model on Knulli (`192.168.1.25`),
-and an RG DS on ROCKNIX (`192.168.1.24`). rc.14 has now been installed from the
-published artifact on the muOS card and taken all the way through Google
-sign-in, download of 1.21.51.01, install and play. The RG DS passes its self
-test at 17 ok / 0 warnings.
+2601.0 (a fresh card), the same model on Knulli, and an RG DS on ROCKNIX.
+rc.14 has now been installed from the published artifact on the muOS card and
+taken all the way through Google sign-in, download of 1.21.51.01, install and
+play. The RG DS passes its self test at 17 ok / 0 warnings.
 
 What this session actually taught, and what the plan below is built on: every
 failure that cost real time came from an assumption about the *environment*
