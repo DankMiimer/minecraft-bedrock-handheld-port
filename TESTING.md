@@ -13,10 +13,17 @@ every clause marked **measured** (observed on a reference device, dated) or
 `tests/test_platform.sh` asserts the capability clauses against fixtures built
 from captured device output rather than from plausible-looking guesses.
 
-Reference devices: Anbernic RG34XX-SP on Knulli 20260511, and Anbernic RG DS on
-ROCKNIX 20260710 nightly — both captured 2026-08-23. **muOS and dArkOS have no
-reference device**, so their contracts are derived from the code and the two
-field reports and are the ones most likely to be wrong.
+Reference devices: Anbernic RG34XX-SP on Knulli 20260511 and Anbernic RG DS on
+ROCKNIX 20260710 nightly, both captured 2026-08-23; and the same RG34XX-SP on
+muOS 2601.0 JACARANDA, captured 2026-08-24 and played end to end on 2026-08-25.
+**The ArkOS family — ArkOS, dArkOS, DarkOS RE — has no reference device and
+never has.** Its contract is derived from the code and from the log in issue #1,
+so it is the one most likely to be wrong, and it is **out of scope for v2.0.0**:
+the code paths ship, the support claim does not.
+
+The muOS card failed on 2026-08-25 and is out of the device, so its rows below
+record what was measured while it was reachable and cannot be re-run before
+release.
 
 ### Reference capture, 2026-08-23
 
@@ -238,27 +245,37 @@ device of that family. Copy this table into a device report and fill it in;
 
 Current state:
 
-| # | Knulli (RG34XX-SP) | ROCKNIX (RG DS) | muOS | dArkOS |
+| # | Knulli (RG34XX-SP) | ROCKNIX (RG DS) | muOS (RG34XX-SP) | ArkOS family |
 |---|---|---|---|---|
-| 1 Self test | pass | pass | — | — |
-| 2 Identity | pass | pass | — | — |
-| 3 Panel | pass | pass | — | — |
-| 4 Install | pass (earlier checkpoints) | pass (earlier checkpoints) | — | — |
-| 5 Launch from menu | pass | pass | — | — |
-| 6 First frame | pass | pass | — | — |
-| 7 Audio | pass (earlier checkpoints) | pass (earlier checkpoints) | reported fixed in v1.4.1 | open, see issue #1 |
-| 8 Controls | not re-verified | not re-verified | — | open, see issue #1 |
-| 9 Text entry | not verified | not verified | — | — |
-| 10 World load | pass (earlier checkpoints) | pass (earlier checkpoints) | — | — |
-| 11 LAN | pass (earlier checkpoints) | known limitation, see below | reported broken with Wi-Fi on | — |
-| 12 Clean exit | pass | pass | — | — |
-| 13 Relaunch | not verified | not verified | — | — |
-| 14 Frontend restored | pass | pass | — | — |
-| 15 Ladder unchanged | pass | pass | — | — |
+| 1 Self test | pass | pass | pass, 2026-08-25 | — |
+| 2 Identity | pass | pass | pass, 2026-08-24 | — |
+| 3 Panel | pass | pass | pass, 2026-08-24 | — |
+| 4 Install | pass (earlier checkpoints) | pass (earlier checkpoints) | pass, 2026-08-25 | — |
+| 5 Launch from menu | pass | pass | pass, 2026-08-25 | — |
+| 6 First frame | pass | pass | pass, 2026-08-25 | — |
+| 7 Audio | pass (earlier checkpoints) | pass (earlier checkpoints) | pass, 2026-08-25, heard (a v1.x no-audio report was fixed in v1.4.1) | open, see issue #1 |
+| 8 Controls | not re-verified | not re-verified | pass, 2026-08-25 | open, see issue #1 |
+| 9 Text entry | not verified | not verified | not verified | — |
+| 10 World load | pass (earlier checkpoints) | pass (earlier checkpoints) | pass, 2026-08-25 | — |
+| 11 LAN | pass (earlier checkpoints) | known limitation, see below | not verified; a v1.x report described the game exiting with Wi-Fi on (FS-1 in docs/FAILSAFES.md) | — |
+| 12 Clean exit | pass | pass | pass, 2026-08-25 | — |
+| 13 Relaunch | not verified | not verified | not verified | — |
+| 14 Frontend restored | pass | pass | pass, 2026-08-25 | — |
+| 15 Ladder unchanged | pass | pass | pass, 2026-08-25 | — |
 
-A dash means no reference device and no report covering that row. muOS and
-dArkOS cannot progress past row 1 without a volunteer running `selftest.sh`,
-which is why the issue template now asks for it first.
+A dash means no reference device and no report covering that row.
+
+The muOS column comes from one session on 2026-08-25 on an RG34XX-SP running
+2601.0 JACARANDA: Google sign-in on the device, the 1.16.221.01 arm64 split set
+downloaded, installed and played for 488 s with sound and controls working,
+`exit_status=0 (success)`, `failsafe=rung=0 (tuned) floor=0`, and the frontend
+back on its own menu afterwards. Rows 9, 11 and 13 were never exercised, and the
+card failed the same day, so they stay open rather than being inferred from the
+rest. `docs/CFW-CONTRACTS.md` and `docs/FAILSAFES.md` carry the full capture.
+
+The ArkOS column is empty because there has never been a device. v2.0.0 does not
+claim the family; its code paths ship unverified and a single **Self test**
+paste from an ArkOS-family device is still the one input that would change that.
 
 ## Release-gating tracks
 

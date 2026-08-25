@@ -54,8 +54,13 @@ case "$MCPE_CFW" in
          "reported as '$MCPE_CFW'; per-firmware behaviour falls back to generic" ;;
 esac
 case "$MCPE_CFW" in
-  arkos) warn "firmware has no reference device" \
-      "its contract in docs/CFW-CONTRACTS.md is assumed, not measured" ;;
+  knulli|rocknix|muos)
+    ok "firmware covered by this release" "$(mcpe_cfw_support)" ;;
+  arkos)
+    warn "firmware has no reference device" \
+      "$(mcpe_cfw_support); its contract in docs/CFW-CONTRACTS.md is assumed, not measured" ;;
+  *)
+    warn "firmware not covered by this release" "$(mcpe_cfw_support)" ;;
 esac
 
 # ------------------------------------------------------------------- python

@@ -154,6 +154,11 @@ source "$GAMEDIR/lib/message.sh" || { echo "Missing message helpers."; exit 1; }
 # only record a device leaves when it locks up during startup.
 mcpe_stage_begin "$GAMEDIR/logs"
 mcpe_report_begin "$GAMEDIR/logs/boot-report.txt"
+# Armed here, at the first point the report file exists, so that every exit
+# below carries the boot report into the launcher log -- including the ones
+# that happen before the game is ever reached. mcpe_report_print is
+# idempotent, so the normal path's explicit call still prints it exactly once.
+trap mcpe_report_print EXIT
 mcpe_resolve_cfw
 mcpe_stage payload
 mcpe_startup_mark "payload resolved"
@@ -192,9 +197,10 @@ cd "$GAMEDIR"
 mcpe_report_set port_dir "$PORTDIR"
 mcpe_report_set game_dir "$GAMEDIR"
 mcpe_report_set port_version "$(cat "$GAMEDIR/PORT_VERSION" 2>/dev/null || echo unknown)"
-mcpe_report_set edition "$MCPE_EDITION_ID"
+mcpe_report_set edition "$MCPE_EDITION_ID (${MCPE_EDITION_STABILITY:-stable})"
 mcpe_report_set shared_data "$MCPE_SHARED_ROOT"
 mcpe_report_set cfw "$MCPE_CFW ($MCPE_CFW_CONFIDENCE, CFW_NAME=${CFW_NAME:-unset}, os=${MCPE_HOST_OS:-unknown})"
+mcpe_report_set cfw_support "$(mcpe_cfw_support)"
 mcpe_report_set host "arch=${MCPE_HOST_ARCH:-unknown} profile=${MCPE_HOST_PROFILE:-generic} model=${MCPE_HOST_MODEL:-unknown}"
 mcpe_report_set memory_kb "${MCPE_HOST_MEMORY_KB:-unknown}"
 mcpe_report_set graphics "backend=${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown} compositor=${MCPE_HOST_COMPOSITOR:-none}"
@@ -206,6 +212,10 @@ mcpe_report_set portmaster "control=${PM_CONTROL_ROOT:-none} mapping=${MCPE_PORT
 echo "Port dir: $PORTDIR"
 echo "Game dir: $GAMEDIR"
 echo "Edition: $MCPE_EDITION_ID"
+if [ "${MCPE_EDITION_STABILITY:-stable}" = experimental ]; then
+  echo "This edition is EXPERIMENTAL and in early development."
+  echo "Expect rough edges in the second-screen companion; please report them."
+fi
 echo "Shared data: $MCPE_SHARED_ROOT"
 echo "CFW: $MCPE_CFW ($MCPE_CFW_CONFIDENCE; CFW_NAME=${CFW_NAME:-unset}) profile=${MCPE_HOST_PROFILE:-generic} backend=${MCPE_GRAPHICS_BACKEND_RESOLVED:-unknown}"
 echo "Locale: ${MCPE_LOCALE_RESOLVED:-unknown}"
@@ -315,23 +325,53 @@ import_legacy_r36s_versions
 # runtime is missing or the menu crashes, everything falls back to the old
 # auto behavior. Disable with MCPE_MENU=0; custom shortcuts that pin
 # MCVER_OVERRIDE skip it too.
+love_txt_candidates() { # every place PortMaster is known to keep the runtime
+  # PM_CONTROL_ROOT and controlfolder are the same directory unless a stub
+  # control.txt redirected one of them, so the list is de-duplicated: it is
+  # printed into the boot report, and a repeated path there reads as a bug.
+  local seen="" candidate
+  for candidate in "$PM_CONTROL_ROOT/runtimes/love_11.5/love.txt" \
+                   "$controlfolder/runtimes/love_11.5/love.txt" \
+                   "$controlfolder/libs/love_11.5/love.txt" \
+                   "$controlfolder/runtimes/love/love.txt" \
+                   "/userdata/system/.local/share/$PM_DIR/runtimes/love_11.5/love.txt"; do
+    case "$seen" in *"|$candidate|"*) continue ;; esac
+    seen="$seen|$candidate|"
+    printf '%s\n' "$candidate"
+  done
+}
 find_love_txt() {
   local lt
-  for lt in "$PM_CONTROL_ROOT/runtimes/love_11.5/love.txt" \
-            "$controlfolder/runtimes/love_11.5/love.txt" \
-            "$controlfolder/libs/love_11.5/love.txt" \
-            "$controlfolder/runtimes/love/love.txt" \
-            "/userdata/system/.local/share/$PM_DIR/runtimes/love_11.5/love.txt"; do
-    [ -f "$lt" ] && { echo "$lt"; return 0; }
-  done
+  while IFS= read -r lt; do
+    [ -n "$lt" ] && [ -f "$lt" ] && { printf '%s\n' "$lt"; return 0; }
+  done < <(love_txt_candidates)
   return 1
 }
 MENU_LOVE_TXT=""
 MENU_WANTED=0
-if [ "${MCPE_MENU:-auto}" != 0 ] && [ -z "${MCVER_OVERRIDE:-}" ] &&
-   [ -f "$GAMEDIR/menu/main.lua" ]; then
+# Why the menu is or is not available, recorded in the boot report. Without it a
+# device whose PortMaster carries no LOVE runtime falls through to the legacy
+# path, and the only thing the player is told is that no Minecraft version is
+# installed -- true, and not the reason they never saw a menu (issue #10).
+MENU_UNAVAILABLE_REASON=""
+if [ "${MCPE_MENU:-auto}" = 0 ]; then
+  MENU_UNAVAILABLE_REASON="switched off with MCPE_MENU=0"
+elif [ -n "${MCVER_OVERRIDE:-}" ]; then
+  MENU_UNAVAILABLE_REASON="skipped because MCVER_OVERRIDE pins a version"
+elif [ ! -f "$GAMEDIR/menu/main.lua" ]; then
+  MENU_UNAVAILABLE_REASON="this payload has no menu/main.lua"
+else
   MENU_WANTED=1
   MENU_LOVE_TXT="$(find_love_txt)" || MENU_LOVE_TXT=""
+  [ -n "$MENU_LOVE_TXT" ] ||
+    MENU_UNAVAILABLE_REASON="PortMaster's LOVE 11.5 runtime was not found"
+fi
+if [ -n "$MENU_LOVE_TXT" ]; then
+  mcpe_report_set menu "available love=$MENU_LOVE_TXT"
+else
+  mcpe_report_set menu "unavailable: $MENU_UNAVAILABLE_REASON"
+  [ "$MENU_WANTED" = 1 ] &&
+    mcpe_report_set menu_searched "$(love_txt_candidates | tr '\n' ' ')"
 fi
 if [ "$MENU_WANTED" = 1 ] && [ -z "$MENU_LOVE_TXT" ] &&
    [ "${MCPE_MENU:-auto}" = 1 ]; then
@@ -549,11 +589,23 @@ if has_installer_input; then
 fi
 
 if ! has_installed_version && [ -z "$MENU_LOVE_TXT" ]; then
-  show_msg "No Minecraft version installed." \
-           "Copy your own APK/APKM/APKS/XAPK (arm64, or arm32 for RK3326" \
-           "devices like the R36S) into:" \
-           "ports/minecraftbedrock-data/apk/" \
-           "then launch this port again."
+  # Lead with the runtime when that is what actually stopped the menu. A player
+  # who put an APK in the right place and still reads "no version installed" has
+  # no way to guess that PortMaster is the thing to fix.
+  no_version_lines=()
+  if [ "$MENU_WANTED" = 1 ]; then
+    no_version_lines+=("The launcher menu could not start:" \
+                       "PortMaster's LOVE 11.5 runtime was not found," \
+                       "so Install APK and Versions are unavailable." \
+                       "Update PortMaster on this device, then try again." \
+                       "")
+  fi
+  no_version_lines+=("No Minecraft version installed." \
+                     "Copy your own APK/APKM/APKS/XAPK (arm64, or arm32 for RK3326" \
+                     "devices like the R36S) into:" \
+                     "ports/minecraftbedrock-data/apk/" \
+                     "then launch this port again.")
+  show_msg "${no_version_lines[@]}"
   exit 1
 fi
 
@@ -632,7 +684,7 @@ menu_restore_frontend() {
     setsid $ESUDO "$ES_INIT" start </dev/null >/dev/null 2>&1
   )
 }
-trap menu_restore_frontend EXIT
+trap 'menu_restore_frontend; mcpe_report_print' EXIT
 
 # --- Launcher menu ---------------------------------------------------------------
 # Loop: install/delete actions return to the menu; play/exit leave it.

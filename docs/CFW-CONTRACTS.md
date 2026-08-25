@@ -343,6 +343,12 @@ instead of surfacing it later as an unrelated metadata failure.
 
 ## dArkOS / ArkOS family — no reference device
 
+**Out of scope for v2.0.0.** Everything below is written from the code and from
+the log in issue #1; nothing in it has been observed on hardware. The code paths
+ship — they cost nothing and that log paid for them — but the release makes no
+support claim for this family, and `mcpe_cfw_support` reports `unverified` on
+it so a report from one of these devices is legible as such.
+
 Covers ArkOS, dArkOS, DarkOS RE and ArkOS-for-clone builds, which share the
 layout and display path the port branches on.
 
@@ -377,11 +383,13 @@ assembled from it points at a process that never exists.
 
 ## What would raise these from assumed to measured
 
-- muOS: what is left is what needs a player, not another capture. Identity, the
-  frontend handoff, graphics, storage and the downloader are measured above on
-  the RG34XX-SP reference device; the Jacaranda audio path has been selected
-  correctly but never *heard*, and whether the Wi-Fi startup crash still occurs
-  on 2.0 needs a real session.
+- muOS: mostly answered. Identity, the frontend handoff, graphics, storage and
+  the downloader are measured above on the RG34XX-SP reference device, and on
+  2026-08-25 a player signed in, installed 1.16.221.01 and played it with sound
+  and controls working — so the Jacaranda audio path has now been *heard*, not
+  merely selected. What is still open is whether the Wi-Fi startup crash behind
+  FS-1 still occurs on an affected build, and text entry, LAN and an immediate
+  relaunch. The card failed the same day, so those need another muOS device.
 - An R36S-class device on dArkOS RE: identity, `ESUDO`, the KMSDRM panel-mode
   fix, the audio triage, and the ABI loader check. Still nothing measured.
 

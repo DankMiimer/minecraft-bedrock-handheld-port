@@ -6,6 +6,7 @@
   "payload": "minecraftbedrock",
   "entrypoint": "Minecraft Bedrock.sh",
   "channel": "testing",
+  "stability": "stable",
   "shared_data": "minecraftbedrock-data",
   "host_abis": [
     "aarch64",
