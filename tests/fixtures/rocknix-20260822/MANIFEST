@@ -1,0 +1,36 @@
+Captured by tools/capture-fixture.sh from a live device.
+
+  name:     rocknix
+  os:       
+  model:    Anbernic RG DS
+  kernel:   7.0.2
+
+Real content: etc/os-release, proc/*, sys/class/drm/*/status and modes,
+sys/class/input/event*/device/{name,phys}, sys/class/graphics, reference/*.
+
+Empty markers, because device nodes, sockets and shared libraries cannot be
+copied and the probe only tests them for existence: everything under dev/ and
+run/, the loader and library paths, and the Mesa dri directory.
+
+Contains no credential material. Nothing from the downloader state directory,
+no tokens, no account identifiers.
+
+A compositor, a running daemon and an ioctl cannot be captured. Tests that need
+those supply MCPE_TEST_COMPOSITOR or similar, and should say so.
+
+--- Reproduced against the device (2026-08-26, port v2.0.0-rc.15) ---
+
+  MCPE_CFW=rocknix explicit     MCPE_HOST_PROFILE=rgds
+  MCPE_GRAPHICS_BACKEND=wayland MCPE_HAS_DRM=1, HAS_MALI=1, HAS_MESA=1
+  MCPE_HOST_MEMORY_KB=3051736   active panel 640x480
+  DRM connector card0-DSI-1 at 640x480, two connected DSI connectors
+  both ABI loaders              audio=pulse, alsa=1 pulse=1 pipewire=1
+  MCPE_IS_RGDS=1                MCPE_TOUCH_COUNT=2
+
+Every field matches, including audio -- this firmware keeps its PipeWire socket
+at /run/pipewire/pipewire-0, which the probe now checks.
+
+Needs MCPE_TEST_ARCH=aarch64 and MCPE_TEST_COMPOSITOR=sway. sway is a running
+compositor: the device resolves the wayland backend because sway holds DRM
+master, and no capture can express a running process. That substitution is the
+one thing this fixture is told rather than asked.

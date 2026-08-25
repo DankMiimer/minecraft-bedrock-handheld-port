@@ -62,9 +62,13 @@ mcpe_probe_daemon() { # process name
   pidof "$1" >/dev/null 2>&1
 }
 
-mcpe_probe_tool() { # command name, plus the marker that stands for it
+mcpe_probe_tool() { # command name
   if [ -n "${MCPE_PROBE_ROOT:-}" ]; then
-    [ -e "${MCPE_PROBE_ROOT}$2" ]
+    # A capture cannot hold an executable, so the marker for a tool is the tool's
+    # own path. Anything else invents a correspondence: pactl on Knulli is what
+    # makes that device report Pulse, and it has no /run/pulse at all.
+    [ -e "${MCPE_PROBE_ROOT}/usr/bin/$1" ] || [ -e "${MCPE_PROBE_ROOT}/bin/$1" ] ||
+      [ -e "${MCPE_PROBE_ROOT}/usr/sbin/$1" ]
   else
     command -v "$1" >/dev/null 2>&1
   fi
@@ -126,15 +130,15 @@ mcpe_probe_platform() { # output env file
     [ -n "$fb_mode" ] || fb_mode="$(cat "$probe_root/sys/class/graphics/fb0/virtual_size" 2>/dev/null | tr ',' 'x')"
   fi
   [ -e "$probe_root/dev/snd" ] || [ -d "$probe_root/dev/snd" ] && has_alsa=1
-  mcpe_probe_tool pactl /run/pulse && has_pulse=1
+  mcpe_probe_tool pactl && has_pulse=1
   { mcpe_probe_daemon pipewire || mcpe_probe_socket "${XDG_RUNTIME_DIR:-/nonexistent}/pipewire-0" ||
-    mcpe_probe_socket /run/pipewire-0; } && has_pipewire=1
+    mcpe_probe_socket /run/pipewire-0 || mcpe_probe_socket /run/pipewire/pipewire-0; } && has_pipewire=1
   if [ -n "${MCPE_TEST_AUDIO:-}" ]; then audio="$MCPE_TEST_AUDIO"
-  elif mcpe_probe_tool pactl /run/pulse &&
+  elif mcpe_probe_tool pactl &&
        { [ -n "${MCPE_PROBE_ROOT:-}" ] || mcpe_bounded_probe 2 pactl info; }; then audio=pulse
   elif mcpe_probe_daemon pipewire-pulse; then audio=pulse
   elif mcpe_probe_daemon pipewire || mcpe_probe_socket "${XDG_RUNTIME_DIR:-/nonexistent}/pipewire-0" ||
-       mcpe_probe_socket /run/pipewire-0; then audio=pipewire
+       mcpe_probe_socket /run/pipewire-0 || mcpe_probe_socket /run/pipewire/pipewire-0; then audio=pipewire
   fi
 
   gamepad_events="$(grep -E 'H: Handlers=.*(js[0-9]+|event[0-9]+)' "$probe_root/proc/bus/input/devices" 2>/dev/null | sed -n 's/.*Handlers=//p' | tr '\n' ';' || true)"

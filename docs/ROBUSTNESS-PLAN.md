@@ -88,12 +88,35 @@ now stands in for a live socket or a running daemon, while real hardware keeps
 the stricter `-S` and `pidof` tests — checked against the Knulli and ROCKNIX
 devices, both unchanged at `pulse` with `alsa=1 pulse=1 pipewire=1`.
 
-**Still to do here:** captures for the other firmwares. Only muOS has one, and
-`tools/capture-muos.sh` is muOS-shaped; ROCKNIX and Knulli are both reachable
-and would each take minutes. PortMaster is found through a hardcoded list of
-absolute paths, so the execution test supplies a stub via `XDG_DATA_HOME`
-rather than production code gaining a test-only override — worth revisiting if
-more of the runtimes section should be covered.
+**All three firmwares are captured now**, by `tools/capture-fixture.sh`, which
+is firmware-agnostic: it records what it finds rather than what it expects.
+`tests/test_platform.sh` asserts each capture against the numbers its device
+reported on the same day — including, for the RG DS, the DRM connector and mode,
+Mesa, the rgds profile and two touch nodes, none of which the other two devices
+have.
+
+Two probe defects surfaced from the attempt to make the captures faithful, both
+fixed and both checked against live hardware afterwards:
+
+- A tool's presence was being stood in for by an unrelated path. Knulli reports
+  Pulse because `pactl` is installed, and it has no `/run/pulse` at all, so the
+  capture has to mark the tool's own resolved path.
+- ROCKNIX keeps its PipeWire socket at `/run/pipewire/pipewire-0`, one directory
+  below the flat path the probe knew. On hardware `pidof` covered for it; a
+  capture has no daemons, which is exactly why the gap showed up.
+
+**What a capture still cannot hold**, recorded per fixture rather than glossed:
+a running compositor (the RG DS needs `MCPE_TEST_COMPOSITOR=sway`, since sway
+holding DRM master is why that device resolves the wayland backend), and a
+running daemon (Knulli's `MCPE_HAS_PIPEWIRE` reads 0 against the device's 1,
+because that firmware exposes no socket anywhere and is detected by `pidof`
+alone — the resolved backend is `pulse` either way).
+
+**Still to do here:** PortMaster is found through a hardcoded list of absolute
+paths, so the execution test supplies a stub via `XDG_DATA_HOME` rather than
+production code gaining a test-only override — worth revisiting if more of the
+runtimes section should be covered. And `tests/test_selftest_runs.sh` still only
+runs against the muOS capture; the other two would each be a few lines.
 
 Build a fixture tree per firmware from `tools/capture-muos.sh` output, run
 `selftest.sh` against it with `MCPE_PROBE_ROOT`, and assert on the *report*: the

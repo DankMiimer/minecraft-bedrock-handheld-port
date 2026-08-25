@@ -1,0 +1,84 @@
+I: Bus=0019 Vendor=0000 Product=0000 Version=0000
+N: Name="rk805 pwrkey"
+P: Phys=rk805_pwrkey/input0
+S: Sysfs=/devices/platform/fdd40000.i2c/i2c-0/0-0020/rk805-pwrkey.2.auto/input/input0
+U: Uniq=
+H: Handlers=kbd event0 
+B: PROP=0
+B: EV=3
+B: KEY=10000000000000 0
+
+I: Bus=0018 Vendor=0416 Product=038f Version=1060
+N: Name="Goodix Capacitive TouchScreen"
+P: Phys=input/ts
+S: Sysfs=/devices/platform/fe5c0000.i2c/i2c-3/3-0014/input/input1
+U: Uniq=
+H: Handlers=kbd event1 
+B: PROP=2
+B: EV=b
+B: KEY=400 0 0 0 2000000000000001 f800000000000000
+B: ABS=265800000000003
+
+I: Bus=0018 Vendor=0416 Product=038f Version=1060
+N: Name="Goodix Capacitive TouchScreen"
+P: Phys=input/ts
+S: Sysfs=/devices/platform/fe5e0000.i2c/i2c-5/5-0014/input/input3
+U: Uniq=
+H: Handlers=kbd event2 
+B: PROP=2
+B: EV=b
+B: KEY=400 0 0 0 2000000000000001 f800000000000000
+B: ABS=265800000000003
+
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="adc-keys-home"
+P: Phys=adc-keys/input0
+S: Sysfs=/devices/platform/adc-keys-home/input/input5
+U: Uniq=
+H: Handlers=event3 
+B: PROP=0
+B: EV=3
+B: KEY=20000000000000 0 0 0 0
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="rk817_ext Headphones"
+P: Phys=ALSA
+S: Sysfs=/devices/platform/sound/sound/card0/input6
+U: Uniq=
+H: Handlers=event4 
+B: PROP=0
+B: EV=21
+B: SW=4
+
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="gpio-keys-hall"
+P: Phys=gpio-keys/input0
+S: Sysfs=/devices/platform/gpio-keys-hall/input/input7
+U: Uniq=
+H: Handlers=event5 
+B: PROP=0
+B: EV=21
+B: SW=1
+
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="gpio-keys-volume"
+P: Phys=gpio-keys/input0
+S: Sysfs=/devices/platform/gpio-keys-volume/input/input8
+U: Uniq=
+H: Handlers=kbd event6 
+B: PROP=0
+B: EV=100003
+B: KEY=c000000000000 0
+
+I: Bus=0019 Vendor=484b Product=1101 Version=0100
+N: Name="retrogame_joypad"
+P: Phys=rocknix-singleadc-joypad/input0
+S: Sysfs=/devices/platform/rocknix-singleadc-joypad/input/input9
+U: Uniq=
+H: Handlers=js0 event7 
+B: PROP=0
+B: EV=20000b
+B: KEY=f00000000 0 0 0 7fdb000000000000 0 0 0 0
+B: ABS=1b
+B: FF=107030000 0
+

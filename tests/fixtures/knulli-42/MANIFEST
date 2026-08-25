@@ -1,0 +1,38 @@
+Captured by tools/capture-fixture.sh from a live device.
+
+  name:     knulli
+  os:       Batocera.linux 42
+  model:    Anbernic RG34XX-SP
+  kernel:   4.9.170
+
+Real content: etc/os-release, proc/*, sys/class/drm/*/status and modes,
+sys/class/input/event*/device/{name,phys}, sys/class/graphics, reference/*.
+
+Empty markers, because device nodes, sockets and shared libraries cannot be
+copied and the probe only tests them for existence: everything under dev/ and
+run/, the loader and library paths, and the Mesa dri directory.
+
+Contains no credential material. Nothing from the downloader state directory,
+no tokens, no account identifiers.
+
+A compositor, a running daemon and an ioctl cannot be captured. Tests that need
+those supply MCPE_TEST_COMPOSITOR or similar, and should say so.
+
+--- Reproduced against the device (2026-08-26, port v2.0.0-rc.15) ---
+
+  MCPE_CFW=knulli explicit      MCPE_HOST_PROFILE=h700
+  MCPE_GRAPHICS_BACKEND=mali    MCPE_HAS_DRM=0, HAS_MALI=1, HAS_MESA=0
+  MCPE_HOST_MEMORY_KB=2027140   active panel 720x480
+  both ABI loaders              audio=pulse, alsa=1 pulse=1
+  MCPE_IS_RGDS=0                MCPE_TOUCH_COUNT=0
+
+Needs MCPE_TEST_ARCH=aarch64, MCPE_TEST_COMPOSITOR=none and
+MCPE_TEST_FB_MODE=720x480, because uname, a compositor and fbset are live.
+
+--- The one field this capture cannot reproduce ---
+
+MCPE_HAS_PIPEWIRE is 0 here and 1 on the device. Knulli runs PipeWire but
+exposes no socket at any path the probe checks, so the device detects it purely
+through `pidof pipewire` -- a running daemon, which no capture can hold. The
+resolved backend is `pulse` either way, which is what actually drives the launch;
+only the informational flag differs.

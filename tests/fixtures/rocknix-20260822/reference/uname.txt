@@ -1,0 +1,1 @@
+Linux RK3566 7.0.2 #1 SMP PREEMPT Sat Aug 22 01:59:16 UTC 2026 aarch64 GNU/Linux

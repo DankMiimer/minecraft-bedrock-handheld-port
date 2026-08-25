@@ -370,4 +370,53 @@ esac
 [ "$MCPE_TOUCH_COUNT" = 0 ] ||
   { echo "the RG34XX-SP has no touchscreen" >&2; exit 1; }
 
+# Captured from the Knulli reference RG34XX-SP on 2026-08-26 with
+# tools/capture-fixture.sh. Same hardware as the muOS capture above, so the pair
+# isolates firmware from device. See its MANIFEST for the one field a capture
+# cannot hold.
+KFIX="$ROOT/tests/fixtures/knulli-42"
+[ -d "$KFIX" ] || { echo "the captured Knulli fixture is missing" >&2; exit 1; }
+unset CFW_NAME MCPE_CFW_OVERRIDE MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
+MCPE_PROBE_ROOT="$KFIX" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none   MCPE_TEST_FB_MODE=720x480 mcpe_probe_platform "$TMP/captured-knulli.env"
+source "$TMP/captured-knulli.env"
+[ "$MCPE_CFW" = knulli ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ] ||
+  { echo "captured Knulli fixture must resolve knulli explicitly" >&2; exit 1; }
+[ "$MCPE_HOST_PROFILE" = h700 ] && [ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = mali ] ||
+  { echo "captured Knulli fixture is h700 on the mali backend" >&2; exit 1; }
+[ "$MCPE_HAS_DRM" = 0 ] && [ "$MCPE_HAS_MESA" = 0 ] ||
+  { echo "the Knulli reference device has neither DRM nor Mesa" >&2; exit 1; }
+[ "$MCPE_HOST_MEMORY_KB" = 2027140 ] && [ "$MCPE_ACTIVE_HEIGHT" = 480 ] ||
+  { echo "captured Knulli memory and panel must match the device" >&2; exit 1; }
+[ "$MCPE_AUDIO_BACKEND_RESOLVED" = pulse ] && [ "$MCPE_HAS_PULSE" = 1 ] ||
+  { echo "Knulli resolves pulse, which the capture records through pactl" >&2; exit 1; }
+[ "$MCPE_IS_RGDS" = 0 ] && [ "$MCPE_TOUCH_COUNT" = 0 ] ||
+  { echo "the RG34XX-SP is not an RG DS and has no touchscreen" >&2; exit 1; }
+
+# Captured from the RG DS on ROCKNIX on 2026-08-26. This is the only reference
+# device with real DRM, Mesa and a touchscreen, so it is the one capture that
+# exercises the connector parsing and the rgds profile.
+RFIX="$ROOT/tests/fixtures/rocknix-20260822"
+[ -d "$RFIX" ] || { echo "the captured ROCKNIX fixture is missing" >&2; exit 1; }
+unset CFW_NAME MCPE_CFW_OVERRIDE MCPE_CFW MCPE_CFW_CONFIDENCE MCPE_CFW_CACHE_KEY
+# sway is a running compositor and cannot be captured; the device resolves the
+# wayland backend because sway holds DRM master.
+MCPE_PROBE_ROOT="$RFIX" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=sway   mcpe_probe_platform "$TMP/captured-rocknix.env"
+source "$TMP/captured-rocknix.env"
+[ "$MCPE_CFW" = rocknix ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ] ||
+  { echo "captured ROCKNIX fixture must resolve rocknix explicitly" >&2; exit 1; }
+[ "$MCPE_HOST_PROFILE" = rgds ] && [ "$MCPE_IS_RGDS" = 1 ] ||
+  { echo "the RG DS must match the rgds profile" >&2; exit 1; }
+[ "$MCPE_GRAPHICS_BACKEND_RESOLVED" = wayland ] ||
+  { echo "under sway the game nests as a Wayland client, never KMSDRM" >&2; exit 1; }
+[ "$MCPE_HAS_DRM" = 1 ] && [ "$MCPE_HAS_MESA" = 1 ] ||
+  { echo "the RG DS has real DRM and Mesa" >&2; exit 1; }
+[ "$MCPE_DRM_CONNECTOR" = card0-DSI-1 ] && [ "$MCPE_DRM_MODE" = 640x480 ] ||
+  { echo "captured DRM connector and mode must match the device" >&2; exit 1; }
+[ "$MCPE_HOST_MEMORY_KB" = 3051736 ] && [ "$MCPE_ACTIVE_WIDTH" = 640 ] ||
+  { echo "captured RG DS memory and panel must match the device" >&2; exit 1; }
+[ "$MCPE_AUDIO_BACKEND_RESOLVED" = pulse ] && [ "$MCPE_HAS_PIPEWIRE" = 1 ] ||
+  { echo "ROCKNIX resolves pulse and keeps a PipeWire socket" >&2; exit 1; }
+[ "$MCPE_TOUCH_COUNT" = 2 ] ||
+  { echo "the RG DS has two touch nodes" >&2; exit 1; }
+
 echo "platform fixture tests passed"

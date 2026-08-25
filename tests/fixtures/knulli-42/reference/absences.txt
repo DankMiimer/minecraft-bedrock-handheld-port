@@ -1,0 +1,11 @@
+captured_name=knulli
+dev_dri=absent
+sys_class_drm_entries=0
+connected_connectors=0
+run_pulse=absent
+mesa_dri=absent
+xwayland=absent
+sway_running=no
+pipewire_running=yes
+pactl=/usr/bin/pactl
+nproc=/usr/bin/nproc
