@@ -1,0 +1,11 @@
+captured_name=rocknix
+dev_dri=present
+sys_class_drm_entries=4
+connected_connectors=2
+run_pulse=present
+mesa_dri=present
+xwayland=/usr/bin/Xwayland
+sway_running=yes
+pipewire_running=yes
+pactl=/usr/bin/pactl
+nproc=absent
