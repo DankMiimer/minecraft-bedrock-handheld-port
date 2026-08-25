@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **A `/dev/dri/card0` that no driver is behind no longer counts as DRM.**
+  PortMaster's `westonwrap.sh` runs `mknod /dev/dri/card0 c 226 0` on firmwares
+  that have no DRM at all, and the node outlives the run, so after one use of
+  the optional downloader a muOS device reported `MCPE_HAS_DRM=1` while
+  `/sys/class/drm` stayed empty. The capability probe now requires the kernel to
+  list the card as well. Measured on both reference devices the same day: muOS
+  answers 0 with the synthetic node present, and an RG DS on ROCKNIX with a real
+  `card0` and two connected DSI connectors still answers 1. No backend changed —
+  `mali` is chosen before `kmsdrm` and muOS has `/dev/disp` — but the reported
+  flag is now true, and a firmware without mali could have been pushed onto the
+  wrong backend by a leftover node.
+
 ## v2.0.0-rc.13 (testing)
 
 Diagnostics, not gameplay: rc.12's self test reported a runtime as missing on

@@ -186,12 +186,30 @@ frontend, walk `/proc/<pid>/status` up from the port and leave it alone if
 port exits. `/proc/<pid>/comm` reads `frontend.sh` for it and `muxlaunch` for
 the drawing child, so both are matchable by name.
 
-**Graphics — measured.** No `/dev/dri` at all. `/dev/mali0` and `/dev/disp` are
-present, so the capability probe must select the `mali` backend — the same
+**Graphics — measured.** No `/dev/dri` **on a pristine device**; `/dev/mali0`
+and `/dev/disp` are present, so the capability probe must select the `mali`
+backend — the same
 answer as Knulli on the same silicon. `fbset` reports `720x480` visible with a
 `720 960` virtual geometry, 32 bpp, `rgba 8/16,8/8,8/0,8/24` (BGRA byte order,
 2880-byte stride). The visible height must come from the mode, not from
 `virtual_size`.
+
+The qualifier matters, because the port creates that node itself. PortMaster's
+`westonwrap.sh` runs `mkdir /dev/dri` and `mknod /dev/dri/card0 c 226 0` (lines
+202-203 of the pinned pack), so after any run of the optional downloader this
+firmware has a `/dev/dri/card0` that no driver is behind — `/sys/class/drm` stays
+empty — and it survives until reboot. Audited on the reference device: 31 of the
+32 claims in this section verified unchanged, and this was the one that had
+drifted.
+
+Nothing broke, because backend selection tries `mali` before `kmsdrm` and this
+device has both `/dev/mali0` and `/dev/disp`; a launch made while the synthetic
+node existed still resolved `graphics=backend=mali`. What it did do was report
+`MCPE_HAS_DRM=1` from a device with no DRM at all. The probe now also requires
+the kernel to list the card under `/sys/class/drm`, checked against both
+devices on the same day: this one answers 0 with the synthetic node present,
+and an RG DS on ROCKNIX — a real `card0` with `card0-DSI-1` and `card0-DSI-2`
+— still answers 1.
 
 **Install layout — measured.** The split install works:
 `/mnt/mmc/ROMS/Ports/Minecraft Bedrock.sh` alongside
