@@ -37,7 +37,7 @@ device" so the assumptions stay legible for whoever eventually measures them.
 
 | Item | State |
 |---|---|
-| R1 GitHub serves rc.9 as Latest | **Open** — needs a write to the repository's releases; not done from here |
+| R1 GitHub serves rc.9 as Latest | **Done** — rc.4, rc.7, rc.8 and rc.9 flagged prerelease on 2026-08-25; `releases/latest` now resolves to v1.6, and will resolve to v2.0.0 when it publishes |
 | R2 Update port broken on a default install | Error message fixed; the index rows are a post-publish step |
 | R3 Compatibility table under-reports | **Done** |
 | R4 Boot report missing from early exits | **Done** |
@@ -46,7 +46,7 @@ device" so the assumptions stay legible for whoever eventually measures them.
 | R7 Version, channel, reproducibility gate | `VERSION` is `2.0.0`; the build and the twice-compared assembly have not been run |
 | R8 Verify the built artifact on hardware | **Open** — needs the devices, and it gates publication |
 | R9 Repository hygiene | **Done** |
-| R10 Answer the three open issues | **Open** — needs a write to the repository's issues; not done from here |
+| R10 Answer the three open issues | **Done** — #1, #2 and #10 answered on 2026-08-25 |
 | R11 Changelog a release reader can use | **Done** |
 
 ---
@@ -69,6 +69,12 @@ list.
 
 **Do:** flag rc.3 through rc.15 as prereleases, publish 2.0.0 as a normal
 release, and confirm `releases/latest` resolves to it.
+
+**Done, 2026-08-25.** Nine of the thirteen RC tags were already flagged; the
+four that were not — rc.4, rc.7, rc.8, rc.9 — now are. `releases/latest`
+resolves to **v1.6**, the last release that actually claims to be finished. That
+is the honest interim answer, and it becomes v2.0.0 on publication. Confirming
+the badge lands on 2.0.0 remains a post-publish step (see the checklist).
 
 ### R2 — "Update port" cannot work on a default install
 
@@ -221,6 +227,14 @@ session stand in for a build it never ran.
 
 Replies drafted for #1 and #2 during Phase 5 were never sent because no release
 contained the fixes. 2.0.0 is that release.
+
+**Done, 2026-08-25.** All three answered, pointing at rc.15 rather than at
+`releases/latest`, and telling players to take the zip from the release page
+because **Update port** cannot fetch a release until R2's index rows exist.
+
+#10 turned out to be R1's cost, made concrete: the stub-redirect fix landed
+2026-08-24 21:59 and first shipped in rc.12, while the release page was handing
+that reporter rc.9. The two blockers at the top of this list are one story.
 
 ### R11 — A changelog a release reader can use
 
