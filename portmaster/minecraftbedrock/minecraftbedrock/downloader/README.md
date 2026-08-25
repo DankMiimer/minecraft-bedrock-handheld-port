@@ -69,3 +69,40 @@ installed beside the binaries.
 
 `lib/libqt-xcb-glx-compat.so` is built from the repository's small C source
 with `tools/ondevice-downloader/build-qt-xcb-glx-compat-arm64.sh`.
+
+## Why not ROCKNIX (measured 2026-08-25)
+
+The gate excludes ROCKNIX for a reason that is not the firmware list. Everything
+except the browser's graphics already works there: the runtime downloads and
+extracts, Weston and Xwayland start, the Qt process runs, and the Chromium flags
+that fixed muOS apply unchanged. PortMaster on ROCKNIX even ships both
+`mesa_pkg` and `weston_pkg`, so the dependency that made muOS hard is already
+satisfied.
+
+Four configurations were tried on an RG DS, and each fails inside a component
+this port does not control:
+
+| Weston mode | Qt renderer | outcome |
+|---|---|---|
+| `headless noop kiosk llvmpipe` (shipped) | `opengl` + `xcb_glx` | `Could not create scene graph context for backend 'opengl'` |
+| `headless noop kiosk llvmpipe` | `software` + `none` | scene graph starts; `No suitable graphics backend found` from QtWebEngine |
+| `headless noop kiosk crusty_x11egl` | `opengl` + `xcb_glx` | scene graph context fails again |
+| `wayland gl kiosk crusty_glx` (nested in sway) | n/a | `wayland-backend.so: undefined symbol: wl_egl_window_destroy`, fatal before a compositor exists |
+
+The last row is the wall. `wl_egl_window_destroy` is defined by nothing on the
+device: the Weston package ships `libwayland-client`, `-cursor` and `-server`
+but no `libwayland-egl`; the Mesa package ships none either; and ROCKNIX's own
+`libEGL.so.1` does not define it. So the pinned Weston package cannot nest in
+sway on this firmware, and headless leaves Crusty with no surface to present
+into -- westonwrap detects the firmware itself, sets `rocknix_mode=1` and unsets
+`SDL_VIDEODRIVER`, which is the path muOS never takes.
+
+Two things found on the way are worth keeping separately: this port used to pin
+`QT_QUICK_BACKEND`, `QT_XCB_GL_INTEGRATION` and `QSG_RHI_BACKEND`, so no
+firmware could select a renderer at all; and ROCKNIX masks
+`/usr/lib/libGL.so.1.7.0` with a `/dev/null` character device, re-created every
+session, which is real but is not what stops the browser.
+
+Making this work needs an upstream change to the pinned Weston/Crusty package,
+not a wider gate here. RG DS owners use the Windows or Linux helper, which
+works today.
