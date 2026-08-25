@@ -371,6 +371,17 @@ def main() -> int:
     parser.add_argument("--repo", default="DankMiimer/minecraft-bedrock-handheld-port")
     parser.add_argument("--base-index", type=pathlib.Path, default=ROOT / "release-index.json")
     parser.add_argument(
+        "--mirror-channel",
+        choices=("stable", "testing"),
+        default=None,
+        help="Also list this release under a second channel, pointing at the same "
+             "assets. Safe because the updater resolves a device's channel from "
+             "config/update_channel, which survives the code swap -- the channel "
+             "stamped into the payload is never read. Without this, publishing a "
+             "stable release strands everyone on the testing channel at whatever "
+             "release candidate they last installed.",
+    )
+    parser.add_argument(
         "--extra-asset",
         type=pathlib.Path,
         action="append",
@@ -427,6 +438,9 @@ def main() -> int:
         "".join(f"{sha256(path)}  {path.name}\n" for _, path in sums),
     )
     tag = f"v{args.version}"
+    channels = [args.channel]
+    if args.mirror_channel and args.mirror_channel != args.channel:
+        channels.append(args.mirror_channel)
     releases = []
     if args.base_index.is_file():
         base = json.loads(args.base_index.read_text(encoding="utf-8"))
@@ -435,14 +449,18 @@ def main() -> int:
         product_ids = {edition for edition, _ in products}
         releases = [row for row in base["releases"]
                     if not (row.get("edition") in product_ids and
-                            row.get("channel") == args.channel)]
+                            row.get("channel") in channels)]
     for edition, path in products:
-        releases.append({
-            "edition": edition, "channel": args.channel, "version": args.version,
-            "asset": path.name,
-            "url": f"https://github.com/{args.repo}/releases/download/{tag}/{path.name}",
-            "sha256": sha256(path), "size": path.stat().st_size, "minimum_updater": 2,
-        })
+        # One digest per product rather than one per row: mirrored rows describe
+        # the same file, and hashing it twice is how they would come to disagree.
+        digest, size = sha256(path), path.stat().st_size
+        for channel in channels:
+            releases.append({
+                "edition": edition, "channel": channel, "version": args.version,
+                "asset": path.name,
+                "url": f"https://github.com/{args.repo}/releases/download/{tag}/{path.name}",
+                "sha256": digest, "size": size, "minimum_updater": 2,
+            })
     releases.sort(key=lambda row: (row["edition"], row["channel"], row["version"]))
     write_text_lf(
         args.out_dir / "release-index.json",
@@ -483,7 +501,11 @@ def main() -> int:
     write_text_lf(
         args.out_dir / "RELEASE_NOTES.md",
         f"# Minecraft Bedrock handheld port {args.version}\n\n"
-        f"Channel: `{args.channel}`\n\n{status}\n\n"
+        f"Channel: `{args.channel}`"
+        + (f" (also published to the `{args.mirror_channel}` channel)"
+           if args.mirror_channel and args.mirror_channel != args.channel
+           else "")
+        + f"\n\n{status}\n\n"
         "## Highlights\n\n"
         "- Separate standard and RGDS products; the standard archive contains no "
         "dual-screen runtime, while RGDS is arm64-only for ROCKNIX/Sway and its "

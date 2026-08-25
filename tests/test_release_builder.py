@@ -101,4 +101,78 @@ with tempfile.TemporaryDirectory(prefix="release-test-") as tmpstr:
     assert "No game files are included" in notes
     for name in ("release-index.json", "SHA256SUMS.txt", "RELEASE_NOTES.md"):
         assert b"\r" not in (out / name).read_bytes()
+    # A stable release must also be offered to the testing channel, pointing at
+    # the same asset. The device's channel lives in config/update_channel and
+    # survives the code swap, so a shared asset cannot move anyone between
+    # channels -- the channel stamped into the payload is never read back.
+    base_index = tmp / "base-index.json"
+    base_index.write_text(json.dumps({"schema": 2, "releases": [
+        {"edition": "minecraftbedrock.standard", "channel": "testing",
+         "version": "9.9.8-test", "asset": "old.zip", "url": "https://example/old.zip",
+         "sha256": "0" * 64, "size": 1, "minimum_updater": 2},
+        {"edition": "somethingelse", "channel": "testing", "version": "1.0",
+         "asset": "keep.zip", "url": "https://example/keep.zip",
+         "sha256": "1" * 64, "size": 2, "minimum_updater": 2},
+    ]}), encoding="utf-8")
+    mirrored = tmp / "mirrored"
+    subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "build_releases.py"),
+        "--version", "9.9.9-test", "--out-dir", str(mirrored),
+        "--channel", "stable", "--mirror-channel", "testing",
+        "--base-index", str(base_index),
+        "--rgds-client", str(artifacts / "client"),
+        "--standard-arm64-client", str(artifacts / "standard-arm64"),
+        "--standard-armhf-client", str(artifacts / "standard-armhf"),
+        "--bottomd", str(artifacts / "bottomd"),
+        "--bedrockmap", str(artifacts / "bedrockmap"),
+        "--context-bridge", str(artifacts / "context-bridge"),
+    ], check=True)
+    mirror_index = json.loads((mirrored / "release-index.json").read_text(encoding="utf-8"))
+    rows = mirror_index["releases"]
+    # Exactly one row per edition-and-channel pair: release_select.py rejects
+    # anything else, so a duplicate here is a broken updater on every device.
+    pairs = [(row["edition"], row["channel"]) for row in rows]
+    assert len(pairs) == len(set(pairs)), pairs
+    for edition in ("minecraftbedrock.standard", "minecraftbedrock.rgds"):
+        pick = {row["channel"]: row for row in rows if row["edition"] == edition}
+        assert set(pick) == {"stable", "testing"}, (edition, sorted(pick))
+        assert pick["stable"]["version"] == "9.9.9-test"
+        assert pick["testing"]["version"] == "9.9.9-test"
+        # Same file, so the digests must agree; a mismatch means the updater
+        # would reject the download it was just told to make.
+        for field in ("asset", "url", "sha256", "size"):
+            assert pick["stable"][field] == pick["testing"][field], (edition, field)
+    # The superseded testing row is replaced, and another edition is untouched.
+    assert not any(row["asset"] == "old.zip" for row in rows)
+    assert any(row["asset"] == "keep.zip" for row in rows)
+    notes = (mirrored / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+    assert "also published to the `testing` channel" in notes
+
+# The index the repository tracks is the published one: update_port.sh fetches
+# it from raw.githubusercontent.com/<repo>/main/release-index.json. A bad row
+# here breaks Update port on every device at once, so it is checked directly
+# rather than only as a build output.
+tracked = json.loads((ROOT / "release-index.json").read_text(encoding="utf-8"))
+assert tracked["schema"] == 2
+seen = {}
+for row in tracked["releases"]:
+    key = (row["edition"], row["channel"])
+    # release_select.py requires exactly one match for a device's edition and
+    # channel, and reports "found N" rather than choosing between duplicates.
+    assert key not in seen, f"duplicate release-index row for {key}"
+    seen[key] = row
+    assert row["channel"] in ("stable", "testing"), row
+    assert len(row["sha256"]) == 64 and not set(row["sha256"]) - set("0123456789abcdef"), row
+    assert row["size"] > 0, row
+    assert row["minimum_updater"] >= 2, row
+    assert row["url"].endswith("/" + row["asset"]), row
+# Where one asset is offered on both channels, the two rows must describe it
+# identically -- a device that downloads the file and checks it against the
+# other row's digest would reject its own update.
+for (edition, channel), row in seen.items():
+    other = seen.get((edition, "testing" if channel == "stable" else "stable"))
+    if other is not None and other["version"] == row["version"]:
+        for field in ("asset", "url", "sha256", "size"):
+            assert other[field] == row[field], (edition, field)
+
 print("release builder tests passed")

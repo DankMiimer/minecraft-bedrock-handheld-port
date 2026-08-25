@@ -67,16 +67,18 @@ launch on each migrated installation.
    prerelease must carry the prerelease flag or GitHub hands that badge to the
    newest tag that does not — which is how rc.9 held it while rc.10 through
    rc.15 were published behind it.
-2. **Update `release-index.json` for both channels.** A fresh install defaults
-   to `stable`, so a stable row is required or **Update port** fails for
-   everyone who never changed the setting. Add a `testing` row for the same
-   version, pointing at the same asset, URL and SHA-256: the payload's own
-   `edition.json` records the channel it was built with, but `update_port.sh`
-   writes the *device's* channel back after a successful update and checks only
-   the edition id in the downloaded payload, so a testing-channel device
-   updates onto the stable archive and stays on testing. Building the same
-   version twice with different `--channel` values would produce two archives
-   with different SHA-256, which doubles the assets for no benefit.
+2. **Commit the built `release-index.json` to `main`.** The on-device updater
+   fetches it from `raw.githubusercontent.com/<repo>/main/release-index.json`,
+   so the file in the repository is the published index — the copy inside the
+   build artifact has no effect until it is committed. Do not hand-edit it:
+   the build emits both channels' rows already, because a stable build is run
+   with `--mirror-channel testing`. A fresh install defaults to `stable`, so a
+   stable row is required or **Update port** fails for everyone who never
+   changed the setting; the mirrored testing row carries existing testers onto
+   the same asset instead of stranding them on the last release candidate.
+   Check before committing that there is exactly one row per edition-and-channel
+   pair — `release_select.py` fails on anything else — and that each pair's
+   two rows carry the same asset, URL and SHA-256.
 3. Download every published asset and verify its SHA-256 against
    `SHA256SUMS.txt` before committing the index that points at it.
 

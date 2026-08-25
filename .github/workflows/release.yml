@@ -182,7 +182,13 @@ jobs:
           CHANNEL: ${{ inputs.channel || 'testing' }}
         run: |
           VERSION=$(cat VERSION)
-          COMMON_ARGS="--version $VERSION --channel $CHANNEL \
+          # A stable release has to become the testing channel's newest build
+          # too, or everyone on testing sits on the last release candidate for
+          # ever. Never the reverse: stable must not be pointed at a testing
+          # build.
+          MIRROR=""
+          if [ "$CHANNEL" = stable ]; then MIRROR="--mirror-channel testing"; fi
+          COMMON_ARGS="--version $VERSION --channel $CHANNEL $MIRROR \
             --standard-arm64-client build/release-inputs/mcpelauncher-client.aarch64.standard \
             --standard-armhf-client build/release-inputs/mcpelauncher-client.armhf.standard \
             --rgds-client build/release-inputs/mcpelauncher-client.aarch64.rgds \
