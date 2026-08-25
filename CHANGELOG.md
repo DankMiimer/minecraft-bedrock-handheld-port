@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-rc.14 (testing)
+
+Robustness, from a week on real hardware. Two capability answers the port was
+getting wrong on muOS -- a DRM node with no driver behind it, and four launch
+lookups that needed a working regex engine -- plus the muOS reference guide,
+written while the device was still available to check against. No gameplay
+change from rc.13.
 
 - **The launch path no longer needs busybox's regex engine.** Memory size,
   panel geometry and the frontend-ancestry walk went through `awk '/re/'`, and
@@ -24,8 +30,6 @@
   the missing 64-bit `libcom_err.so.2`, and what busybox cannot do (`tar -z`,
   `date +%N`). Written on the day the device was about to be handed back to
   Knulli, so the facts survive the hardware going away.
-
-## Unreleased
 
 - **A `/dev/dri/card0` that no driver is behind no longer counts as DRM.**
   PortMaster's `westonwrap.sh` runs `mknod /dev/dri/card0 c 226 0` on firmwares
