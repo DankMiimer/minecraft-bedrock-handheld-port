@@ -247,7 +247,15 @@ PY
 else
   ok "failsafe ladder" "no history yet; the tuned profile will be used"
 fi
-prev="$(cut -f1 <"$GAMEDIR/logs/stage.prev.txt" 2>/dev/null)"
+# Guarded because the redirect reads a file that does not exist until the port
+# has launched once. On a fresh muOS card the very first run printed
+# "line 250: .../logs/stage.prev.txt: No such file or directory" into the
+# report; it has not reproduced since, on that same card, with the file absent
+# or with the whole logs directory removed, so the trigger is not understood.
+# The guard costs nothing and makes the question moot.
+prev=""
+[ -r "$GAMEDIR/logs/stage.prev.txt" ] &&
+  prev="$(cut -f1 <"$GAMEDIR/logs/stage.prev.txt" 2>/dev/null)"
 case "$prev" in
   ""|done) ;;
   *) warn "previous launch did not finish" "it stopped at '$prev'; see logs/hang-report.txt if present" ;;

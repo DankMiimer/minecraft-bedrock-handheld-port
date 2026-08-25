@@ -152,6 +152,12 @@ def test_the_selftest_answers_before_anything_is_installed():
     # Redaction, and the version-shape protection that keeps it useful.
     for needle in ("REDACTED_EMAIL", "REDACTED_IP", "@D@"):
         assert needle in selftest, needle
+    # A fresh install has no logs at all, and the self test is the first thing
+    # a new player runs. Reading a missing file through an input redirect makes
+    # the shell print the error itself, which 2>/dev/null on the command cannot
+    # catch -- seen on a fresh muOS card, where it leaked into the report.
+    assert 'prev="$(cut -f1 <"$GAMEDIR/logs/stage.prev.txt"' not in selftest or         '[ -r "$GAMEDIR/logs/stage.prev.txt" ]' in selftest,         "the stage.prev.txt read must be guarded on a device that never launched"
+
     # Reachable from the menu as well as over SSH.
     assert 'key = "network"' in read(PAYLOAD / "menu/main.lua")
     assert 'quitWith("selftest")' in read(PAYLOAD / "menu/main.lua")
