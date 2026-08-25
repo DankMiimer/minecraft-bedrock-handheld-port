@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- **The sign-in browser's renderer is a default now, not a mandate.**
+  `gui-session.sh` exported `QT_QUICK_BACKEND=opengl`,
+  `QT_XCB_GL_INTEGRATION=xcb_glx` and `QSG_RHI_BACKEND=opengl` unconditionally,
+  so no firmware could select anything else and every attempt to override from
+  outside was silently overwritten one layer down. They keep exactly those
+  values wherever nothing sets them, which is everywhere the port ships today —
+  verified on the Knulli reference device, where the patched file resolves to
+  `opengl xcb_glx opengl`, the same three values rc.14 hardcodes, and nothing
+  else in the payload sets or forwards them. The downloader README records why
+  ROCKNIX still cannot run the browser: four configurations were measured on an
+  RG DS and each fails inside the pinned Weston/Crusty package, ending with
+  `wayland-backend.so: undefined symbol: wl_egl_window_destroy`, which nothing
+  on that device defines.
+
 ## v2.0.0-rc.14 (testing)
 
 Robustness, from a week on real hardware. Two capability answers the port was

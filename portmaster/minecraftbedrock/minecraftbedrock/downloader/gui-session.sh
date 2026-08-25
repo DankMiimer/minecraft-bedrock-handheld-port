@@ -43,9 +43,13 @@ export QTWEBENGINE_DISABLE_SANDBOX=1
 # -- so any future child that does lose its capabilities degrades instead of
 # killing the sign-in window.
 export QTWEBENGINE_CHROMIUM_FLAGS="${MCPE_DOWNLOADER_CHROMIUM_FLAGS:---no-sandbox --disable-gpu-sandbox --disable-dev-shm-usage --no-zygote}"
-export QT_QUICK_BACKEND=opengl
-export QT_XCB_GL_INTEGRATION=xcb_glx
-export QSG_RHI_BACKEND=opengl
+# Defaults, not mandates. Crusty's GLX frontend is what makes these the right
+# answer on the Mali firmwares, and pinning them meant a firmware that needs a
+# different renderer could not ask for one -- every attempt to override from
+# outside was silently overwritten here.
+export QT_QUICK_BACKEND="${QT_QUICK_BACKEND:-opengl}"
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-xcb_glx}"
+export QSG_RHI_BACKEND="${QSG_RHI_BACKEND:-opengl}"
 export QSG_RENDER_LOOP=basic
 export QT_IM_MODULE=qtvirtualkeyboard
 export QT_SCALE_FACTOR="${MCPE_DOWNLOADER_QT_SCALE:-1}"
