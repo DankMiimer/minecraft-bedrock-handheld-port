@@ -43,6 +43,33 @@ mcpe_bounded_probe() {
   timeout "$seconds" "$@" >/dev/null 2>&1
 }
 
+# A fixture cannot hold a live socket or a running daemon, so under a probe root
+# the captured marker's existence stands in for both. On a real device the
+# stricter tests are kept exactly as they were. Without this, audio was the one
+# capability a captured fixture could not express: ALSA was probed under the
+# root while PipeWire and Pulse were found with pidof and -S against absolute
+# paths, so a muOS capture resolved alsa where the device resolved pipewire.
+mcpe_probe_socket() { # absolute path
+  if [ -n "${MCPE_PROBE_ROOT:-}" ]; then
+    [ -e "${MCPE_PROBE_ROOT}$1" ]
+  else
+    [ -S "$1" ]
+  fi
+}
+
+mcpe_probe_daemon() { # process name
+  [ -z "${MCPE_PROBE_ROOT:-}" ] || return 1
+  pidof "$1" >/dev/null 2>&1
+}
+
+mcpe_probe_tool() { # command name, plus the marker that stands for it
+  if [ -n "${MCPE_PROBE_ROOT:-}" ]; then
+    [ -e "${MCPE_PROBE_ROOT}$2" ]
+  else
+    command -v "$1" >/dev/null 2>&1
+  fi
+}
+
 mcpe_probe_platform() { # output env file
   local out="$1" model compatible os_name arch mem compositor drm_pair connector mode
   local has_mali=0 has_mesa=0 has_drm=0 audio=alsa backend profile=generic is_rgds=0
@@ -99,12 +126,15 @@ mcpe_probe_platform() { # output env file
     [ -n "$fb_mode" ] || fb_mode="$(cat "$probe_root/sys/class/graphics/fb0/virtual_size" 2>/dev/null | tr ',' 'x')"
   fi
   [ -e "$probe_root/dev/snd" ] || [ -d "$probe_root/dev/snd" ] && has_alsa=1
-  command -v pactl >/dev/null 2>&1 && has_pulse=1
-  { pidof pipewire >/dev/null 2>&1 || [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/pipewire-0" ]; } && has_pipewire=1
+  mcpe_probe_tool pactl /run/pulse && has_pulse=1
+  { mcpe_probe_daemon pipewire || mcpe_probe_socket "${XDG_RUNTIME_DIR:-/nonexistent}/pipewire-0" ||
+    mcpe_probe_socket /run/pipewire-0; } && has_pipewire=1
   if [ -n "${MCPE_TEST_AUDIO:-}" ]; then audio="$MCPE_TEST_AUDIO"
-  elif command -v pactl >/dev/null 2>&1 && mcpe_bounded_probe 2 pactl info; then audio=pulse
-  elif pidof pipewire-pulse >/dev/null 2>&1; then audio=pulse
-  elif pidof pipewire >/dev/null 2>&1 || [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/pipewire-0" ] || [ -S /run/pipewire-0 ]; then audio=pipewire
+  elif mcpe_probe_tool pactl /run/pulse &&
+       { [ -n "${MCPE_PROBE_ROOT:-}" ] || mcpe_bounded_probe 2 pactl info; }; then audio=pulse
+  elif mcpe_probe_daemon pipewire-pulse; then audio=pulse
+  elif mcpe_probe_daemon pipewire || mcpe_probe_socket "${XDG_RUNTIME_DIR:-/nonexistent}/pipewire-0" ||
+       mcpe_probe_socket /run/pipewire-0; then audio=pipewire
   fi
 
   gamepad_events="$(grep -E 'H: Handlers=.*(js[0-9]+|event[0-9]+)' "$probe_root/proc/bus/input/devices" 2>/dev/null | sed -n 's/.*Handlers=//p' | tr '\n' ';' || true)"

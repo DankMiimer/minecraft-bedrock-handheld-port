@@ -29,13 +29,14 @@ MCPE_TEST_ARCH=aarch64, MCPE_TEST_COMPOSITOR=none and MCPE_TEST_FB_MODE=720x480
 
 --- What it cannot reproduce, and why ---
 
-**Audio.** ALSA detection reads $probe_root/dev/snd, but PipeWire and Pulse are
-detected with `pidof` and `-S` on absolute paths (/run/pipewire-0 and
-$XDG_RUNTIME_DIR/pipewire-0), which ignore MCPE_PROBE_ROOT entirely. So this
-fixture resolves audio=alsa where the device resolves pipewire. The only lever a
-test has is MCPE_TEST_AUDIO, which supplies the answer rather than deriving it,
-so it proves nothing. Making that path probe-root aware is the prerequisite for
-covering audio from a fixture at all.
+**Audio is covered now.** It was not when this fixture was captured: PipeWire
+and Pulse were detected with `pidof` and `-S` against absolute paths, so the
+capture resolved alsa where the device resolves pipewire. Detection now honours
+MCPE_PROBE_ROOT -- under a probe root the captured marker's existence stands in
+for a live socket or a running daemon -- and this fixture resolves
+audio=pipewire with alsa=1 pulse=0 pipewire=1, matching the device's boot report
+exactly. The stricter socket test is unchanged on real hardware, verified
+against both the Knulli and ROCKNIX devices.
 
 **Anything needing a live kernel interface**: ioctls on input nodes, a real
 socket, a Mali driver, a compositor. Device entries here are empty regular
