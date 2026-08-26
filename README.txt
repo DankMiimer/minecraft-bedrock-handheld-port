@@ -86,11 +86,13 @@ UNAVAILABLE while keeping live position and status telemetry. It never reuses
 another world's terrain.
 
 Locally produced artifacts are not a claim of completed physical validation.
-2.0.0 is published from CI-built, twice-compared archives that were installed
+2.0.1 is published from CI-built, twice-compared archives that were installed
 and self-tested on every reachable reference device first; anything that could
 not be verified that way says so in TESTING.md rather than being implied by the
-version number. See portmaster/minecraftbedrock/README.md and COMPATIBILITY.md
-for the user-facing contract.
+version number. It carries one fix over 2.0.0: on ROCKNIX every on-screen
+message went to the log alone, so the port could stop for a reason it had
+already worked out and say nothing. See portmaster/minecraftbedrock/README.md
+and COMPATIBILITY.md for the user-facing contract.
 
 Build and verify
 ----------------
