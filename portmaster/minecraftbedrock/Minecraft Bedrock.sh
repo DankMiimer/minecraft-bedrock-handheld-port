@@ -252,8 +252,15 @@ show_msg() {
       echo "  ==================================================="
     } > /dev/tty1 2>/dev/null && wrote_tty=1
   fi
-  if mcpe_console_is_visible; then
-    [ "$wrote_tty" = 1 ] && sleep "${SHOW_MSG_SLEEP:-6}"
+  # Only count the console rung when it was actually written to. A visible
+  # console is not the same thing as a console the player can read: under a
+  # compositor the write above is skipped on purpose, and sway is then drawing
+  # over the very console /proc/consoles calls visible. Testing visibility
+  # alone returned here on ROCKNIX with nothing on screen, which silenced every
+  # message on that firmware -- the RGDS redirect, the failsafe notices and the
+  # no-version text alike. The player saw the port exit and nothing else.
+  if [ "$wrote_tty" = 1 ] && mcpe_console_is_visible; then
+    sleep "${SHOW_MSG_SLEEP:-6}"
     return 0
   fi
   # The console is not rendered on this firmware, so the text above went
