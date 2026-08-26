@@ -24,22 +24,22 @@ pending.
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
 
-## Download v2.0.0
+## Download v2.0.1
 
 Download an install archive from the release
 assets, not GitHub's automatically generated **Source code** archives.
 
 | Download | Who needs it |
 |---|---|
-| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-standard-v2.0.0.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
-| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-rgds-v2.0.0.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway; arm64 only. Adds the second-screen companion, which is in early development |
-| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/mcbedrock-get-windows-v2.0.0.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
-| [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/mcbedrock-get-linux-x86_64-v2.0.0.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
-| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-source-v2.0.0.zip) | Maintainers and license compliance; not an install archive |
-| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-standard-v2.0.0.spdx.json) | Machine-readable contents of the standard archive |
-| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/minecraftbedrock-rgds-v2.0.0.spdx.json) | Machine-readable contents of the RGDS archive |
-| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/RELEASE_NOTES.md) | Short packaged release summary |
-| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.0/SHA256SUMS.txt) | Verifies every published file |
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway; arm64 only. Adds the second-screen companion, which is in early development |
+| [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/mcbedrock-get-windows-v2.0.1.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
+| [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/mcbedrock-get-linux-x86_64-v2.0.1.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
+| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-source-v2.0.1.zip) | Maintainers and license compliance; not an install archive |
+| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.spdx.json) | Machine-readable contents of the standard archive |
+| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.spdx.json) | Machine-readable contents of the RGDS archive |
+| [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/RELEASE_NOTES.md) | Short packaged release summary |
+| [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/SHA256SUMS.txt) | Verifies every published file |
 
 Use the **standard edition** unless you own an RG DS and specifically want to
 help test the dual-screen companion. The standard edition intentionally

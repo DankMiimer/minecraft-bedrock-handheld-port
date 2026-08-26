@@ -1,5 +1,33 @@
 # Changelog
 
+## v2.0.1
+
+One fix, for ROCKNIX. Every message the port put on screen there went to the
+log and nowhere else, so a port that knew exactly why it was stopping appeared
+to quit for no reason.
+
+An RG DS reported it against 2.0.0: pressing Play on the standard edition
+closed the launcher. The standard build has no dual-screen payload and refuses
+to start on RGDS hardware on purpose, telling you to install the RGDS edition
+instead -- but that sentence only reached `logs/launcher.log`.
+
+The port skips writing to the console under a compositor, because text written
+there lands behind whatever the compositor is drawing. The check that followed
+asked only whether a console was *visible*, and ROCKNIX lists `tty0` in
+`/proc/consoles`, so it stopped there having drawn nothing at all. The message
+box and framebuffer paths below it were never reached.
+
+The console now counts only when it was actually written to. On ROCKNIX that
+means the message box draws instead -- the same runtime the launcher menu
+already uses on that device.
+
+This affected every message on ROCKNIX, not only the RGDS redirect: the
+failsafe notices and the "no Minecraft version installed" text too. **Knulli
+and muOS are unaffected** and their behaviour is unchanged; ROCKNIX was the one
+firmware that both lists a `tty` console and runs a compositor.
+
+Nothing else changed. The payloads are otherwise identical to 2.0.0.
+
 ## v2.0.0
 
 The first stable 2.x release, and the first one whose compatibility claims are
