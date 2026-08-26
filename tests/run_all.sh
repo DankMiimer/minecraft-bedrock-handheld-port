@@ -36,6 +36,7 @@ bash tests/test_performance.sh
 bash tests/test_platform.sh
 bash tests/test_selftest_runs.sh
 bash tests/test_launcher_early_exit.sh
+bash tests/test_message_reaches_player.sh
 bash tests/test_abi.sh
 bash tests/test_failsafe_apply.sh
 bash tests/test_audio.sh
