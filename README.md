@@ -252,7 +252,10 @@ materials, checksums, and an edition-aware updater index. See the checklist
 before promoting any prerelease to stable.
 
 Port by:
+
+MCPE - Open-source Bedrock launcher for Linux this project packages and adapts for handheld hardware. All credit for the core launcher and reverse-engineering work goes to MCPE developers. (https://github.com/minecraft-linux/mcpelauncher-manifest)
+
 ImpressiveStay6355 - (Original r36s port this whole project was built on) (https://github.com/impressivestay6355-cmyk/mcpelauncher-r36s)
+
 DankMiimer - (ARM Launcher + google sign in and ARM64 support).
-MCPE - Built on top of minecraft-linux/mcpelauncher-manifest (GPL-3.0) — the open-source Bedrock launcher for Linux this project packages and adapts for handheld hardware. All credit for the core launcher and reverse-engineering work goes to that project
 
