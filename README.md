@@ -192,38 +192,8 @@ library hash, not from filenames. Exact status and evidence are in
 - **Support bundle** — create a local redacted diagnostic archive.
 - **Controller test** — record the detected pad and inputs locally.
 
-Menu controls are D-pad to move, **A** to select, **B** to go back, **X** to
-delete, and Left/Right to change settings. The launcher detects firmware
-button-label differences; `MCPE_MENU_CONFIRM=a|b` remains available as an
-advanced override.
 
-For H700-class systems, start with a 30–40 FPS cap and 3–4 chunk render
-distance. The port restores performance, display, frontend, and input state
-after normal exit or a supervised failure.
 
-## Updates and backups
-
-Use **Backup** before testing a new game version, firmware, or port prerelease.
-Backups contain launcher settings, profiles, and worlds, but never the supplied
-APK or extracted version; keep the original complete APK set separately for
-recovery. Use **Update port** to install updates for the current standard or
-RGDS edition and selected channel. An update replaces port code only and keeps
-the shared user-data directory intact.
-
-## Standard and RGDS editions
-
-Both editions share only user-owned data under:
-
-```text
-ports/minecraftbedrock-data/
-  apk/       original installers
-  versions/  validated extracted game versions
-  profiles/  worlds and per-version player data
-  backups/   local backup archives
-```
-
-Their code, logs, runtime, caches, update channel, and temporary state remain
-separate. Updating one edition cannot overlay the other.
 
 ### The RGDS second-screen companion is experimental
 
@@ -243,21 +213,7 @@ The game itself runs the same way it does in the standard edition. What is
 experimental is everything on the lower screen. Reports are welcome and are how
 this gets better; if you want a dependable install, use the standard edition.
 
-When you join a world hosted by another device, Bedrock does not store that
-host's LevelDB world database locally. RGDS therefore keeps live status but
-shows `REMOTE WORLD / MAP UNAVAILABLE` and clears old local terrain instead of
-displaying a misleading cached map.
 
-## Updating from 1.x
-
-The first 2.x launch migrates APKs, installed versions, profiles, and backups
-into the shared data directory. It inventories both locations first, refuses
-ambiguous collisions, writes a recovery manifest, and keeps rollback state
-until the first clean game exit.
-
-Do not delete an old installation before this migration. If the launcher
-reports that both old and new locations contain data, move one copy aside and
-launch again; it will not choose one destructively.
 
 ## Troubleshooting
 
