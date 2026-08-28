@@ -1,7 +1,7 @@
 # Minecraft Bedrock for ARM Linux handhelds
 
 ![An RG34XX SP and an RG DS side by side, both running Minecraft Bedrock in the
-same LAN world. The RG DS lower screen shows the companion: a live minimap with
+same LAN world. The RG DS lower screen shows the companion(prototype): a live minimap with
 waypoints, health and hunger, and tabs for HUD, chat, items, input and
 settings.](docs/rg34xxsp-and-rgds-lan.jpg)
 
@@ -19,15 +19,13 @@ not done, and the physical acceptance matrix for the armhf path remains
 pending.
 
 > **No game files are included.** You must supply your own official Minecraft
-> Bedrock Android APK or complete split-APK set.
+> Bedrock Android APK(s) or sign in with your google account that owns Minecraft
+for direct access to any version you might want to try out.
 >
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
 
 ## Download v2.0.1
-
-Download an install archive from the release
-assets, not GitHub's automatically generated **Source code** archives.
 
 | Download | Who needs it |
 |---|---|
@@ -103,7 +101,7 @@ then launch **Minecraft Bedrock** once. This creates the shared data folders.
 
 There are two routes. Pick the first one if your device can use it.
 
-#### On the device itself — no PC needed
+#### On the device itself (with WiFi) — no PC needed
 
 Open **Get APK from Google Play** in the launcher menu. It signs you in on
 Google's own page, downloads the build you choose, validates it and installs
@@ -120,7 +118,7 @@ Verified end to end on an RG34XX-SP running muOS 2601.0 JACARANDA on
 2026-08-25: sign-in, download of the 1.16.221.01 split set, install, and a
 clean play session with working controls and sound.
 
-#### On a PC — the helper
+#### On a PC (Huge download and Install of Ubuntu subsystem) — the helper
 
 On a Windows PC, use the helper —
 [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get):
@@ -297,4 +295,8 @@ Release assembly creates deterministic edition archives, SPDX SBOMs, source
 materials, checksums, and an edition-aware updater index. See the checklist
 before promoting any prerelease to stable.
 
-Port by DankMiimer.
+Port by:
+ImpressiveStay6355 - (Original r36s port this whole project was built on) (https://github.com/impressivestay6355-cmyk/mcpelauncher-r36s)
+DankMiimer - (ARM Launcher + google sign in and ARM64 support).
+MCPE - Built on top of minecraft-linux/mcpelauncher-manifest (GPL-3.0) — the open-source Bedrock launcher for Linux this project packages and adapts for handheld hardware. All credit for the core launcher and reverse-engineering work goes to that project
+
