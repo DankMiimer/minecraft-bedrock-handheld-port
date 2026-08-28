@@ -31,13 +31,10 @@ assets, not GitHub's automatically generated **Source code** archives.
 
 | Download | Who needs it |
 |---|---|
-| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
-| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway; arm64 only. Adds the second-screen companion, which is in early development |
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.zip) | Normal single-screen PortMaster devices. Full launcher with login and Bedrock version download and play; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway. Its not actively being developed anymore; arm64 only. Adds the second-screen companion, which is in early development |
 | [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/mcbedrock-get-windows-v2.0.1.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
 | [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/mcbedrock-get-linux-x86_64-v2.0.1.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
-| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-source-v2.0.1.zip) | Maintainers and license compliance; not an install archive |
-| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.spdx.json) | Machine-readable contents of the standard archive |
-| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.spdx.json) | Machine-readable contents of the RGDS archive |
 | [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/RELEASE_NOTES.md) | Short packaged release summary |
 | [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/SHA256SUMS.txt) | Verifies every published file |
 
@@ -162,10 +159,7 @@ The installer validates package identity, version, signing data, dependencies,
 and ABI before publishing anything. Mixed or incomplete sets are rejected, and
 a failed install leaves the original APKs and previous versions intact.
 
-### 4. Play
-
-![The Minecraft world-selection screen as it appears on the handheld](screenshot.png)
-
+### 4. Play!
 
 Open **Versions**, select the installed build, then choose **Play**. The
 launcher remembers the selection. After a successful install you may keep the
@@ -175,7 +169,7 @@ APKs for recovery or delete them from the launcher with **X**.
 
 | Version | Verdict | Why |
 |---|---|---|
-| **1.16.221.01** | **Recommended** | Menus and text are the right size on a small screen, and it runs the most smoothly of anything tested |
+| **1.16.221.01** | **Recommended** | Newest version where the menus and text are the right size on a small screen, and it runs the most smoothly of anything tested |
 | **1.21.51.01** | Usable | The newest version without the slow graphics engine, but its menus are much smaller. Only the original release qualifies — the 1.21.51.02 re-upload switched that engine back on |
 | 1.18.30 and newer | Not worth trying | These use RenderDragon, a graphics engine handhelds are far too slow for. Expect severe stuttering, and small menus |
 | 1.26 and newer | **Will not work** | Google now protects these in a way the launcher cannot open |
