@@ -234,6 +234,19 @@ See [SUPPORT.md](SUPPORT.md) for report requirements. Never upload APKs,
 extracted game libraries/assets, worlds, account data, private server details,
 `versions/`, `profiles/`, or `libminecraftpe.so`.
 
+## Related ports
+
+Two smaller-console ports built from the same lineage, both software-rendered on
+hardware with no GPU at all:
+
+- **[minecraft-bedrock-miyoo-mini-plus](https://github.com/DankMiimer/minecraft-bedrock-miyoo-mini-plus)**
+  — Bedrock 1.2.20.2 on the Miyoo Mini Plus, drawn entirely on two 1.2 GHz
+  Cortex-A7 cores by Mesa llvmpipe.
+- **[NanoCraft](https://github.com/DankMiimer/nanocraft)** — Minecraft **Pocket
+  Edition 0.8.1** on the Anbernic RG Nano. On a single-core 55 MB console
+  Bedrock manages 2.2 fps and crashes; Pocket Edition runs at 7.8 fps at the
+  panel's native resolution.
+
 ## Maintainers and source
 
 - [Testing evidence](TESTING.md)
