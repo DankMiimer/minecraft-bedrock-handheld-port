@@ -192,9 +192,28 @@ Verified on RG34XX-SP/Knulli with `gfx_ui_profile:0` and the pack active:
   x 625 against its right edge at x 633.
 
 Not covered: `centered_gui_elements_at_bottom_middle_touch` gets the same
-transformation but no touch device was available to test it, and the pack's
-Pocket inventory overrides do not apply on Classic, which uses the non-pocket
-inventory screens -- expected from the file names, not measured.
+transformation but no touch device was available to test it.
+
+**Scaling the Classic inventory the same way does not work, and was reverted.**
+The generator emits overrides only for the crafting prototypes Pocket
+references, so Classic gets a partial scale. Widening it to the whole `crafting`
+namespace (22 overrides to 96) and testing on device produced a worse screen
+than stock: the left panel grew to 465 px while the right reached only 220 and
+the two overlapped around x 490. The cause is the generator's own rule --
+double pixel lengths, leave percentages alone -- which holds the Pocket layout
+together because Pocket sizes in pixels, and pulls the Classic layout apart
+because Classic mixes both. A blanket factor is the wrong instrument here; the
+Classic screen needs its containers considered individually, which was not
+attempted.
+
+One thing that is *not* a defect, checked against a pack-off capture of the same
+screen: the empty grey Equipment panel appears identically with the pack
+disabled. It is stock behaviour on this build, not something the overrides
+break.
+
+The generator and `inventory_screen.json` are back at the tested 22-override
+version, verified by checksum on the device. Classic therefore keeps the stock
+inventory and the fixed HUD.
 
 ### UI viewport experiment, phase 2, 2026-09-04
 
