@@ -72,7 +72,7 @@ index 09e8146..f90073b 100644
      static void initHybrisHooks(std::unordered_map<std::string, void *> &syms);
  
 diff --git a/src/fake_egl.cpp b/src/fake_egl.cpp
-index f1a02b0..a3834d3 100644
+index f1a02b0..be861a0 100644
 --- a/src/fake_egl.cpp
 +++ b/src/fake_egl.cpp
 @@ -3,6 +3,9 @@
@@ -85,7 +85,7 @@ index f1a02b0..a3834d3 100644
  
  #define __ANDROID__
  #include <EGL/egl.h>
-@@ -10,6 +13,15 @@
+@@ -10,6 +13,16 @@
  #include <log.h>
  #include <cstring>
  #include <game_window.h>
@@ -98,10 +98,11 @@ index f1a02b0..a3834d3 100644
 +#include <cstdlib>
 +#include <sys/resource.h>
 +#include <unistd.h>
++#include "ui_layout_scale.h"
  #include <mcpelauncher/linker.h>
  #ifdef USE_ARMHF_SUPPORT
  #include "armhf_support.h"
-@@ -20,6 +32,68 @@ static thread_local EGLSurface currentDrawSurface;
+@@ -20,6 +33,68 @@ static thread_local EGLSurface currentDrawSurface;
  static void *(*hostProcAddrFn)(const char *);
  static std::unordered_map<std::string, void *> hostProcOverrides;
  
@@ -170,7 +171,7 @@ index f1a02b0..a3834d3 100644
  EGLBoolean eglInitialize(EGLDisplay display, EGLint *major, EGLint *minor) {
      if(major)
          *major = 1;
-@@ -102,21 +176,167 @@ EGLBoolean eglMakeCurrent(EGLDisplay display, EGLSurface draw, EGLSurface read,
+@@ -102,21 +177,167 @@ EGLBoolean eglMakeCurrent(EGLDisplay display, EGLSurface draw, EGLSurface read,
      } else {
          ((GameWindow *)currentDrawSurface)->makeCurrent(false);
      }
@@ -339,6 +340,23 @@ index f1a02b0..a3834d3 100644
      return EGL_TRUE;
  }
  
+@@ -124,7 +345,15 @@ EGLBoolean eglQuerySurface(EGLDisplay display, EGLSurface surface, EGLint attrib
+     if(attribute == EGL_WIDTH || attribute == EGL_HEIGHT) {
+         int w, h;
+         ((GameWindow *)surface)->getWindowSize(w, h);
+-        *value = (attribute == EGL_WIDTH ? w : h - Settings::menubarsize);
++        int real = (attribute == EGL_WIDTH ? w : h - Settings::menubarsize);
++        *value = mcpe_ui_layout::extent(real);
++        if(mcpe_ui_layout::active()) {
++            static int logged = 0;
++            if(logged++ < 2)
++                Log::info("UIScale", "eglQuerySurface %s -> %d (real %d, scale %.3f)",
++                          attribute == EGL_WIDTH ? "EGL_WIDTH" : "EGL_HEIGHT",
++                          *value, real, mcpe_ui_layout::scale());
++        }
+         return EGL_TRUE;
+     }
+     Log::warn("FakeEGL", "eglQuerySurface %x", attribute);
 diff --git a/src/fake_looper.cpp b/src/fake_looper.cpp
 index 985e9ed..c9e1581 100644
 --- a/src/fake_looper.cpp
@@ -392,11 +410,14 @@ index 2a70102..b01b530 100644
      static void initHybrisHooks(std::unordered_map<std::string, void *> &syms);
  };
 diff --git a/src/fake_window.cpp b/src/fake_window.cpp
-index ae5b3b8..85f7dc4 100644
+index ae5b3b8..5f040a9 100644
 --- a/src/fake_window.cpp
 +++ b/src/fake_window.cpp
-@@ -3,6 +3,14 @@
+@@ -1,16 +1,25 @@
+ #include "fake_window.h"
+ #include "settings.h"
  #include <game_window.h>
++#include "ui_layout_scale.h"
  
  void FakeWindow::initHybrisHooks(std::unordered_map<std::string, void*>& syms) {
 +    syms["ANativeWindow_acquire"] = (void*)+[](void*) {};
@@ -410,6 +431,16 @@ index ae5b3b8..85f7dc4 100644
      syms["ANativeWindow_getWidth"] = (void*)+[](void* window) -> int32_t {
          int width, height;
          ((GameWindow*)window)->getWindowSize(width, height);
+-        return width;
++        return mcpe_ui_layout::extent(width);
+     };
+     syms["ANativeWindow_getHeight"] = (void*)+[](void* window) -> int32_t {
+         int width, height;
+         ((GameWindow*)window)->getWindowSize(width, height);
+-        return height - Settings::menubarsize;
++        return mcpe_ui_layout::extent(height - Settings::menubarsize);
+     };
+ }
 diff --git a/src/jni/jni_descriptors.cpp b/src/jni/jni_descriptors.cpp
 index fb41d61..ebb7aa9 100644
 --- a/src/jni/jni_descriptors.cpp
@@ -423,10 +454,10 @@ index fb41d61..ebb7aa9 100644
      {Function<&MainActivity::getDeviceModel>{}, "getDeviceModel"},
      {Function<&MainActivity::getExternalStoragePath>{}, "getExternalStoragePath"},
 diff --git a/src/jni/main_activity.cpp b/src/jni/main_activity.cpp
-index 01e728c..401d2b7 100644
+index 01e728c..f9141ba 100644
 --- a/src/jni/main_activity.cpp
 +++ b/src/jni/main_activity.cpp
-@@ -20,4 +20,10 @@
+@@ -20,6 +20,10 @@
  #include <android/keycodes.h>
  
  #include <log.h>
@@ -435,7 +466,9 @@ index 01e728c..401d2b7 100644
 +#include <cstdio>
 +#include <cstring>
  
-@@ -28,14 +28,30 @@ std::shared_ptr<FakeJni::JString> MainActivity::createUUID() {
+ FakeJni::JInt BuildVersion::SDK_INT = 32;
+ std::shared_ptr<FakeJni::JString> BuildVersion::RELEASE = std::make_shared<FakeJni::JString>("AndroidX");
+@@ -28,14 +32,30 @@ std::shared_ptr<FakeJni::JString> MainActivity::createUUID() {
      return UUID::randomUUID()->toString();
  }
  
@@ -468,9 +501,7 @@ index 01e728c..401d2b7 100644
  }
  
  FakeJni::JLong MainActivity::getUsedMemory() {
-@@ -68,6 +68,64 @@ FakeJni::JLong MainActivity::getUsedMemory() {
-     fclose(file);
-     return pageCount * pageSize;
+@@ -70,6 +90,92 @@ FakeJni::JLong MainActivity::getUsedMemory() {
  #endif
  }
  
@@ -563,7 +594,8 @@ index 01e728c..401d2b7 100644
  FakeJni::JLong MainActivity::getFreeMemory() {
  #ifdef __APPLE__
      uint64_t page_size;
-@@ -97,6 +155,10 @@ FakeJni::JLong MainActivity::getFreeMemory() {
+@@ -96,6 +202,10 @@ FakeJni::JLong MainActivity::getFreeMemory() {
+     double page_K = page_size / (double)1024;
      return info.t_free * page_K * 1000;
  #else
 +    // MemAvailable, not freeram -- see mcpeAvailableBytes above.
@@ -573,7 +605,9 @@ index 01e728c..401d2b7 100644
      struct sysinfo memInfo;
      sysinfo(&memInfo);
      long long total = memInfo.freeram;
-@@ -135,11 +197,27 @@ FakeJni::JLong MainActivity::getTotalMemory() {
+@@ -133,11 +243,27 @@ FakeJni::JLong MainActivity::getTotalMemory() {
+ }
+ 
  FakeJni::JLong MainActivity::getMemoryLimit() {
 -    return getTotalMemory();
 +    // Android's memory limit is this app's share, not the machine's RAM.
@@ -600,8 +634,9 @@ index 01e728c..401d2b7 100644
 +    return available;
  }
  
+ void MainActivity::pickImage(FakeJni::JLong callback) {
 diff --git a/src/jni/main_activity.h b/src/jni/main_activity.h
-index 20080b4..56d6aa7 100644
+index 20080b4..b29e597 100644
 --- a/src/jni/main_activity.h
 +++ b/src/jni/main_activity.h
 @@ -3,6 +3,8 @@
@@ -613,7 +648,7 @@ index 20080b4..56d6aa7 100644
  
  class BuildVersion : public FakeJni::JObject {
  public:
-@@ -116,30 +118,46 @@ public:
+@@ -116,30 +118,48 @@ public:
      int getScreenWidth() {
          int width, height;
          window->getWindowSize(width, height);
@@ -662,7 +697,7 @@ index 20080b4..56d6aa7 100644
          return true;
      }
  
-@@ -188,6 +228,7 @@ public:
+@@ -188,6 +208,7 @@ public:
      }
  
      FakeJni::JFloat getPixelsPerMillimeter();
@@ -671,7 +706,7 @@ index 20080b4..56d6aa7 100644
      FakeJni::JInt getPlatformDpi();
  
 diff --git a/src/main.cpp b/src/main.cpp
-index d0e1907..b64d463 100644
+index d0e1907..844607f 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -43,6 +43,10 @@
@@ -685,7 +720,7 @@ index d0e1907..b64d463 100644
  
  struct RpcCallbackServer : daemon_utils::auto_shutdown_service {
  
-@@ -68,6 +72,139 @@ void printVersionInfo();
+@@ -68,6 +72,147 @@ void printVersionInfo();
  
  void loadGameOptions();
  
@@ -833,7 +868,7 @@ index d0e1907..b64d463 100644
  int main(int argc, char* argv[]) {
      if(argc == 2 && argv[1][0] != '-') {
          Log::info("Sendfile", "sending file");
-@@ -425,6 +562,9 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
+@@ -425,6 +570,9 @@ Hardware	: Qualcomm Technologies, Inc MSM8998
      Log::info("Launcher", "Loaded Minecraft library");
      Log::debug("Launcher", "Minecraft is at offset 0x%" PRIXPTR, (uintptr_t)MinecraftUtils::getLibraryBase(handle));
      base = MinecraftUtils::getLibraryBase(handle);
@@ -853,3 +888,62 @@ index d0e1907..b64d463 100644
      std::thread startThread([&support]() {
          support.startGame((ANativeActivity_createFunc*)linker::dlsym(handle, "ANativeActivity_onCreate"),
                            linker::dlsym(handle, "stbi_load_from_memory"),
+diff --git a/src/ui_layout_scale.h b/src/ui_layout_scale.h
+new file mode 100644
+index 0000000..0ad136c
+--- /dev/null
++++ b/src/ui_layout_scale.h
+@@ -0,0 +1,53 @@
++#pragma once
++// Phase 1 of the handheld UI viewport experiment; see docs/UI-SCALING.md.
++//
++// 1.21 lays its JSON UI out from the drawing surface it is told about, not from
++// the Android display metrics: an earlier build lied to
++// MainActivity::getScreenWidth and nothing moved. The two queries that actually
++// report the surface are fake_egl::eglQuerySurface (EGL_WIDTH/EGL_HEIGHT) and
++// ANativeWindow_getWidth/getHeight, and both read GameWindow::getWindowSize.
++// This header shrinks exactly those two answers and nothing else.
++//
++// MCPE_UI_LAYOUT_SCALE=1.5 reports a surface 1/1.5 the real size, so the engine
++// lays the interface out coarser. Rendering is deliberately NOT corrected here:
++// the game draws into only part of the panel and pointer mapping is untouched,
++// so this is a diagnostic, not a usable mode. It isolates the one open
++// question - does layout follow these queries? - from the glViewport/glScissor
++// and input work a shippable version needs.
++//
++// Unset, empty, unparsable, <= 1.0 or > 4.0 all mean off, so a default build
++// behaves exactly as it did before.
++
++#include <cstdlib>
++
++namespace mcpe_ui_layout {
++
++inline double scale() {
++    static const double value = []() -> double {
++        const char *raw = std::getenv("MCPE_UI_LAYOUT_SCALE");
++        if(!raw || !*raw)
++            return 1.0;
++        char *end = nullptr;
++        double parsed = std::strtod(raw, &end);
++        // The negated comparisons also reject NaN.
++        if(end == raw || !(parsed > 1.0) || !(parsed <= 4.0))
++            return 1.0;
++        return parsed;
++    }();
++    return value;
++}
++
++inline bool active() {
++    return scale() > 1.0;
++}
++
++// Never report less than 1: a zero or negative dimension would divide by zero
++// somewhere in the engine's layout maths.
++inline int extent(int real) {
++    if(!active() || real <= 0)
++        return real;
++    int scaled = (int)(real / scale());
++    return scaled < 1 ? 1 : scaled;
++}
++
++}  // namespace mcpe_ui_layout

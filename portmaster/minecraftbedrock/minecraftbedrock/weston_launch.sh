@@ -419,6 +419,14 @@ SDL3_AUDIO_ENV=()
 [ -n "${MCPE_SDL_AUDIODRIVER:-}" ] &&
   SDL3_AUDIO_ENV=(SDL_AUDIO_DRIVER="$MCPE_SDL_AUDIODRIVER")
 
+# Developer diagnostic for the UI viewport experiment (docs/UI-SCALING.md).
+# Forwarded only when explicitly set, so a normal launch is byte-identical.
+# The client clamps the value and ignores anything <= 1.0, and phase 1 does not
+# correct rendering, so this is not a player-facing setting.
+UI_LAYOUT_ENV=()
+[ -n "${MCPE_UI_LAYOUT_SCALE:-}" ] &&
+  UI_LAYOUT_ENV=(MCPE_UI_LAYOUT_SCALE="$MCPE_UI_LAYOUT_SCALE")
+
 {
   printf 'timestamp=%q\n' "$(date -Iseconds 2>/dev/null || date)"
   printf 'abi=%q\n' arm64
@@ -498,6 +506,7 @@ CLIENT_PIDS_BEFORE="$(pidof mcpelauncher-client 2>/dev/null || true)"
     SDL_VIDEO_X11_FORCE_EGL="$APP_FORCE_EGL" \
     SDL_AUDIODRIVER="${MCPE_SDL_AUDIODRIVER:-openal}" \
     "${SDL3_AUDIO_ENV[@]}" \
+    "${UI_LAYOUT_ENV[@]}" \
     XDG_DATA_HOME="$DATA_ROOT" \
     MCPELAUNCHER_DATA_DIR="$DATA_DIR" \
     OPENSSL_armcap=0 \

@@ -170,6 +170,48 @@ coarser while every draw still rasterises across the full panel. The viewport
 override must apply only while framebuffer 0 is bound, and pointer input needs
 the inverse factor.
 
+### Phase 1: which query does 1.21 actually lay out from?
+
+The `MCPE_REPORTED_DISPLAY_SCALE` result above is easy to over-read. That build
+lied in `MainActivity::getScreenWidth`, the Android display-metrics route, and
+nothing moved -- which says the display metrics are ignored, not that the
+approach fails. Two other functions report the drawing surface, both reading the
+same `GameWindow::getWindowSize`, and neither had been touched:
+
+| Reports the surface | Where | Lied to in that test |
+|---|---|---|
+| `eglQuerySurface` (`EGL_WIDTH`/`EGL_HEIGHT`) | `mcpelauncher-client/src/fake_egl.cpp` | no |
+| `ANativeWindow_getWidth` / `getHeight` | `mcpelauncher-client/src/fake_window.cpp` | no |
+| `getScreenWidth/Height`, `getDisplayWidth/Height` | `src/jni/main_activity.cpp` | yes, no effect |
+
+`MCPE_UI_LAYOUT_SCALE` (in `src/ui_layout_scale.h`, from the client patch)
+shrinks exactly the first two answers and nothing else. `1.5` reports a surface
+two thirds the real size. Unset, empty, unparsable, `<= 1.0` or `> 4.0` all mean
+off, so a default build is unchanged; `weston_launch.sh` forwards the variable
+only when it is explicitly set.
+
+**This is a diagnostic, not a usable mode.** Rendering is deliberately not
+corrected, so the game draws into part of the panel and pointer mapping keeps
+the old factor. It answers one question -- does the interface lay out coarser? --
+before any of the viewport and input work is written. If the UI does not change
+size, the surface-reporting route is dead and only the display scaler remains.
+
+The client override is reachable on this hardware. The device reports
+`renderer=legacy_gles_no_renderdragon` on `OpenGL ES 3.2`, which is the ES2 path
+in `main.cpp`: `MinecraftUtils::setupGLES2Symbols(fake_egl::eglGetProcAddress)`
+builds the fake `libGLESv2.so` by calling `eglGetProcAddress`, and that consults
+`hostProcOverrides` first. So the commented `glViewport` skeleton in
+`FakeEGL::setupGLOverrides()` intercepts the real game's calls, and phase 2 has
+somewhere to live. The glcore path reaches the same map through
+`GLCorePatch::installGL`.
+
+Phase 2 scales `glViewport`/`glScissor` back up so drawing covers the panel
+again, guarded on framebuffer 0 being bound -- the `LD_PRELOAD` trace above
+found no offscreen target is ever allocated, so the guard should always hold
+here, but it is cheap to enforce through a `glBindFramebuffer` override rather
+than assumed. `glGetIntegerv(GL_VIEWPORT)` readback needs checking too. Phase 3
+applies the inverse factor to pointer input.
+
 This would enlarge JSON UI and shrink nothing, so Ore UI screens would grow with
 it -- they need the opposite treatment. cohtml is the one library this binary
 still exports symbols for (`cohtml::SystemImpl::CreateView(const ViewSettings&)`

@@ -340,6 +340,36 @@ def test_fps_summary_uses_posix_awk():
     assert "sort -n" in runner
 
 
+def test_ui_layout_scale_experiment_is_off_by_default():
+    """Phase 1 of the UI viewport experiment must not change a normal launch.
+
+    The earlier MCPE_REPORTED_DISPLAY_SCALE attempt lied to
+    MainActivity::getScreenWidth and nothing moved, because 1.21 lays out from
+    the drawing surface. The patch must therefore hook the two queries that
+    actually report it, and must be inert unless explicitly switched on.
+    """
+    patch = (ROOT / "source_release/mcpelauncher-client.patch").read_text(
+        encoding="utf-8"
+    )
+    assert "src/ui_layout_scale.h" in patch
+    assert 'std::getenv("MCPE_UI_LAYOUT_SCALE")' in patch
+    # Both surface queries are hooked, not just one.
+    assert "*value = mcpe_ui_layout::extent(real);" in patch
+    assert "return mcpe_ui_layout::extent(width);" in patch
+    assert "return mcpe_ui_layout::extent(height - Settings::menubarsize);" in patch
+    # Unset/garbage/out-of-range must all collapse to 1.0, and the reported
+    # extent must never reach zero.
+    assert "if(!raw || !*raw)" in patch
+    assert "if(end == raw || !(parsed > 1.0) || !(parsed <= 4.0))" in patch
+    assert "return scaled < 1 ? 1 : scaled;" in patch
+
+    launcher = (PAYLOAD / "weston_launch.sh").read_text(encoding="utf-8")
+    # Forwarded only when set, so an ordinary launch keeps its exact env.
+    assert 'UI_LAYOUT_ENV=()' in launcher
+    assert '[ -n "${MCPE_UI_LAYOUT_SCALE:-}" ] &&' in launcher
+    assert '"${UI_LAYOUT_ENV[@]}"' in launcher
+
+
 def test_renderdragon_era_memory_tuning_is_not_the_arm64_default():
     """Legacy Bedrock gets normal page cache and adaptive glibc allocation."""
     launcher = (PAYLOAD / "weston_launch.sh").read_text(encoding="utf-8")
