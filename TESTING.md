@@ -194,7 +194,35 @@ Verified on RG34XX-SP/Knulli with `gfx_ui_profile:0` and the pack active:
 Not covered: `centered_gui_elements_at_bottom_middle_touch` gets the same
 transformation but no touch device was available to test it.
 
-**Scaling the Classic inventory the same way does not work, and was reverted.**
+**The Classic inventory cannot be scaled from this pack's namespace at all.**
+Worked through its containers individually rather than by blanket factor, and
+the obstacle turned out to be structural. The screen is
+`crafting.recipe_inventory_screen_content`, whose `content_stack_panel` is a
+horizontal stack sized `[326, 166]` -- the number that matches the ~325 px the
+stock screen measures on device. Enlarging that panel to `[652, 332]` was tested
+in isolation: the container grew and `recipe_book`, sized `["fill", "100%"]`,
+filled it, while `player_inventory` stayed stock-sized and ended up marooned
+against the right edge.
+
+`player_inventory` has no size of its own. It is a `common.root_panel` whose
+geometry comes from `common.common_panel`,
+`common.inventory_panel_bottom_half` and `common.hotbar_grid_template`; only its
+`$top_half_variant` (`crafting.survival_panel_top_half`) is in the crafting
+namespace. A crafting-namespace pack file therefore reaches part of that panel
+and not the rest, which is precisely the partial scaling seen every time. It is
+namespace ownership, not tuning, and no amount of per-container adjustment
+inside `inventory_screen.json` can fix it.
+
+Scaling it properly means overriding `common` prototypes -- `container_item`,
+`cell_image`, `common_panel`, `inventory_panel_bottom_half`,
+`hotbar_grid_template`. Those are shared by every container screen in the game
+(chest, furnace, anvil, beacon, brewing, cartography, enchanting, grindstone,
+all of which extend `common.inventory_screen_common`) and by the Pocket
+inventory this pack already scales explicitly, so it also risks double-scaling
+the path that currently works. That is a much larger and riskier change than the
+Classic HUD fix, and it is not attempted here.
+
+**The earlier blanket attempt, for the record.**
 The generator emits overrides only for the crafting prototypes Pocket
 references, so Classic gets a partial scale. Widening it to the whole `crafting`
 namespace (22 overrides to 96) and testing on device produced a worse screen
