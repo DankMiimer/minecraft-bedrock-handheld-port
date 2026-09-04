@@ -320,6 +320,43 @@ at native resolution, but with hearts, hunger and menus 1.5x larger alongside
 it. Pack factors and the surface scale multiply, so a pack tuned for a native
 surface wants reducing when a scale is in use.
 
+### Ore UI under a surface scale: measured, and not yet solved
+
+Checked on 2026-09-04 at `MCPE_UI_LAYOUT_SCALE=1.5`, with a native capture of
+the same screen for comparison rather than a lone "looks cramped" screenshot.
+
+- The **Create** screen (the marketplace list behind Play) grew from a 273 px
+  green button to 395 px, a factor of 1.45. It stays usable because it scrolls.
+- **Create New World** does not survive it. That screen already overflows at
+  native size, and at 1.5 only its top-left corner is reachable. This is the
+  screen `scale=2` broke in the earlier DPI experiment, and a surface scale
+  breaks it the same way.
+
+**Lowering the reported DPI does not fix it.** Ore UI answers to the Android
+DPI, so cancelling a 1.5 surface scale with `MCPE_UI_DENSITY_SCALE=0.667` looks
+like it should restore Ore UI while leaving JSON UI alone -- and no rebuild is
+needed to try it, because `Settings::scale` is a float and `run_bedrock.sh`
+writes it straight into `mcpelauncher-client-settings.txt`. Tried: JSON UI was
+correctly unaffected, confirming the two systems really are independent, but
+Create New World came back with content drawn at two different scales
+overlapping rather than at one consistent smaller one. Whether that is a real
+render fault or an artifact of capturing a partially repainted framebuffer was
+not established. Either way the DPI is not a sufficient lever on its own.
+
+So the cohtml route stands, and the symbol it needs is present: a `grep` of this
+build's `libminecraftpe.so` finds
+`_ZN6cohtml10SystemImpl10CreateViewERKNS_12ViewSettingsE`
+(`cohtml::SystemImpl::CreateView(cohtml::ViewSettings const&)`) alongside
+`CreateViewImpl` and `SystemRendererImpl::CreateViewRenderer`. Hooking it means
+knowing where the dimensions sit inside `ViewSettings`, which is an ABI this
+repository has no header for and must not guess at.
+
+**Until that is solved, a surface scale is not shippable**, however good it
+looks on the HUD and menus: it trades an unusable world-creation screen for a
+larger interface. The JSON-UI-only alternative -- keep the resource pack and
+leave the surface alone -- remains the option that works today, with the native
+status renderers as its known cost.
+
 This would enlarge JSON UI and shrink nothing, so Ore UI screens would grow with
 it -- they need the opposite treatment. cohtml is the one library this binary
 still exports symbols for (`cohtml::SystemImpl::CreateView(const ViewSettings&)`
