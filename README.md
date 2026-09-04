@@ -41,6 +41,13 @@ help test the dual-screen companion. The standard edition intentionally
 redirects RGDS users to the separate RGDS package instead of silently
 installing experimental code.
 
+Nothing below is needed to play. The release also publishes the
+[source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-source-v2.0.1.zip),
+which is the GPL-licensed launcher source this build was made from, and a
+software bill of materials for each edition:
+[standard](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.spdx.json),
+[RGDS](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.spdx.json).
+
 ## Supported firmware
 
 | Firmware | Status |
