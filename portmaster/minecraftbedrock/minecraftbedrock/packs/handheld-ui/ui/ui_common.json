@@ -1,0 +1,16 @@
+{
+  "namespace": "common",
+  "highlight_slot": {
+    "texture": "textures/ui/selected_hotbar_slot",
+    "size": ["100% + 4px", "100% + 4px"],
+    "alpha": 1,
+    "color": [1, 1, 0.4],
+    "layer": 6
+  },
+  "item_text_label": {
+    "font_scale_factor": 2
+  },
+  "item_panel_image": {
+    "size": ["100%c + 16px", "100%c + 16px"]
+  }
+}

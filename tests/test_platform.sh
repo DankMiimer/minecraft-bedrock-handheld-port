@@ -47,6 +47,20 @@ source "$TMP/h700.env"
 # Batocera upstream everywhere except OS_NAME.
 [ "$MCPE_CFW" = knulli ] && [ "$MCPE_CFW_CONFIDENCE" = explicit ]
 
+# The early H700 anti-stutter profile lied to Bedrock that this four-core SoC
+# had only two CPUs and confined chunk/mesh workers to cores 0-1. Non-
+# RenderDragon builds do not need that isolation, and it delays both chunk
+# loading and rebuilds after a block changes. Platform detection must therefore
+# identify H700 without silently enabling any of the legacy scheduler knobs.
+unset MCPE_PIN_RENDER_CORE MCPE_PIN_MAIN_CORE MCPE_PIN_OTHER_CORES MCPE_FAKE_NPROC
+MCPE_PROBE_ROOT="$TMP/root" MCPE_TEST_ARCH=aarch64 MCPE_TEST_COMPOSITOR=none \
+  MCPE_TEST_FB_MODE=720x480 mcpe_apply_platform_profile "$TMP/h700-default-profile.env"
+[ -z "${MCPE_PIN_RENDER_CORE:-}" ] && [ -z "${MCPE_PIN_MAIN_CORE:-}" ] &&
+  [ -z "${MCPE_PIN_OTHER_CORES:-}" ] && [ -z "${MCPE_FAKE_NPROC:-}" ] || {
+    echo "H700 profile must leave Bedrock CPU scheduling unrestricted" >&2
+    exit 1
+  }
+
 # The same muOS device once the optional downloader has run. PortMaster's
 # westonwrap mknods /dev/dri/card0 on a firmware that has no DRM at all, and
 # the node outlives the run, so this is that device's normal state rather than

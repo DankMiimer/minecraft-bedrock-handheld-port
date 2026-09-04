@@ -192,8 +192,8 @@ on screen.
 
 | Rung | Name | Behaviour |
 |---|---|---|
-| L0 | Tuned | Current behaviour: measured presets, affinity pinning, performance governor |
-| L1 | Conservative | `MCPE_FAKE_NO_NETWORK=1`, VSync on, 30 fps cap, no affinity pinning, no governor change, UI scale from panel geometry, minimum render distance |
+| L0 | Tuned | Current behaviour: measured presets, engine-managed CPU scheduling, performance governor |
+| L1 | Conservative | `MCPE_FAKE_NO_NETWORK=1`, VSync on, 30 fps cap, clears any opt-in legacy affinity override, no governor change, UI scale from panel geometry, minimum render distance |
 | L2 | Minimal | L1 plus graphics fallback (arm64 `crusty_x11egl` → `wayland`/pixman; armhf `kmsdrm` → `x11` → `wayland`) and the most conservative audio backend the probe can prove works |
 | L3 | Diagnostic | Do not start Minecraft. Run the self-test, write the bundle, print how to report |
 

@@ -1,0 +1,14 @@
+{
+  "namespace": "pause",
+  "pause_button_template": {
+    "size": ["100%", 56],
+    "$button_font_scale_factor": 2,
+    "$button_text_max_size": ["100%", 20]
+  },
+  "realms_stories_button_panel": {
+    "size": ["100%", 56]
+  },
+  "store_button_panel": {
+    "size": ["100%", 56]
+  }
+}

@@ -42,6 +42,41 @@ def test_menu_failure_does_not_silently_autoplay():
         assert '[ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return' in text
 
 
+def test_knulli_and_rocknix_close_es_during_bedrock():
+    launcher = (ROOT / "portmaster/minecraftbedrock/Minecraft Bedrock.sh").read_text(
+        encoding="utf-8"
+    )
+    stop = launcher.split("menu_stop_frontend() {", 1)[1].split(
+        "menu_restore_frontend() {", 1
+    )[0]
+    restore = launcher.split("menu_restore_frontend() {", 1)[1].split(
+        "trap 'menu_restore_frontend", 1
+    )[0]
+    assert "mcpe_is_cfw knulli" in stop
+    assert "mcpe_is_cfw rocknix" in stop
+    assert "killall -q emulationstation" in stop
+    assert "killall -9 emulationstation" in stop
+    assert "/usr/bin/emulationstation-standalone --stop-rebooting" in stop
+    assert 'stopped_cfw" = knulli' in restore and '"$ES_INIT" start' in restore
+    assert "MCPE_ROCKNIX_SCOPE" in stop
+    assert "systemctl stop essway.service" in stop
+    assert 'stopped_cfw" = rocknix' in restore
+    assert "systemctl start essway.service" in restore
+    rgds_entry = (ROOT / "bottomscreen/release/Minecraft Bedrock RGDS.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "systemd-run --quiet --scope --collect --unit=" in rgds_entry
+    # systemd 255 rejects --wait together with --scope. Scope mode already
+    # keeps systemd-run in the foreground until its command exits.
+    assert "--scope --collect --wait" not in rgds_entry
+    assert "MCPE_ROCKNIX_SCOPE=1" in rgds_entry
+    assert "swaymsg exit" not in stop
+    # Menu-less launches must get the same handoff before the game starts.
+    launch = launcher.index('bash "$GAMEDIR/run_bedrock.sh"')
+    assert launcher.rfind("menu_stop_frontend", 0, launch) > launcher.index(
+        "MCPE_LAUNCH_STARTED_MS=")
+
+
 def test_installer_and_runtime_portability_contracts():
     installer = (ROOT / "portmaster/minecraftbedrock/minecraftbedrock/apkmeta.py").read_text(
         encoding="utf-8"
@@ -296,6 +331,98 @@ def test_both_launch_paths_share_one_audio_triage():
     # The old inline copy must be gone, not merely bypassed.
     assert "find_pulse_socket() {" not in (PAYLOAD / "run_bedrock.sh").read_text(
         encoding="utf-8")
+
+
+def test_fps_summary_uses_posix_awk():
+    """ROCKNIX BusyBox awk does not implement gawk's asort()."""
+    runner = (PAYLOAD / "run_bedrock.sh").read_text(encoding="utf-8")
+    assert "asort(" not in runner
+    assert "sort -n" in runner
+
+
+def test_ui_layout_scale_experiment_is_off_by_default():
+    """Phase 1 of the UI viewport experiment must not change a normal launch.
+
+    The earlier MCPE_REPORTED_DISPLAY_SCALE attempt lied to
+    MainActivity::getScreenWidth and nothing moved, because 1.21 lays out from
+    the drawing surface. The patch must therefore hook the two queries that
+    actually report it, and must be inert unless explicitly switched on.
+    """
+    patch = (ROOT / "source_release/mcpelauncher-client.patch").read_text(
+        encoding="utf-8"
+    )
+    assert "src/ui_layout_scale.h" in patch
+    assert 'std::getenv("MCPE_UI_LAYOUT_SCALE")' in patch
+    # Both surface queries are hooked, not just one.
+    assert "*value = mcpe_ui_layout::extent(real);" in patch
+    assert "return mcpe_ui_layout::extent(width);" in patch
+    assert "return mcpe_ui_layout::extent(height - Settings::menubarsize);" in patch
+    # Unset/garbage/out-of-range must all collapse to 1.0, and the reported
+    # extent must never reach zero.
+    assert "if(!raw || !*raw)" in patch
+    assert "if(end == raw || !(parsed > 1.0) || !(parsed <= 4.0))" in patch
+    assert "return scaled < 1 ? 1 : scaled;" in patch
+
+    launcher = (PAYLOAD / "weston_launch.sh").read_text(encoding="utf-8")
+    # Forwarded only when set, so an ordinary launch keeps its exact env.
+    assert 'UI_LAYOUT_ENV=()' in launcher
+    assert '[ -n "${MCPE_UI_LAYOUT_SCALE:-}" ] &&' in launcher
+    assert '"${UI_LAYOUT_ENV[@]}"' in launcher
+
+    # Phase 2 scales rasterisation back up to the panel.
+    assert 'hostProcOverrides["glViewport"]' in patch
+    assert 'hostProcOverrides["glScissor"]' in patch
+    # Only the default framebuffer was lied about; an offscreen target has its
+    # own resolution, so the binding has to be tracked rather than assumed.
+    assert 'hostProcOverrides["glBindFramebuffer"]' in patch
+    assert "drawingToPanel = (framebuffer == 0)" in patch
+    assert "if(!drawingToPanel)" in patch
+    # A read-back viewport must come back in the space the caller set it in.
+    assert 'hostProcOverrides["glGetIntegerv"]' in patch
+    # Edge conversion, not size scaling: adjacent rectangles must stay flush.
+    assert "mcpe_ui_layout::toPanel(x + width) - x0" in patch
+    # The armhf wrappers bridge a calling convention; a plain function in that
+    # chain would be an ABI mismatch, so the rendering half stays off there.
+    assert "#ifdef USE_ARMHF_SUPPORT" in patch
+    assert "viewport scaling is not supported on armhf" in patch
+    # The wrapped entry points come from eglGetProcAddress, which keeps any
+    # earlier override in the chain instead of bypassing it.
+    assert 'fake_egl::eglGetProcAddress("glViewport")' in patch
+
+
+def test_handheld_ui_toggle_is_wired_end_to_end():
+    """The menu toggle must reach the pack manager as a request, not a command.
+
+    A saved `on` replayed against a version the pack was never measured on has
+    to disable it, not abort the launch.
+    """
+    menu = (PAYLOAD / "menu/main.lua").read_text(encoding="utf-8")
+    assert 'key = "handheld_ui"' in menu
+    assert '1.21.51.01 only' in menu
+
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "handheld_ui)" in launcher
+    assert 'MCPE_HANDHELD_UI="$v"' in launcher
+
+    runner = (PAYLOAD / "run_bedrock.sh").read_text(encoding="utf-8")
+    assert "--request on" in runner and "--request off" in runner
+    # Never the strict verbs from the launch path, or a stale setting on
+    # another version would fail the launch.
+    assert "handheld_ui.py on" not in runner
+    assert "handheld_ui.py off" not in runner
+
+    manager = (PAYLOAD / "handheld_ui.py").read_text(encoding="utf-8")
+    assert "strict: bool = True" in manager
+    assert "and strict:" in manager
+
+
+def test_renderdragon_era_memory_tuning_is_not_the_arm64_default():
+    """Legacy Bedrock gets normal page cache and adaptive glibc allocation."""
+    launcher = (PAYLOAD / "weston_launch.sh").read_text(encoding="utf-8")
+    assert 'MCPE_PREWARM_GAMEPLAY_ASSETS:-0' in launcher
+    assert "MALLOC_TRIM_THRESHOLD_" not in launcher
+    assert "MALLOC_MMAP_THRESHOLD_" not in launcher
+    assert "MALLOC_CHECK_" not in launcher
 
 
 def test_both_launch_paths_are_supervised_during_startup():

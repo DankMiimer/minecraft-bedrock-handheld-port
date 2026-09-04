@@ -639,14 +639,67 @@ latest_installed_version() {
 }
 
 # --- Frontend handling for the menu ---------------------------------------------
-# muOS owns its framebuffer outside a launched port, so its frontend needs a
-# local handoff. Knulli already pauses ES input/display through emulatorlauncher
-# while a port runs; trying to stop its service from inside that child blocks
-# for 20 seconds and leaves the ES wrapper alive beside the port.
+# Knulli and ROCKNIX both leave ES-DE resident while their port wrapper waits.
+# That was confirmed from the live process trees while two 1.16 clients shared
+# a LAN world: ES kept its memory and remained a second input owner on both.
+# Stop only ES here (never Sway on ROCKNIX), then restore it after the game and
+# nested compositor have finished. Other CFWs retain the explicit legacy opt-in.
 ES_INIT=/etc/init.d/S31emulationstation
 MENU_STOPPED_ES=0
 MENU_STOPPED_MUOS=0
+MENU_STOPPED_CFW_ES=""
 menu_stop_frontend() {
+  local i
+  [ -z "$MENU_STOPPED_CFW_ES" ] || return 0
+  if mcpe_is_cfw knulli; then
+    pidof emulationstation >/dev/null 2>&1 || return 0
+    MENU_STOPPED_CFW_ES=knulli
+    # Prevent emulationstation-standalone's crash loop from immediately
+    # respawning ES, then terminate the wrapper and the UI without signalling
+    # their child port process group.
+    [ -x /usr/bin/emulationstation-standalone ] &&
+      /usr/bin/emulationstation-standalone --stop-rebooting 2>/dev/null || true
+    $ESUDO killall -q emulationstation 2>/dev/null || true
+    i=0
+    while pidof emulationstation >/dev/null 2>&1 && [ "$i" -lt 5 ]; do
+      sleep 1
+      i=$((i + 1))
+    done
+    pidof emulationstation >/dev/null 2>&1 &&
+      $ESUDO killall -9 emulationstation 2>/dev/null || true
+    return 0
+  fi
+  if mcpe_is_cfw rocknix; then
+    pidof emulationstation >/dev/null 2>&1 || return 0
+    # The RGDS entrypoint moves this launcher out of essway.service first.
+    # Without that cgroup handoff, stopping the service would kill this port
+    # along with ES-DE. A direct/manual launch therefore leaves ES resident
+    # instead of turning a frontend request into a game crash.
+    if [ "${MCPE_ROCKNIX_SCOPE:-0}" != 1 ] ||
+       grep -q '/essway.service' /proc/self/cgroup 2>/dev/null; then
+      echo "ROCKNIX frontend handoff skipped: launcher is not in its own systemd scope."
+      return 0
+    fi
+    MENU_STOPPED_CFW_ES=rocknix
+    # Sway owns the display session needed by Bedrock and is a separate unit.
+    $ESUDO systemctl stop essway.service 2>/dev/null || {
+      MENU_STOPPED_CFW_ES=""
+      echo "ROCKNIX could not stop essway.service; leaving ES-DE resident."
+      return 0
+    }
+    i=0
+    while pidof emulationstation >/dev/null 2>&1 && [ "$i" -lt 5 ]; do
+      sleep 1
+      i=$((i + 1))
+    done
+    if pidof emulationstation >/dev/null 2>&1; then
+      MENU_STOPPED_CFW_ES=""
+      echo "ROCKNIX essway.service stopped but ES-DE remained; not starting Bedrock."
+      $ESUDO systemctl start essway.service >/dev/null 2>&1 || true
+      return 1
+    fi
+    return 0
+  fi
   # PortMaster/CFW launch wrappers normally own frontend suspension. The old
   # internal kill/restart path is retained only as an explicit compatibility
   # escape hatch for direct/manual launches.
@@ -671,6 +724,25 @@ menu_restore_frontend() {
     kill "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
     wait "$MCPE_MENU_HANDOFF_PID" 2>/dev/null || true
     unset MCPE_MENU_HANDOFF_PID
+  fi
+  if [ -n "$MENU_STOPPED_CFW_ES" ]; then
+    local stopped_cfw="$MENU_STOPPED_CFW_ES"
+    MENU_STOPPED_CFW_ES=""
+    # Avoid a duplicate if the firmware recovered ES on its own.
+    if ! pidof emulationstation >/dev/null 2>&1; then
+      (
+        unset TMO GFX ARGS MCVER_OVERRIDE BIN_OVERRIDE EXTRA_LIB APP_EXTRA_ARGS
+        unset MCPE_DATA_ROOT_OVERRIDE MCPE_DATA_DIR_OVERRIDE SDL_DRIVER_OVERRIDE
+        unset GAMEWINDOW_EGLUT_CRUSTY_CONTEXT GAMEWINDOW_EGLUT_FORCE_FOCUS
+        unset WESTON_SQUASH GAMEDIR MCPE_MENU MCPE_MENU_STATUS
+        if [ "$stopped_cfw" = knulli ] && [ -x "$ES_INIT" ]; then
+          setsid $ESUDO "$ES_INIT" start </dev/null >/dev/null 2>&1
+        elif [ "$stopped_cfw" = rocknix ]; then
+          $ESUDO systemctl start essway.service >/dev/null 2>&1
+        fi
+      )
+    fi
+    return
   fi
   if [ "$MENU_STOPPED_MUOS" = 1 ]; then
     MENU_STOPPED_MUOS=0
@@ -863,7 +935,7 @@ run_launcher_menu() {
     refresh_apk_groups || true
     mcpe_startup_mark "APK inventory ready"
     refresh_downloader_menu_state
-    menu_stop_frontend
+    menu_stop_frontend || exit 1
     : > "$CONFDIR/menu_action.txt"
     rm -f "$CONFDIR/menu_first_frame.txt"
     export MCPE_MENU_STATUS
@@ -1201,6 +1273,13 @@ apply_settings() {
         case "$v" in 0|1)
           [ -z "${MCPE_MEASURE_FPS:-}" ] && export MCPE_MEASURE_FPS="$v" ;;
         esac ;;
+      handheld_ui)
+        # Opt-in larger interface. The pack manager applies its own version,
+        # ABI and library-hash gate, so this is only a request; on any build
+        # but the tested one it resolves to off rather than failing the launch.
+        case "$v" in 0|1)
+          [ -z "${MCPE_HANDHELD_UI:-}" ] && export MCPE_HANDHELD_UI="$v" ;;
+        esac ;;
       update_channel)
         case "$v" in stable|testing)
           printf '%s\n' "$v" >"$CONFDIR/update_channel" ;;
@@ -1369,6 +1448,9 @@ if [ "${MCPE_FAILSAFE_RUNG:-0}" -ge 3 ]; then
   mcpe_report_set exit_status "diagnostic; the game was not started"
 else
   MCPE_LAUNCH_STARTED_MS="$(mcpe_now_ms)"
+  # This is idempotent when the launcher menu already performed the handoff,
+  # and also covers menu-less/autoplay launches.
+  menu_stop_frontend || exit 1
   bash "$GAMEDIR/run_bedrock.sh"
   status=$?
   MCPE_LAUNCH_SECONDS=$(( ($(mcpe_now_ms) - MCPE_LAUNCH_STARTED_MS) / 1000 ))

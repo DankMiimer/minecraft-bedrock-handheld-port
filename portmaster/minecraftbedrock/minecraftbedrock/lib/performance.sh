@@ -42,14 +42,13 @@ mcpe_memory_tier() { # [mem_mb] -> 512m|1g|2g|3g|unknown
   fi
 }
 
-# What is actually the game's to spend. The remainder is the firmware, the
-# frontend -- Knulli keeps EmulationStation resident behind a running port --
-# Weston, the launcher process itself, and the page-cache headroom the asset
-# prewarm in weston_launch.sh depends on. Measured on the reference RG34XX-SP:
-# 224 MB resident before the port starts, 157 MB of it EmulationStation, which
-# is what the one-fifth share reproduces at 2 GB. The floor keeps a 512 MB
-# device from reserving so little that the firmware has nowhere to live, and
-# the ceiling stops a large device from donating headroom nothing will use.
+# What is actually the game's to spend. The remainder is firmware, Weston, the
+# launcher/companion processes and page-cache headroom. The original 2 GB
+# measurement included a resident ES-DE; the frontend now closes during play,
+# so this one-fifth reserve is intentionally conservative until a post-handoff
+# memory trace justifies raising the game's advertised limit. The floor keeps
+# a 512 MB device from reserving so little that the firmware has nowhere to
+# live, and the ceiling stops a large device donating headroom nothing uses.
 mcpe_memory_budget_mb() { # [mem_mb] -> MiB, 0 when unknown
   local mb="${1:-$(mcpe_memory_mb)}" reserve
   case "$mb" in ''|*[!0-9]*) mb=0 ;; esac

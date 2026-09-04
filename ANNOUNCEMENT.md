@@ -45,7 +45,8 @@ can be added.
 - **Dual-screen aware** — on the RG DS the touchscreen is mapped to the game
   screen automatically.
 - **Performance mode** — CPU/GPU clocks are boosted while playing and
-  restored on exit; on 4-core devices a measured thread layout cuts stutter.
+  restored on exit. Bedrock and the kernel retain all available CPU cores for
+  simulation, chunk generation, and rendering.
 - Supports aarch64 devices and armhf RK3326/R36S-style PortMaster setups.
 
 ## Install

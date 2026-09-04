@@ -109,6 +109,22 @@ fi
 echo "ABI: $ABI (version has: 64=$V_HAS64 32=$V_HAS32, usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE, mem=${MEM_KB}kB)"
 mcpe_stage abi
 mcpe_report_set abi "$ABI (installed: 64=$V_HAS64 32=$V_HAS32; usable: 64=$ARM64_USABLE 32=$ARMHF_USABLE; override=${MCPE_ABI_OVERRIDE:-none})"
+# Reconcile our optional UI pack before either ABI starts. Other versions must
+# not inherit its JSON overrides through the shared game profile.
+if [ -f "$GAMEDIR/handheld_ui.py" ]; then
+  # The menu's Handheld UI toggle arrives as a request, not a command: the
+  # manager still applies the version/ABI/library gate, so switching to a build
+  # the pack was never measured against turns it off instead of failing here.
+  HANDHELD_UI_REQUEST=()
+  case "${MCPE_HANDHELD_UI:-}" in
+    1) HANDHELD_UI_REQUEST=(--request on) ;;
+    0) HANDHELD_UI_REQUEST=(--request off) ;;
+  esac
+  python3 "$GAMEDIR/handheld_ui.py" sync \
+    --profile "$MCPE_DATA_ROOT_OVERRIDE" --version "$MCVER_OVERRIDE" \
+    --abi "$ABI" "${HANDHELD_UI_REQUEST[@]}" \
+    --library-sha256 "${MCPE_GAME_LIBRARY_SHA256:-}" || exit 1
+fi
 # Device memory. Resolved before the ABI presets so the measured tier is what
 # their ${VAR:-default} expansions see, and exported so the client can answer
 # Android's memory questions with this device's real budget instead of with
@@ -192,15 +208,11 @@ export GAMEWINDOW_EGLUT_FORCE_FOCUS="${GAMEWINDOW_EGLUT_FORCE_FOCUS:-1}"
 
 export MCPE_DISABLE_AUTO_COMPACTION="${MCPE_DISABLE_AUTO_COMPACTION:-0}"
 
-# Thread layout measured on a 4x Cortex-A53 (H700): render thread on core 3,
-# simulation ("MINECRAFT MAIN") on core 2, chunk workers on 0-1, and the game
-# sees 2 CPUs so its worker pools fit. Cut stutters ~4x. Only applied on
-# 4-core devices; elsewhere the engine keeps its defaults.
-# busybox systems (ROCKNIX) have no nproc.
+# Record the real core count for diagnostics only. Bedrock and the kernel keep
+# control of worker-pool sizing and scheduling; restricting chunk/mesh work to
+# two H700 cores made block-face rebuilds and new chunks arrive late.
+# BusyBox systems (ROCKNIX) have no nproc.
 NCORES="$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 0)"
-# Affinity is set by the validated H700 profile in lib/platform.sh. Core count
-# alone is not a device identifier (RK356x is also commonly four-core).
-export MCPE_AFFINITY_LOG="${MCPE_AFFINITY_LOG:-0}"
 
 chmod +x "$BIN_OVERRIDE" 2>/dev/null
 
@@ -362,19 +374,23 @@ fi
 
 if [ -n "$FPS_TRACE" ] && [ -s "$FPS_TRACE" ]; then
   echo "=== FPS SUMMARY ($FPS_TRACE) ==="
-  awk -F, 'NR>1 && $3+0>2000000 {  # skip first ~2s of load
-             d=$3-p; if(p>0 && d>0){n++; s+=d; a[n]=d} p=$3
-           }
-           END{
-             if(n<10){print "  not enough frames"; exit}
-             asort(a);
-             med=a[int(n/2)];
-             fps=1000000/med;
-             # percent of frames at >=58fps (<=17240us) and >=30fps
-             for(i=1;i<=n;i++){ if(a[i]<=17240)c60++; if(a[i]<=33333)c30++ }
-             printf "  frames=%d  median=%.1fms (%.1f fps)  mean=%.1ffps\n", n, med/1000, fps, 1000000/(s/n);
-             printf "  %%>=58fps=%.0f%%  %%>=30fps=%.0f%%  p99frame=%.1fms\n", 100*c60/n, 100*c30/n, a[int(n*0.99)]/1000
-           }' "$FPS_TRACE"
+  # ROCKNIX ships BusyBox awk, without gawk's array-sorting extension. Emit frame
+  # intervals first and let the platform's numeric sort order them before the
+  # portable summary pass.
+  awk -F, 'NR>1 && $3+0>2000000 {
+             d=$3-p; if(p>0 && d>0) print d; p=$3
+           }' "$FPS_TRACE" |
+    sort -n |
+    awk '{
+           n++; a[n]=$1; s+=$1;
+           if($1<=17240)c60++; if($1<=33333)c30++
+         }
+         END{
+           if(n<10){print "  not enough frames"; exit}
+           med=a[int(n/2)]; fps=1000000/med;
+           printf "  frames=%d  median=%.1fms (%.1f fps)  mean=%.1ffps\n", n, med/1000, fps, 1000000/(s/n);
+           printf "  %%>=58fps=%.0f%%  %%>=30fps=%.0f%%  p99frame=%.1fms\n", 100*c60/n, 100*c30/n, a[int(n*0.99)]/1000
+         }'
 fi
 
 exit "$GAME_STATUS"

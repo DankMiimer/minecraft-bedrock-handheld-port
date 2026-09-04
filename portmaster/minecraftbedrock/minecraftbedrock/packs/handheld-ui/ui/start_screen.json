@@ -1,0 +1,28 @@
+{
+  "namespace": "start",
+  "main_buttons_panel": {
+    "size": [300, "100%c"]
+  },
+  "main_buttons_panel_new_player_flow": {
+    "size": [300, "100%c"]
+  },
+  "stacked_row": {
+    "size": ["100%", 64]
+  },
+  "main_button": {
+    "$button_font_scale_factor": 2,
+    "$button_text_max_size": ["100%", 20]
+  },
+  "main_button_dark": {
+    "$button_font_scale_factor": 2,
+    "$button_text_max_size": ["100%", 20]
+  },
+  "main_content_button": {
+    "$button_font_scale_factor": 2,
+    "$button_text_max_size": ["100%", 20]
+  },
+  "store_button_content/button_label": {
+    "$button_font_scale_factor": 2,
+    "$button_text_max_size": ["100%", 20]
+  }
+}

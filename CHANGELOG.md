@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+- Added an opt-in Handheld UI resource pack for the tested 1.21.51.01 arm64
+  build, off by default and gated on that exact version, ABI and native-library
+  fingerprint. It enlarges the main menu, pause menu, Pocket inventory, the
+  selected-item name and the hotbar for a 720x480 handheld panel, using small
+  original JSON overrides against the game's own textures. Activation is
+  managed outside Minecraft by `handheld_ui.py`, preserves every other pack
+  entry, backs up the activation file and touches no worlds.
+- Scaled that pack by integers only. The UI font is a bitmap font and item art
+  is 16x16, so the first 1.5x prototype resampled and read as blurry text;
+  menus are now 2x and the hotbar 3x, each derived from the installed build's
+  own stock values so vanilla proportions survive.
+- Recorded that health, hunger, armour and bubbles cannot be enlarged by any
+  resource pack on this build: they are native `custom` renderers that ignore
+  their container size and expose no state bindings to rebuild from. Launcher
+  UI zoom stays the only shipping way to enlarge them.
+- Removed the automatic H700 thread-affinity and fake-CPU profile. It was an
+  early RenderDragon anti-stutter experiment that told Bedrock a four-core H700
+  had only two CPUs, reserved separate render and simulation cores, and
+  confined chunk/mesh workers to cores 0-1. On the recommended non-RenderDragon
+  builds that can make a destroyed block briefly expose an unreconstructed
+  hole and slows new chunks. Bedrock and the kernel now schedule across all
+  four cores. The client-side knobs remain available only as explicit developer
+  overrides for comparison runs, and safe mode still clears them.
+- Kept `gfx_multithreaded_renderer=1`: disabling it loses static chunk draws on
+  the EGLUT/Crusty/libmali path. Async texture loading and the texture-dequeue
+  budget are also unchanged because neither controls terrain mesh rebuilds.
+- Rejected the old block-particle workaround after its first controlled
+  in-world test. Suppressing `minecraft:block_destruct` removed the intended
+  debris animation but left the black block flash unchanged, proving the flash
+  is not that particle billboard. Vanilla block-destruction particles remain
+  intact while the damage-overlay/chunk-replacement path is tested separately.
+- Made the old RenderDragon asset prewarm opt-in instead of running before
+  every arm64 launch, and removed the fixed glibc trim/mmap thresholds. Legacy
+  1.16 now keeps its page cache available for world streaming and lets glibc
+  adapt allocation to the workload. The low-memory armhf profile keeps its
+  separately validated allocator settings.
+- Fixed the frontend handoff on the two active reference firmwares. Knulli
+  closes ES-DE directly. ROCKNIX first moves the RGDS launcher from
+  `essway.service` into a transient systemd scope, then stops the service;
+  killing ES inside its original cgroup also killed the port and immediately
+  restarted ES. The scope relies on its normal foreground lifetime because
+  systemd 255 rejects `--wait` with `--scope`. Sway remains alive, and each
+  firmware restores ES-DE only after game/compositor cleanup.
+- Made the optional FPS summary work with ROCKNIX's BusyBox `awk`; it no longer
+  relies on a GNU-only array-sorting function.
+
 ## v2.0.1
 
 One fix, for ROCKNIX. Every message the port put on screen there went to the
