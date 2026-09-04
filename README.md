@@ -19,8 +19,8 @@ not done, and the physical acceptance matrix for the armhf path remains
 pending.
 
 > **No game files are included.** You must supply your own official Minecraft
-> Bedrock Android APK(s) or sign in with your google account that owns Minecraft
-for direct access to any version you might want to try out.
+> Bedrock Android APK(s) or sign in with your Google account that owns Minecraft
+> for direct access to any version you might want to try out.
 >
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
