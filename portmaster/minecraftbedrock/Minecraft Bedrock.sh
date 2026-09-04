@@ -1273,6 +1273,13 @@ apply_settings() {
         case "$v" in 0|1)
           [ -z "${MCPE_MEASURE_FPS:-}" ] && export MCPE_MEASURE_FPS="$v" ;;
         esac ;;
+      handheld_ui)
+        # Opt-in larger interface. The pack manager applies its own version,
+        # ABI and library-hash gate, so this is only a request; on any build
+        # but the tested one it resolves to off rather than failing the launch.
+        case "$v" in 0|1)
+          [ -z "${MCPE_HANDHELD_UI:-}" ] && export MCPE_HANDHELD_UI="$v" ;;
+        esac ;;
       update_channel)
         case "$v" in stable|testing)
           printf '%s\n' "$v" >"$CONFDIR/update_channel" ;;

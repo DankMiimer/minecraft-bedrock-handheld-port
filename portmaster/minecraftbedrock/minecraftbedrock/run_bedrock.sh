@@ -112,9 +112,17 @@ mcpe_report_set abi "$ABI (installed: 64=$V_HAS64 32=$V_HAS32; usable: 64=$ARM64
 # Reconcile our optional UI pack before either ABI starts. Other versions must
 # not inherit its JSON overrides through the shared game profile.
 if [ -f "$GAMEDIR/handheld_ui.py" ]; then
+  # The menu's Handheld UI toggle arrives as a request, not a command: the
+  # manager still applies the version/ABI/library gate, so switching to a build
+  # the pack was never measured against turns it off instead of failing here.
+  HANDHELD_UI_REQUEST=()
+  case "${MCPE_HANDHELD_UI:-}" in
+    1) HANDHELD_UI_REQUEST=(--request on) ;;
+    0) HANDHELD_UI_REQUEST=(--request off) ;;
+  esac
   python3 "$GAMEDIR/handheld_ui.py" sync \
     --profile "$MCPE_DATA_ROOT_OVERRIDE" --version "$MCVER_OVERRIDE" \
-    --abi "$ABI" \
+    --abi "$ABI" "${HANDHELD_UI_REQUEST[@]}" \
     --library-sha256 "${MCPE_GAME_LIBRARY_SHA256:-}" || exit 1
 fi
 # Device memory. Resolved before the ABI presets so the measured tier is what

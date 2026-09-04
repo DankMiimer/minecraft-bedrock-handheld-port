@@ -215,6 +215,12 @@ local SCHEMA = {
     help   = "Auto follows launch history. Normal forces the tuned profile.",
   },
   {
+    key = "handheld_ui", label = "Handheld UI", widget = "toggle",
+    values = {"0", "1"},
+    names  = {"Off", "On"},
+    help   = "Bigger menus, hotbar and inventory. 1.21.51.01 only; ignored on older builds.",
+  },
+  {
     key = "measure_fps", label = "FPS logging", widget = "toggle",
     values = {"0", "1"},
     names  = {"Off", "On"},

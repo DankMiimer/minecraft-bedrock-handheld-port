@@ -60,6 +60,24 @@ class ActivationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.sync(True, digest="different-library")
 
+    def test_menu_request_on_an_older_version_disables_instead_of_failing(self):
+        """A saved menu toggle must never fail the launch on another version.
+
+        Typing `on` against an untested build is an error; replaying the saved
+        setting is not, or switching to 1.16 with the toggle left on would
+        break starting the game at all.
+        """
+        result = ui.sync(PAYLOAD, self.profile, "1.16.221.01-971622101-arm64",
+                         "different-library", True, "arm64", strict=False)
+        self.assertFalse(result["enabled"])
+        self.assertFalse(result["compatible"])
+        self.assertEqual(self.packs(), [self.other])
+        # The preference is still recorded, so returning to the tested build
+        # brings the pack back without the player setting it again.
+        self.assertTrue(json.loads(
+            (self.profile / "handheld-ui.json").read_text())["enabled"])
+        self.assertTrue(self.sync()["enabled"])
+
     def test_malformed_activation_is_preserved(self):
         self.activation.write_text("{broken user state")
         before = self.activation.read_bytes()

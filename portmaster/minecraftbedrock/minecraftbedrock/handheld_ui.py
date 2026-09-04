@@ -35,7 +35,8 @@ def atomic_json(path: Path, value) -> None:
 
 
 def sync(gamedir: Path, profile: Path, version: str, library_sha256: str,
-         request: bool | None = None, abi: str = "arm64") -> dict:
+         request: bool | None = None, abi: str = "arm64",
+         strict: bool = True) -> dict:
     profile = profile.resolve()
     preference = profile / "handheld-ui.json"
     config = read_json(preference, {"enabled": False})
@@ -44,7 +45,12 @@ def sync(gamedir: Path, profile: Path, version: str, library_sha256: str,
     requested = config["enabled"] if request is None else request
     compatible = (version == TARGET_VERSION and library_sha256 == TARGET_SHA256
                   and abi == "arm64")
-    if request is True and not compatible:
+    # Asking for the pack on a build it was not measured against is an error
+    # when a person types it, and merely a no-op when the launcher replays a
+    # saved menu setting: switching to another version must not fail the launch.
+    # The preference is still recorded either way, so going back to the tested
+    # build restores the pack without the player touching the setting again.
+    if request is True and not compatible and strict:
         raise ValueError("Handheld UI requires the tested 1.21.51.01 arm64 library")
 
     mojang = profile / "mcpelauncher/games/com.mojang"
@@ -100,6 +106,10 @@ def main() -> int:
     parser.add_argument("--version")
     parser.add_argument("--library-sha256")
     parser.add_argument("--abi", default="arm64")
+    # The launcher replays the menu's saved toggle through this rather than
+    # through `on`/`off`, so an incompatible version disables the pack instead
+    # of failing the launch.
+    parser.add_argument("--request", choices=("on", "off"))
     args = parser.parse_args()
     profile = args.profile or args.gamedir / "profiles/default"
     if args.action == "status":
@@ -115,7 +125,8 @@ def main() -> int:
                 version = line.partition("=")[2]
                 break
     library_hash = args.library_sha256 or ""
-    wants_pack = args.action == "on" or read_json(profile / "handheld-ui.json", {}).get("enabled", False)
+    wants_pack = (args.action == "on" or args.request == "on"
+                  or read_json(profile / "handheld-ui.json", {}).get("enabled", False))
     if version == TARGET_VERSION and not library_hash and args.action != "off" and wants_pack:
         library = args.gamedir / "versions" / version / "lib/arm64-v8a/libminecraftpe.so"
         digest = hashlib.sha256()
@@ -124,7 +135,12 @@ def main() -> int:
                 digest.update(block)
         library_hash = digest.hexdigest()
     request = {"on": True, "off": False}.get(args.action)
-    result = sync(args.gamedir, profile, version or "", library_hash, request, args.abi)
+    strict = True
+    if request is None and args.request:
+        request = args.request == "on"
+        strict = False
+    result = sync(args.gamedir, profile, version or "", library_hash, request,
+                  args.abi, strict)
     print("Handheld UI: " + json.dumps(result))
     return 0
 

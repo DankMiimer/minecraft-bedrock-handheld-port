@@ -390,6 +390,32 @@ def test_ui_layout_scale_experiment_is_off_by_default():
     assert 'fake_egl::eglGetProcAddress("glViewport")' in patch
 
 
+def test_handheld_ui_toggle_is_wired_end_to_end():
+    """The menu toggle must reach the pack manager as a request, not a command.
+
+    A saved `on` replayed against a version the pack was never measured on has
+    to disable it, not abort the launch.
+    """
+    menu = (PAYLOAD / "menu/main.lua").read_text(encoding="utf-8")
+    assert 'key = "handheld_ui"' in menu
+    assert '1.21.51.01 only' in menu
+
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "handheld_ui)" in launcher
+    assert 'MCPE_HANDHELD_UI="$v"' in launcher
+
+    runner = (PAYLOAD / "run_bedrock.sh").read_text(encoding="utf-8")
+    assert "--request on" in runner and "--request off" in runner
+    # Never the strict verbs from the launch path, or a stale setting on
+    # another version would fail the launch.
+    assert "handheld_ui.py on" not in runner
+    assert "handheld_ui.py off" not in runner
+
+    manager = (PAYLOAD / "handheld_ui.py").read_text(encoding="utf-8")
+    assert "strict: bool = True" in manager
+    assert "and strict:" in manager
+
+
 def test_renderdragon_era_memory_tuning_is_not_the_arm64_default():
     """Legacy Bedrock gets normal page cache and adaptive glibc allocation."""
     launcher = (PAYLOAD / "weston_launch.sh").read_text(encoding="utf-8")

@@ -162,6 +162,34 @@ UI behaviour, and anything at a scale other than 1.5. The device was returned to
 a clean state afterwards, with ES-DE running and no port processes left.
 Local-only captures are under `build/diagnostics/handheld-ui-20260904/`.
 
+### Handheld UI menu toggle, 2026-09-05
+
+Added **Settings -> Handheld UI** to the launcher menu, wired
+`settings.cfg` -> `MCPE_HANDHELD_UI` -> `handheld_ui.py sync --request on|off`.
+
+The toggle is a request rather than a command, which is the part worth testing:
+typing `handheld_ui.py on` against an untested build must still refuse, but a
+saved menu setting replayed on another version must disable the pack instead of
+failing the launch. Both behaviours were exercised on device, and 1.16.221.01 is
+installed there, so the regression case is real rather than simulated.
+
+| case | result | exit |
+|---|---|---|
+| request `on`, running 1.16.221.01 | `enabled false, compatible false` | 0 |
+| request `on`, running 1.21.51.01 | `enabled true` | 0 |
+| request `off` | `enabled false` | 0 |
+| `handheld_ui.py on` on 1.16.221.01 | refused with a message | 1 |
+
+End to end through the launcher, twice: with `handheld_ui=1` in `settings.cfg` a
+launch took the pack from `active: false` to `active: true`, and with
+`handheld_ui=0` the next launch took it back to `active: false`.
+
+The preference is recorded even when the running version rejects it, so
+returning to the tested build restores the pack without the player setting it
+again. Not covered: the toggle was driven through `settings.cfg` rather than by
+pressing it in the LOVE menu, so the menu row's own rendering and focus
+behaviour are unverified.
+
 ### Handheld UI on the Classic UI profile, 2026-09-04
 
 Found by the maintainer, not by this testing: switching **Settings -> Video ->

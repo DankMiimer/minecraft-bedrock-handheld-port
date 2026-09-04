@@ -46,6 +46,15 @@ at native resolution. Launcher UI zoom is the only shipping setting that
 enlarges them. Ore UI is unchanged. Effects optimization and measured FPS gains
 are outside this prototype.
 
+## Enable or disable from the launcher
+
+Launcher menu, **Settings** -> **Handheld UI**: `Off` or `On`. The setting is a
+request, not a command. The manager still applies its version, ABI and
+library-hash gate, so on any build but the tested `1.21.51.01` it resolves to
+off and the launch continues normally rather than failing. The preference is
+kept either way, so switching back to the tested build restores the pack
+without setting it again.
+
 ## Enable or disable outside Minecraft
 
 From the installed `minecraftbedrock` payload directory, after exiting the game:
