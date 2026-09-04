@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Added an opt-in Handheld UI resource pack for the tested 1.21.51.01 arm64
+  build, off by default and gated on that exact version, ABI and native-library
+  fingerprint. It enlarges the main menu, pause menu, Pocket inventory, the
+  selected-item name and the hotbar for a 720x480 handheld panel, using small
+  original JSON overrides against the game's own textures. Activation is
+  managed outside Minecraft by `handheld_ui.py`, preserves every other pack
+  entry, backs up the activation file and touches no worlds.
+- Scaled that pack by integers only. The UI font is a bitmap font and item art
+  is 16x16, so the first 1.5x prototype resampled and read as blurry text;
+  menus are now 2x and the hotbar 3x, each derived from the installed build's
+  own stock values so vanilla proportions survive.
+- Recorded that health, hunger, armour and bubbles cannot be enlarged by any
+  resource pack on this build: they are native `custom` renderers that ignore
+  their container size and expose no state bindings to rebuild from. Launcher
+  UI zoom stays the only shipping way to enlarge them.
 - Removed the automatic H700 thread-affinity and fake-CPU profile. It was an
   early RenderDragon anti-stutter experiment that told Bedrock a four-core H700
   had only two CPUs, reserved separate render and simulation cores, and

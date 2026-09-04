@@ -12,7 +12,7 @@ have moved two screens and nothing else.
 |---|---|---|
 | Screens | HUD, inventory and containers, chat, pause, main menu, world list | Create New World, death, sign-in, settings tabs, achievements |
 | Drawn by | the engine | cohtml |
-| Answers to | the real render surface only | the reported Android DPI |
+| Answers to | stock scale: real render surface; individual controls: JSON layout overrides | the reported Android DPI |
 | Resource packs | can override | cannot touch it at all |
 
 ## Ore UI: the client density setting, and why everything "only affected two screens"
@@ -34,7 +34,7 @@ screenshot on each. The port now leaves the setting at its stock value, and
 `mcpe_apply_arm64_defaults` documents why. Raise `MCPE_UI_DENSITY_SCALE` only
 to make Ore UI screens *bigger*; it cannot enlarge anything else.
 
-## JSON UI: only the render surface moves it
+## JSON UI: only the render surface moved the stock layout in these tests
 
 Every other lever was measured against the start screen, whose green Play
 button is JSON UI. Its width as a fraction of the framebuffer is the effective
@@ -71,7 +71,10 @@ truthfully.
 
 Launcher menu, **Settings** -> **UI zoom**: `Off`, `1.25x` (576x384 here) or
 `1.5x` (480x320 here). The port renders below the panel and the display scaler
-enlarges the result, which is the only lever that moves JSON UI on 1.21.
+enlarges the result. This is the only measured launcher setting that enlarges
+the stock JSON UI on 1.21; it does not rule out changing the layout itself with
+a resource pack. See [the handheld UI proposal](HANDHELD-UI-PLAN.md) for the
+1.21.51.01 asset inspection and the native HUD renderer limitation.
 
 At 1.5x the HUD, inventory, chat and menus are half again as large and the GPU
 draws 55% fewer pixels, so it is also the cheapest way to raise the frame rate.
@@ -103,6 +106,53 @@ emits both `0x138` and `0x162`. Map new hardware by running with
 `MCPE_SCREENSHOTS=0` disables it.
 
 ## What a mod could still do
+
+The 2026-09-04 resource-pack experiment confirmed that individual menu buttons,
+labels and hotbar slots can be enlarged at native 720x480. The prototype is in
+`portmaster/minecraftbedrock/minecraftbedrock/packs/handheld-ui/`, with opt-in
+activation and an exact version/library guard in `handheld_ui.py`. Its text
+overrides also enlarge label bounds: increasing font scale alone clipped the
+main menu labels against their original 10-unit maximum height.
+
+In a separate simultaneous HUD probe, three `heart_renderer` instances with
+sizes `[1,1]`, `[1.5,1.5]` and `[16,16]` produced identically sized hearts. The
+probe was removed from the usable pack. This establishes that changing this
+renderer's nominal size is insufficient; it does not establish that every
+possible native rendering approach is impossible. Existing health feedback
+remains intact while the client-side scaling investigation below remains open.
+
+The remaining JSON escape route is closed too. Rebuilding the status icons as
+ordinary image controls would need the player's state as bindings, and this
+build exposes none: `heart_renderer`, `hunger_renderer`, `armor_renderer` and
+`bubbles_renderer` are all `"type": "custom"` carrying only visibility bindings
+(`#show_survival_ui`, `#is_armor_visible`), and no `#health`, `#hunger`,
+`#absorption`, `#armor_value` or air-supply binding name occurs anywhere in the
+version's `vanilla/ui` tree. So health, hunger, armour and bubbles keep their
+stock size at native resolution no matter what a resource pack does. Their
+position is stock as well: in this HUD mode `not_centered_gui_elements` anchors
+hearts and armour to `top_left [2,2]` and hunger and bubbles to
+`top_right [-2,2]`, which is why they sit in the corners rather than above the
+hotbar. UI zoom is the only shipping setting that enlarges them, and the
+viewport override below is the only way to do it without giving up sharpness.
+
+## Scale factors must be integers
+
+Two rules came out of the 2026-09-04 device iteration, and both show up as
+softness rather than as anything obviously broken:
+
+- **Text.** The UI font is a bitmap font. A `font_scale_factor` of 1.5 lands
+  glyph edges on half-pixels and reads as blurry and "not like Minecraft"; 2 and
+  3 stay crisp. The first prototype scaled the menus by 1.5 and this was the
+  visible result.
+- **Item icons.** Item art is 16x16, so an `item_icon` size that is not a
+  multiple of 16 resamples. 32 and 48 are sharp; 40 and 50 are not. This is what
+  makes hotbar sizing coarse: between a 2x and a 3x slot there is no sharp
+  intermediate step.
+
+Scaling a whole screen by one integer factor also preserves vanilla proportion,
+which is what makes an enlarged screen still look like Minecraft. Derive each
+number from this build's own stock value rather than from the previous
+override, or the roundings compound.
 
 The renderer draws the entire frame into the default framebuffer: an
 `LD_PRELOAD` shim over the host GL library counted 240000+ draw calls, every one

@@ -53,6 +53,7 @@ python3 tests/test_failsafe.py
 python3 tests/test_failsafes.py
 python3 tests/test_prepare_resources.py
 python3 tests/test_screenshot_watch.py
+python3 tests/test_handheld_ui.py
 python3 -m unittest discover -s tools/mcbedrock-get/tests -p 'test_*.py' -v
 python3 tests/test_docs.py
 python3 tests/test_portability_contracts.py

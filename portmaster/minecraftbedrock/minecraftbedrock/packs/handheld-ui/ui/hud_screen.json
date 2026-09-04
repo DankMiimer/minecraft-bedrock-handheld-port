@@ -1,0 +1,186 @@
+{
+  "namespace": "hud",
+  "root_panel": {
+    "$xp_control_offset|default": [0, -39]
+  },
+  "gui_hotbar_grid_item": {
+    "size": [
+      60,
+      66
+    ]
+  },
+  "gui_hotbar_grid_item/hotbar_parent": {
+    "size": [
+      54,
+      54
+    ]
+  },
+  "gui_hotbar_grid_item/hotbar_parent/item_icon": {
+    "size": [
+      48,
+      48
+    ]
+  },
+  "gui_hotbar_grid_item/hotbar_parent/item_count": {
+    "font_scale_factor": 3
+  },
+  "gui_hotbar_grid_item/hotbar_parent/item_dura": {
+    "$durability_bar_size": [
+      36,
+      3
+    ],
+    "$durability_bar_offset": [
+      0,
+      15
+    ]
+  },
+  "gui_hotbar_grid_item/hotbar_parent/item_store": {
+    "size": [
+      36,
+      3
+    ],
+    "offset": [
+      0,
+      15
+    ]
+  },
+  "gui_hotbar_grid_item/hotbar_parent/container_item_lock_overlay": {
+    "size": [
+      48,
+      48
+    ]
+  },
+  "hotbar_renderer": {
+    "$hotbar_renderer_size|default": [
+      60,
+      66
+    ]
+  },
+  "cooldown_renderer": {
+    "size": [
+      60,
+      66
+    ]
+  },
+  "hotbar_slot_selected_image": {
+    "size": [
+      72,
+      72
+    ]
+  },
+  "hotbar_panel": {
+    "size": [
+      "100%c",
+      66
+    ]
+  },
+  "hotbar_start_cap": {
+    "$cap_size|default": [
+      3,
+      66
+    ]
+  },
+  "hotbar_end_cap": {
+    "$cap_size|default": [
+      3,
+      66
+    ]
+  },
+  "hotbar_elipses_panel_right_content": {
+    "size": [
+      60,
+      66
+    ]
+  },
+  "hotbar_elipses_panel_left_content": {
+    "size": [
+      60,
+      66
+    ]
+  },
+  "exp_progress_bar_and_hotbar": {
+    "size": [
+      "100%c",
+      93
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar": {
+    "size": [
+      "100%c + 30px",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar/progress_bar_nub": {
+    "size": [
+      "100%c - 30px",
+      15
+    ],
+    "max_size": [
+      570,
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar/progress_bar_nub/horse_jump_rend": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar/progress_bar_nub/horse_jump_rend/dash_rend": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar/progress_bar_nub/horse_jump_rend/dash_rend/hotbar": {
+    "offset": [
+      12,
+      48
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_hotbar_no_xp_bar": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_hotbar_no_xp_bar/horse_jump_rend": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_hotbar_no_xp_bar/horse_jump_rend/dash_rend": {
+    "size": [
+      "100%c",
+      15
+    ]
+  },
+  "exp_progress_bar_and_hotbar/resizing_hotbar_no_xp_bar/horse_jump_rend/dash_rend/hotbar": {
+    "offset": [
+      12,
+      48
+    ]
+  },
+  "exp_progress_bar_and_hotbar/item_text_factory": {
+    "size": [
+      200,
+      20
+    ]
+  },
+  "progress_text_label": {
+    "font_scale_factor": 2
+  }
+}

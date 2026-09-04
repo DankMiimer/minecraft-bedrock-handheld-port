@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Handheld UI - 1.21.51 prototype",
+    "description": "Larger menu controls and hotbar for 720x480 handhelds. Experimental; Minecraft 1.21.51.01 only.",
+    "uuid": "0b69cb5c-22cd-45c7-9992-a94e90f0e4ad",
+    "version": [0, 1, 0],
+    "min_engine_version": [1, 21, 50]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "ea58ea5b-16bc-4c5a-8422-cec7cf91d733",
+      "version": [0, 1, 0]
+    }
+  ]
+}
