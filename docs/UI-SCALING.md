@@ -196,6 +196,40 @@ the old factor. It answers one question -- does the interface lay out coarser? -
 before any of the viewport and input work is written. If the UI does not change
 size, the surface-reporting route is dead and only the display scaler remains.
 
+#### Result, RG34XX-SP / Knulli, 2026-09-04: the route works
+
+Measured on `1.21.51.01-972105101-arm64` at `MCPE_UI_LAYOUT_SCALE=1.5`, panel
+720x480, density 1, launcher UI zoom Off.
+
+    [UIScale] eglQuerySurface EGL_WIDTH  -> 480 (real 720, scale 1.500)
+    [UIScale] eglQuerySurface EGL_HEIGHT -> 320 (real 480, scale 1.500)
+    [UIDiag]  getScreenWidth  -> 720
+
+The engine drew its whole frame, world and interface together, into a measured
+**480x321** region of the 720x480 panel: the surface size it was told about.
+`getScreenWidth` still answered 720 throughout, so the display-metrics route was
+not involved and the cause is isolated to the EGL/native-window query. That is
+the lever the `MCPE_REPORTED_DISPLAY_SCALE` attempt never pulled.
+
+**The native status renderers follow the surface**, which is the part that
+matters for health and hunger. The heart row measured identically in both modes
+-- 79x7 px starting at x=3 -- so it is drawn in surface units, not in panel
+pixels. Against a 720-wide surface that is 11.0% of the width; against a
+480-wide surface it is 16.5%. Stretching the viewport by the same 1.5 therefore
+lands the hearts at about 118 physical pixels, and a resource pack is not
+involved at any point. This is the only route found so far that enlarges them.
+
+Two consequences for the handheld-ui pack, which composes multiplicatively with
+this and must come down when a surface scale is in use:
+
+- Its 3x hotbar is 546 units wide, which does not fit a 480-wide surface, and
+  the ninth slot was visibly clipped. At a 1.5 surface scale the pack wants its
+  2x hotbar (364 units) instead, which lands at the same 546 physical pixels.
+- Sharpness improves rather than degrades: a 2x item icon is 32 units, and
+  32 x 1.5 = 48 physical pixels, an exact 3x of the 16x16 source. The viewport
+  scale multiplies geometry before rasterisation, so this is not an image
+  upscale and does not soften the way launcher UI zoom does.
+
 The client override is reachable on this hardware. The device reports
 `renderer=legacy_gles_no_renderdragon` on `OpenGL ES 3.2`, which is the ES2 path
 in `main.cpp`: `MinecraftUtils::setupGLES2Symbols(fake_egl::eglGetProcAddress)`

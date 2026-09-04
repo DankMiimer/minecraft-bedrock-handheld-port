@@ -132,6 +132,36 @@ The local `device_ui.py` helper now flattens to RGB. Still unverified for this
 pass: durability bars, armour/air/XP rows, container and trading screens, other
 languages and version switching.
 
+### UI viewport experiment, phase 1, 2026-09-04
+
+Deployed the CI-built patched client (`clients (aarch64, standard)`, all three
+client targets green) to RG34XX-SP/Knulli, keeping the previous binary on-device
+as `bin/mcpelauncher-client.before-uiscale-20260904`. The patch is inert unless
+`MCPE_UI_LAYOUT_SCALE` is set, and the launcher forwards that variable only when
+it is set, so a normal launch is unchanged.
+
+Launched `1.21.51.01-972105101-arm64` with `MCPE_UI_LAYOUT_SCALE=1.5` and
+`MCPE_MENU=0`, reaching `first-frame`. The client logged
+`eglQuerySurface EGL_WIDTH -> 480 (real 720)` and `EGL_HEIGHT -> 320 (real 480)`
+while `getScreenWidth` still answered 720.
+
+- The engine laid out and drew its entire frame at the reported size: the
+  rendered region measured **480x321** of the 720x480 panel, the rest untouched.
+  Rendering is deliberately not corrected in this phase, so this is the expected
+  artifact rather than a fault.
+- The heart row measured **79x7 px at x=3 in both modes**, so the native status
+  renderers draw in surface units. They are 11.0% of a 720-wide surface and
+  16.5% of a 480-wide one, which is what makes phase 2 able to enlarge health
+  and hunger at all -- no resource pack can.
+- The handheld-ui 3x hotbar (546 units) does not fit a 480-wide surface and its
+  ninth slot was clipped. Pack factors compose with the surface scale and must
+  be reduced when one is in use.
+
+Not covered: pointer input mapping, `glGetIntegerv(GL_VIEWPORT)` readback, Ore
+UI behaviour, and anything at a scale other than 1.5. The device was returned to
+a clean state afterwards, with ES-DE running and no port processes left.
+Local-only captures are under `build/diagnostics/handheld-ui-20260904/`.
+
 ### Unrestricted scheduler regression test, 2026-08-27
 
 The H700 anti-stutter profile was removed after its original purpose was traced
