@@ -149,6 +149,16 @@ softness rather than as anything obviously broken:
   makes hotbar sizing coarse: between a 2x and a 3x slot there is no sharp
   intermediate step.
 
+- **Not every number in a control is a layout dimension.** Some are insets tied
+  to the artwork, and scaling those is wrong however consistent it looks. The
+  XP bar sits inside `[4, 16]` and `"100%c +/- 10px"`: the `16` positions the
+  hotbar below the bar and must scale with it, while the `4` and the `10px` are
+  end-cap insets belonging to the bar texture and must not. Scaling all of them
+  by 3 pushed the hotbar 6 px right of the XP bar and pinched the bar 26 px
+  narrow. Keeping the insets at stock brought the width mismatch to 4 px, which
+  is the stock relationship itself -- vanilla's nub sits slightly inside the
+  hotbar frame. Ask what a number is measuring before multiplying it.
+
 Scaling a whole screen by one integer factor also preserves vanilla proportion,
 which is what makes an enlarged screen still look like Minecraft. Derive each
 number from this build's own stock value rather than from the previous

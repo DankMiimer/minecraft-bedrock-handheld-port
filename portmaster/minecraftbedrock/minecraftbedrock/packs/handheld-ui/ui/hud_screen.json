@@ -118,13 +118,13 @@
   },
   "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar": {
     "size": [
-      "100%c + 30px",
+      "100%c + 10px",
       15
     ]
   },
   "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar/progress_bar_nub": {
     "size": [
-      "100%c - 30px",
+      "100%c - 10px",
       15
     ],
     "max_size": [
@@ -146,7 +146,7 @@
   },
   "exp_progress_bar_and_hotbar/resizing_xp_bar_with_hotbar/empty_progress_bar/full_progress_bar/progress_bar_nub/horse_jump_rend/dash_rend/hotbar": {
     "offset": [
-      12,
+      4,
       48
     ]
   },
@@ -170,7 +170,7 @@
   },
   "exp_progress_bar_and_hotbar/resizing_hotbar_no_xp_bar/horse_jump_rend/dash_rend/hotbar": {
     "offset": [
-      12,
+      4,
       48
     ]
   },
