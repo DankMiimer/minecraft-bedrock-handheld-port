@@ -162,6 +162,40 @@ UI behaviour, and anything at a scale other than 1.5. The device was returned to
 a clean state afterwards, with ES-DE running and no port processes left.
 Local-only captures are under `build/diagnostics/handheld-ui-20260904/`.
 
+### Handheld UI on the Classic UI profile, 2026-09-04
+
+Found by the maintainer, not by this testing: switching **Settings -> Video ->
+UI Profile** from Pocket to Classic made health and hunger render behind the
+hotbar. Every earlier session tested only Pocket, and the pack was described as
+working without that qualification.
+
+The two profiles use different HUD layouts. Pocket draws health from
+`not_centered_gui_elements`, anchored into the screen corners. Classic uses
+`centered_gui_elements_at_bottom_middle`, a 180x50 panel anchored
+`bottom_middle` whose `heart_rend` sits at `[-1,-40]` -- directly above the
+hotbar, and independent of `$xp_control_offset`, so it does not move when the
+hotbar grows. Stock, the hotbar is 22 tall and ends around y 445, leaving the
+row at y 440 clear. At the pack's 3x the hotbar is 66 tall and spans roughly
+y 403-469, swallowing it.
+
+Fixed by scaling that panel and its offsets by the same factor as the hotbar:
+`[180,50]` to `[540,150]`, hearts and armour `[-1,-40]` to `[-3,-120]`, hunger
+`[180,-40]` to `[540,-120]`, bubbles and horse hearts likewise. The stock
+180-unit panel matches the stock 182-unit hotbar, so scaling both together keeps
+the vanilla relationship rather than inventing a new one.
+
+Verified on RG34XX-SP/Knulli with `gfx_ui_profile:0` and the pack active:
+
+- health row at y 360-366, hotbar top edge at y 387 -- **21 px clear**, no
+  overlap.
+- hearts start at x 88 against the hotbar's left edge at x 87; hunger ends at
+  x 625 against its right edge at x 633.
+
+Not covered: `centered_gui_elements_at_bottom_middle_touch` gets the same
+transformation but no touch device was available to test it, and the pack's
+Pocket inventory overrides do not apply on Classic, which uses the non-pocket
+inventory screens -- expected from the file names, not measured.
+
 ### UI viewport experiment, phase 2, 2026-09-04
 
 Rendering correction on top of phase 1, tested on RG34XX-SP/Knulli with

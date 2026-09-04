@@ -182,5 +182,55 @@
   },
   "progress_text_label": {
     "font_scale_factor": 2
+  },
+
+  "centered_gui_elements_at_bottom_middle": {
+    "size": [540, 150]
+  },
+  "centered_gui_elements_at_bottom_middle/heart_rend": {
+    "offset": [-3, -120]
+  },
+  "centered_gui_elements_at_bottom_middle/armor_rend": {
+    "offset": [-3, -120]
+  },
+  "centered_gui_elements_at_bottom_middle/hunger_rend": {
+    "offset": [540, -120]
+  },
+  "centered_gui_elements_at_bottom_middle/bubbles_rend_0": {
+    "offset": [540, -150]
+  },
+  "centered_gui_elements_at_bottom_middle/bubbles_rend_1": {
+    "offset": [540, -150]
+  },
+  "centered_gui_elements_at_bottom_middle/horse_heart_rend_0": {
+    "offset": [540, -168]
+  },
+  "centered_gui_elements_at_bottom_middle/horse_heart_rend_1": {
+    "offset": [540, -150]
+  },
+
+  "centered_gui_elements_at_bottom_middle_touch": {
+    "size": [600, 150]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/heart_rend": {
+    "offset": [-3, -120]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/armor_rend": {
+    "offset": [-3, -120]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/hunger_rend": {
+    "offset": [600, -120]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/bubbles_rend_0": {
+    "offset": [600, -150]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/bubbles_rend_1": {
+    "offset": [600, -150]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/horse_heart_rend_0": {
+    "offset": [600, -168]
+  },
+  "centered_gui_elements_at_bottom_middle_touch/horse_heart_rend_1": {
+    "offset": [600, -150]
   }
 }

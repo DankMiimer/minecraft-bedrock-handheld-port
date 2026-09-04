@@ -21,6 +21,14 @@ fractional factors resample and look soft; see `docs/UI-SCALING.md`.
   durability bar and 3x count labels. The XP/hotbar layout moves upward to
   retain bottom clearance. 3x rather than 2x because item art is 16x16: 32 and
   48 are sharp and nothing between them is.
+- Classic UI profile: the health row is moved and widened to match. Classic puts
+  health, armour, hunger and bubbles in
+  `centered_gui_elements_at_bottom_middle`, directly above the hotbar, where
+  Pocket puts them in the screen corners. An enlarged hotbar grows into that row
+  and hides it, so the panel and its offsets are scaled by the same factor as
+  the hotbar: hearts keep the hotbar's left edge and hunger its right, which is
+  what the stock 180-unit panel does against the stock 182-unit hotbar. Both the
+  gamepad and touch variants are overridden; only the gamepad one is tested.
 - Inventory: doubled Pocket cell, tab and panel geometry with 2x labels, plus a
   brighter selection outline. Percentages are kept so the layout still reflows
   at 720x480. Slot counts, collection bindings and actions are unchanged.
