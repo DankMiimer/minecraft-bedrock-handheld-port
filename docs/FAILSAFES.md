@@ -15,8 +15,8 @@ Per (port build, CFW, Bedrock version, ABI preference):
 
 | Rung | Name | What it changes |
 |---|---|---|
-| 0 | tuned | Nothing. The measured profile. |
-| 1 | conservative | No CPU/GPU governor changes, no thread pinning, no faked CPU count, no options.txt rewriting, no asset prewarm, VSync on, 30 fps, offline mode. |
+| 0 | tuned | Nothing. The measured profile; CPU scheduling is left to Bedrock and the kernel. |
+| 1 | conservative | No CPU/GPU governor changes, clears opt-in legacy thread pins/faked CPU count, no options.txt rewriting, no asset prewarm, VSync on, 30 fps, offline mode. |
 | 2 | minimal | Rung 1, plus X11 video, no Crusty context hand-off, audio off, 20 fps. |
 | 3 | diagnostic | Minecraft is not started. A support bundle is collected instead. |
 
@@ -46,7 +46,7 @@ Every rung above 0 is announced on screen and written to
 | ID | Failsafe | Why it exists | Delete when |
 |---|---|---|---|
 | FS-1 | `MCPE_FAKE_NO_NETWORK=1` at rung 1+ | Reddit report (muOS, RG35XX-H, 10 Jul): the game reliably exits before the character menu with Wi-Fi on, and reliably reaches it offline. The in-client guard `patchOldHttpResolveCrash` only fires on arm64 1.16.221.01, so every other build is unprotected. | Three independent reports of a Wi-Fi-up launch succeeding on the affected ABI/version, **or** the resolver guard is generalised beyond the single hardcoded arm64 offset. Until then this is also the fallback that F1 (Phase 2) turns on by default for unguarded legacy builds. |
-| FS-2 | No thread pinning at rung 1+ (`MCPE_PIN_RENDER_CORE`, `MCPE_PIN_MAIN_CORE`, `MCPE_PIN_OTHER_CORES`, `MCPE_FAKE_NPROC` unset) | The pinning is an H700 measurement (render on core 3, sim on core 2, workers 0-1, 2 visible CPUs). It is applied by `lib/platform.sh` on profile match, not by capability, so on an untested four-core device it is an unvalidated guess. | The affinity profile is chosen from a measured capability rather than a device-model match, or every shipped profile has a physical acceptance pass. |
+| FS-2 | Opt-in legacy thread tuning is cleared at rung 1+ (`MCPE_PIN_RENDER_CORE`, `MCPE_PIN_MAIN_CORE`, `MCPE_PIN_OTHER_CORES`, `MCPE_FAKE_NPROC` unset) | The automatic H700 profile was removed on 2026-08-27: its two-CPU worker pool and cores 0-1 confinement delayed chunk generation and chunk-mesh rebuilds on non-RenderDragon builds. The client still accepts these variables for explicit comparison runs, so a conservative launch must clear them. | Rebuild the clients without the legacy affinity/fake-CPU hooks, or teach the ladder to record and restore a user's explicit overrides after the diagnostic launch. |
 | FS-3 | No CPU/GPU governor change at rung 1+ (`MCPE_PERFORMANCE_MODE=0`, `MCPE_PERFORMANCE_OPTIONS=0`) | `enable_performance_mode` writes `performance` to every cpufreq policy and GPU devfreq node. On an unknown thermal design that is a plausible cause of a start that never completes. | A thermal/stability pass on each CFW in the matrix. |
 | FS-4 | `SDL_DRIVER_OVERRIDE=x11` at rung 2 | `lib/platform.sh` picks `mali`/`wayland`/`x11` from capability probing. When that guess is wrong there is currently no recovery, and `x11` is the path `run_bedrock.sh` documents as the general fallback. | The capability probe is confirmed correct across the four-CFW matrix, or the launch path gains a real in-process renderer retry. |
 | FS-5 | `GAMEWINDOW_EGLUT_CRUSTY_CONTEXT=0` at rung 2 | The explicit EGL context hand-off is required on libmali/no-DRM devices and inert elsewhere; switching it off is the documented alternative when the shim misbehaves. | Crusty context hand-off is validated on every device family in the matrix. |
@@ -59,9 +59,9 @@ Every rung above 0 is announced on screen and written to
 
 ## Status
 
-Reviewed 2026-08-25 against v2.0.0-rc.11 with the rc.12 muOS fixes deployed, on
-three reference devices (RG34XX-SP/Knulli, RG DS/ROCKNIX, RG34XX-SP/muOS).
-**Nothing has been removed yet.**
+Reviewed 2026-08-27 against the post-v2.0.1 tree. The automatic H700 affinity
+profile has been removed; the optional client hooks and the rung-1 safeguard
+remain until a client rebuild removes them or the ladder can restore overrides.
 
 A muOS reference device arrived on 2026-08-24 and closed the *capability* half
 of the dependency this register was waiting on: identity, graphics backend,
@@ -94,8 +94,8 @@ screen. Both are fixed, and the second is why FS-11 exists.
 | ID | Status | What is still missing |
 |---|---|---|
 | FS-1 | Not evidenced | Both reference devices run a build the in-client guard covers, so they launch with `offline=0` and never exercise this fallback. It needs a report from an affected build — armhf 1.16.x, or muOS on a version the guard misses. |
-| FS-2 | Partly evidenced | The `h700` and `rgds` affinity profiles ran at rung 0 with pinning active, drawing 2572 and 3101 frames and exiting cleanly. The `rk3326` and `generic` profiles have no device. Full removal also needs affinity chosen by measured capability rather than device-model match. |
-| FS-3 | Partly evidenced | Performance mode was active at rung 0 across a 21-minute ROCKNIX session, repeated Knulli launches, and now an 8-minute muOS session (`CPU=performance GPU-min=648000000`, render thread pinned to core 3, exit 0). Three firmwares, all clean — stability evidence, still not a thermal pass. None for dArkOS. |
+| FS-2 | Default removed; safeguard retained | H700 launches no longer set any affinity or fake-CPU variables. The old opt-in hooks remain in the shipped clients for A/B testing, and rung 1 clears them so a manually tuned launch can still recover. |
+| FS-3 | Partly evidenced | Performance mode was active at rung 0 across a 21-minute ROCKNIX session, repeated Knulli launches, and an 8-minute muOS session (`CPU=performance GPU-min=648000000`, exit 0). Three firmwares, all clean — stability evidence, still not a thermal pass. None for dArkOS. |
 | FS-4 | Partly evidenced | The capability probe picked `mali` on Knulli, `wayland` on ROCKNIX and `mali` on muOS, all three confirmed correct on hardware — muOS exposes no `/dev/dri` at all, which the previous invented fixture had wrong. Three of four firmwares, but none of the three has exercised the rung 2 override itself. |
 | FS-5 | Partly evidenced | The Crusty context hand-off worked at rung 0 on both reference devices, on the libmali and the Sway path. Untested on the ArkOS/KMSDRM family. |
 | FS-6 | Half discharged | `lib/audio.sh` runs on both launch paths and refuses PipeWire with no client config, which is the dArkOS cause from issue #1. Knulli and ROCKNIX resolve the Pulse path correctly. muOS resolves the shape it was predicted to have — PipeWire with **no** Pulse socket at `/run/pipewire-0`, `/usr/share/pipewire/client.conf` present, so OpenAL is offered PipeWire — and on 2026-08-25 that path was **heard**: `audio=backend=pipewire alsa=1 pulse=0 pipewire=1`, sound working in a real session. What is still missing is the firmware the rung was written for: a physical dArkOS. |
@@ -110,9 +110,10 @@ screen. Both are fixed, and the second is why FS-11 exists.
 One volunteer on **dArkOS** running **Self test**. That is now the only
 outstanding ask: muOS answered its half on 2026-08-25 by playing, which is what
 none of these rows could be closed by a device that never started the game.
-FS-1, FS-2, FS-5 and FS-9 still need sessions on firmwares or builds nobody
-here owns — an armhf 1.16.x for the resolver guard, the `rk3326` and `generic`
-affinity profiles, the ArkOS/KMSDRM display path, and an armhf acceptance pass.
+FS-1, FS-5 and FS-9 still need sessions on firmwares or builds nobody here
+owns — an armhf 1.16.x for the resolver guard, the ArkOS/KMSDRM display path,
+and an armhf acceptance pass. FS-2 now waits only on removing the dormant
+client hooks or making explicit overrides restorable.
 
 ## Startup supervision (Phase 2, F2)
 

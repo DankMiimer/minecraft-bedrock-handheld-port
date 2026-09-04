@@ -42,6 +42,41 @@ def test_menu_failure_does_not_silently_autoplay():
         assert '[ "${MCPE_MANAGE_FRONTEND:-0}" = 1 ] || return' in text
 
 
+def test_knulli_and_rocknix_close_es_during_bedrock():
+    launcher = (ROOT / "portmaster/minecraftbedrock/Minecraft Bedrock.sh").read_text(
+        encoding="utf-8"
+    )
+    stop = launcher.split("menu_stop_frontend() {", 1)[1].split(
+        "menu_restore_frontend() {", 1
+    )[0]
+    restore = launcher.split("menu_restore_frontend() {", 1)[1].split(
+        "trap 'menu_restore_frontend", 1
+    )[0]
+    assert "mcpe_is_cfw knulli" in stop
+    assert "mcpe_is_cfw rocknix" in stop
+    assert "killall -q emulationstation" in stop
+    assert "killall -9 emulationstation" in stop
+    assert "/usr/bin/emulationstation-standalone --stop-rebooting" in stop
+    assert 'stopped_cfw" = knulli' in restore and '"$ES_INIT" start' in restore
+    assert "MCPE_ROCKNIX_SCOPE" in stop
+    assert "systemctl stop essway.service" in stop
+    assert 'stopped_cfw" = rocknix' in restore
+    assert "systemctl start essway.service" in restore
+    rgds_entry = (ROOT / "bottomscreen/release/Minecraft Bedrock RGDS.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "systemd-run --quiet --scope --collect --unit=" in rgds_entry
+    # systemd 255 rejects --wait together with --scope. Scope mode already
+    # keeps systemd-run in the foreground until its command exits.
+    assert "--scope --collect --wait" not in rgds_entry
+    assert "MCPE_ROCKNIX_SCOPE=1" in rgds_entry
+    assert "swaymsg exit" not in stop
+    # Menu-less launches must get the same handoff before the game starts.
+    launch = launcher.index('bash "$GAMEDIR/run_bedrock.sh"')
+    assert launcher.rfind("menu_stop_frontend", 0, launch) > launcher.index(
+        "MCPE_LAUNCH_STARTED_MS=")
+
+
 def test_installer_and_runtime_portability_contracts():
     installer = (ROOT / "portmaster/minecraftbedrock/minecraftbedrock/apkmeta.py").read_text(
         encoding="utf-8"
@@ -296,6 +331,22 @@ def test_both_launch_paths_share_one_audio_triage():
     # The old inline copy must be gone, not merely bypassed.
     assert "find_pulse_socket() {" not in (PAYLOAD / "run_bedrock.sh").read_text(
         encoding="utf-8")
+
+
+def test_fps_summary_uses_posix_awk():
+    """ROCKNIX BusyBox awk does not implement gawk's asort()."""
+    runner = (PAYLOAD / "run_bedrock.sh").read_text(encoding="utf-8")
+    assert "asort(" not in runner
+    assert "sort -n" in runner
+
+
+def test_renderdragon_era_memory_tuning_is_not_the_arm64_default():
+    """Legacy Bedrock gets normal page cache and adaptive glibc allocation."""
+    launcher = (PAYLOAD / "weston_launch.sh").read_text(encoding="utf-8")
+    assert 'MCPE_PREWARM_GAMEPLAY_ASSETS:-0' in launcher
+    assert "MALLOC_TRIM_THRESHOLD_" not in launcher
+    assert "MALLOC_MMAP_THRESHOLD_" not in launcher
+    assert "MALLOC_CHECK_" not in launcher
 
 
 def test_both_launch_paths_are_supervised_during_startup():

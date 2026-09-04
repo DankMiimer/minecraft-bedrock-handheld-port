@@ -192,15 +192,11 @@ export GAMEWINDOW_EGLUT_FORCE_FOCUS="${GAMEWINDOW_EGLUT_FORCE_FOCUS:-1}"
 
 export MCPE_DISABLE_AUTO_COMPACTION="${MCPE_DISABLE_AUTO_COMPACTION:-0}"
 
-# Thread layout measured on a 4x Cortex-A53 (H700): render thread on core 3,
-# simulation ("MINECRAFT MAIN") on core 2, chunk workers on 0-1, and the game
-# sees 2 CPUs so its worker pools fit. Cut stutters ~4x. Only applied on
-# 4-core devices; elsewhere the engine keeps its defaults.
-# busybox systems (ROCKNIX) have no nproc.
+# Record the real core count for diagnostics only. Bedrock and the kernel keep
+# control of worker-pool sizing and scheduling; restricting chunk/mesh work to
+# two H700 cores made block-face rebuilds and new chunks arrive late.
+# BusyBox systems (ROCKNIX) have no nproc.
 NCORES="$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 0)"
-# Affinity is set by the validated H700 profile in lib/platform.sh. Core count
-# alone is not a device identifier (RK356x is also commonly four-core).
-export MCPE_AFFINITY_LOG="${MCPE_AFFINITY_LOG:-0}"
 
 chmod +x "$BIN_OVERRIDE" 2>/dev/null
 
@@ -362,19 +358,23 @@ fi
 
 if [ -n "$FPS_TRACE" ] && [ -s "$FPS_TRACE" ]; then
   echo "=== FPS SUMMARY ($FPS_TRACE) ==="
-  awk -F, 'NR>1 && $3+0>2000000 {  # skip first ~2s of load
-             d=$3-p; if(p>0 && d>0){n++; s+=d; a[n]=d} p=$3
-           }
-           END{
-             if(n<10){print "  not enough frames"; exit}
-             asort(a);
-             med=a[int(n/2)];
-             fps=1000000/med;
-             # percent of frames at >=58fps (<=17240us) and >=30fps
-             for(i=1;i<=n;i++){ if(a[i]<=17240)c60++; if(a[i]<=33333)c30++ }
-             printf "  frames=%d  median=%.1fms (%.1f fps)  mean=%.1ffps\n", n, med/1000, fps, 1000000/(s/n);
-             printf "  %%>=58fps=%.0f%%  %%>=30fps=%.0f%%  p99frame=%.1fms\n", 100*c60/n, 100*c30/n, a[int(n*0.99)]/1000
-           }' "$FPS_TRACE"
+  # ROCKNIX ships BusyBox awk, without gawk's array-sorting extension. Emit frame
+  # intervals first and let the platform's numeric sort order them before the
+  # portable summary pass.
+  awk -F, 'NR>1 && $3+0>2000000 {
+             d=$3-p; if(p>0 && d>0) print d; p=$3
+           }' "$FPS_TRACE" |
+    sort -n |
+    awk '{
+           n++; a[n]=$1; s+=$1;
+           if($1<=17240)c60++; if($1<=33333)c30++
+         }
+         END{
+           if(n<10){print "  not enough frames"; exit}
+           med=a[int(n/2)]; fps=1000000/med;
+           printf "  frames=%d  median=%.1fms (%.1f fps)  mean=%.1ffps\n", n, med/1000, fps, 1000000/(s/n);
+           printf "  %%>=58fps=%.0f%%  %%>=30fps=%.0f%%  p99frame=%.1fms\n", 100*c60/n, 100*c30/n, a[int(n*0.99)]/1000
+         }'
 fi
 
 exit "$GAME_STATUS"

@@ -49,11 +49,15 @@ recursively inventories every visible directory under `roms/ports`, and an
 extracted Bedrock version is tens of thousands of files. Dot-directories are
 skipped, so the hidden root is what keeps the Ports menu usable.
 
-**Frontend — measured.** `emulationstation` is running, `/etc/init.d/S31emulationstation`
-exists, `emulatorlauncher` is on `PATH`, and sway is not running. PortMaster's
-`emulatorlauncher` owns the ES lifecycle for the duration of a port, so the
-port must **not** stop ES itself: Scarab's stop action can block for 20 seconds
-and leave the wrapper alive, producing two input owners.
+**Frontend — measured.** `emulationstation` is running,
+`/etc/init.d/S31emulationstation` exists, `emulatorlauncher` is on `PATH`, and
+sway is not running. A live 2026-08-27 Ports launch disproved the earlier
+wrapper assumption: ES-DE and its standalone supervisor remained resident
+beside Bedrock. The launcher first disables the supervisor's reboot loop, then
+stops only `emulationstation` (never the port's process group), and restores ES
+through the init script after the nested compositor exits. This removed about
+119 MiB of resident frontend memory during play and passed the first normal
+launch; repeated exit/relaunch acceptance remains pending.
 
 **Graphics — measured.** No `/dev/dri` at all. `/dev/disp` and `/dev/mali0` are
 present, `/dev/fb0` reports `virtual_size` `720,960` for a physically 720x480
@@ -92,6 +96,17 @@ would reach `rocknix` too. All three routes agree.
 **Compositor — measured.** sway is running and EmulationStation runs under it.
 There is no `/etc/init.d/S31emulationstation`. sway owns DRM master, so the
 KMSDRM path must never be selected here; the game nests as a Wayland client.
+
+**Frontend — measured.** ES-DE is a child of `/usr/bin/start_es.sh`, the main
+process of `essway.service`; the port launched by ES is another descendant of
+that same service. A direct `killall emulationstation` on 2026-08-27 made the
+service exit with status 143, killed the port with its cgroup, and restarted
+ES. The RGDS entry must first run the real launcher in a transient
+`systemd-run --scope`, preserving the Sway/session environment. Only that
+scoped launcher may stop `essway.service`; it starts the service again after
+Bedrock exits. Sway is a separate service and remains running throughout. A
+harmless nested-scope probe verified the cgroup move; full game acceptance is
+pending.
 
 **Session adoption — measured.** A launch over SSH has no session environment:
 `XDG_RUNTIME_DIR` is `/var/run/0-runtime-dir` inside the sway process and the
@@ -297,9 +312,10 @@ the optional downloader, installed it and played. `logs/boot-report.txt`:
 compositor=none`, `audio=backend=pipewire alsa=1 pulse=0 pipewire=1`,
 `exit_status=0 after 488s (success)`, and the next launch still at rung 0. The
 client reported `Mali-G31`, `OpenGL ES 3.2`, its render thread pinned to core 3
-with the rest confined to cores 0-1. Controls and sound both worked, reported
-by the player at the device. This firmware is therefore measured for behaviour,
-not only for capability.
+with the rest confined to cores 0-1. That affinity detail records the historical
+session; it stopped being the default on 2026-08-27. Controls and sound both
+worked, reported by the player at the device. This firmware is therefore
+measured for behaviour, not only for capability.
 
 **Controller — measured.** The gamepad is `/dev/input/event1`, named
 **`muOS-Keys`** — a `gpio-keys-polled` node, not the `Anbernic RG34XX-SP

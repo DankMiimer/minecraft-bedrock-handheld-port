@@ -25,6 +25,87 @@ The muOS card failed on 2026-08-25 and is out of the device, so its rows below
 record what was measured while it was reachable and cannot be re-run before
 release.
 
+### RG34XX-SP missing runtime recovery, 2026-09-04
+
+The Ports entry failed before its normal logs were opened. A traced launch
+found all eight top-level payload shell scripts missing from
+`/userdata/roms/ports/minecraftbedrock/`. Payload discovery consequently chose
+an older `2.0.0-rc.8` installation at `/userdata/ports/minecraftbedrock`, which
+then failed with `Missing message helpers.` The cause of the missing files
+was not established.
+
+Restored only those missing scripts from the workspace, with LF endings and
+executable permissions. Existing code, versions and worlds were retained.
+The unchanged top-level entry then displayed its LOVE launcher menu and started
+`1.21.51.01-972105101-arm64` at 720x480 on Mali-G31. The startup watchdog
+reported its first frame after 23 seconds; a framebuffer capture confirmed
+the Minecraft main menu. This was an SSH invocation of the Ports entry, not
+an automated controller selection through EmulationStation or an in-world test.
+
+Backed up `gamelist.xml` and marked 11 internal/missing legacy Bedrock entries
+hidden while EmulationStation was stopped. The main `Minecraft Bedrock.sh`
+entry remains visible. Diagnostic logs and screenshots are local-only under
+`build/diagnostics/launch-20260904/`; the pre-repair logs are also saved in the
+device's `minecraftbedrock/backups/launch-20260904/` directory.
+
+### Unrestricted scheduler regression test, 2026-08-27
+
+The H700 anti-stutter profile was removed after its original purpose was traced
+to RenderDragon. The code-only `lib/platform.sh` change was deployed to both
+reference devices, preserving the installed game data and versions. The old
+files remain recoverable on-device as
+`lib/platform.sh.before-unrestricted-cpu-20260827` and
+`run_bedrock.sh.before-unrestricted-cpu-20260827` in each edition's directory.
+
+Both no-RenderDragon editions then completed bounded real-client launches:
+1.21.51.01 on RG34XX-SP/Knulli and 1.16.221.01 on RG DS/ROCKNIX. ES-DE was
+fully stopped before Bedrock on both systems; ROCKNIX's Sway compositor stayed
+active because the game needs it. During the launches:
+
+- The live client environments contained none of `MCPE_PIN_RENDER_CORE`,
+  `MCPE_PIN_MAIN_CORE`, `MCPE_PIN_OTHER_CORES`, or `MCPE_FAKE_NPROC`.
+- All 32 Knulli client threads and all 69 ROCKNIX client threads reported
+  `Cpus_allowed_list: 0-3`.
+- Both launch-stage breadcrumbs reached `first-frame`. The final traces held
+  1,377 measured frame intervals on Knulli and 2,548 on ROCKNIX.
+- The forced timeouts were classified as late failures and left the failsafe at
+  rung 0. No client, nested Weston, or RGDS companion process remained, and
+  ES-DE was restored on both devices (with Sway still running on ROCKNIX).
+
+This proves the scheduler change reaches the real game and that launch/cleanup
+remain sound.
+
+The maintainer then launched 1.16.221.01 normally on both devices and joined
+the same LAN world. The transparent hole after a block break was gone, and
+chunk streaming appeared better, but an opaque black rectangle briefly covered
+the break. An old June hypothesis blamed the vanilla
+`minecraft:block_destruct` terrain-atlas billboard. Its first controlled test
+on Knulli disproved that diagnosis: setting the emitter count to zero removed
+the intended block debris animation while the black rectangle remained. The
+workaround has therefore been removed and the original JSON restored. The
+remaining investigation is the damage-overlay/chunk-replacement render path.
+
+The same audit found two RenderDragon-era defaults still active on arm64:
+whole-asset prewarming and fixed glibc trim/mmap thresholds. Neither had
+evidence on 1.16. The prewarm is now opt-in, and the allocator is back on
+glibc's adaptive defaults. Async texture loading, its stock dequeue value, and
+the multithreaded renderer remain enabled; the latter is required for static
+chunk draws on EGLUT/Crusty/libmali.
+
+The live process trees also disproved the launcher's frontend assumption.
+Knulli had both `emulationstation-standalone`/`emulationstation` and Bedrock in
+the same inherited session for more than four hours; ROCKNIX likewise retained
+ES-DE beside Bedrock while Sway hosted the game. Knulli's direct stop passed.
+The first analogous ROCKNIX attempt failed: ES is the main child of
+`essway.service`, so killing it made systemd terminate the port in the same
+cgroup and restart ES. The RGDS entry now moves the real launcher into a
+transient systemd scope before it stops `essway.service`; Sway remains in its
+own service. A harmless on-device nested-scope test confirmed the child moves
+from its parent service cgroup into `/system.slice/<name>.scope`. The first
+deployed wrapper still exited before the launcher because ROCKNIX systemd 255
+rejects `--wait` with `--scope`; scope mode is already foreground, so the
+incompatible flag was removed. Full launch acceptance is pending.
+
 ### Reference capture, 2026-08-23
 
 Read-only capture from both devices; nothing was installed or modified.

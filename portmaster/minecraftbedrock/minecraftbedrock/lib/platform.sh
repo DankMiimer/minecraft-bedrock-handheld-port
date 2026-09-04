@@ -238,10 +238,12 @@ mcpe_apply_platform_profile() {
     export MCPE_DISPLAY_WIDTH="$MCPE_ACTIVE_WIDTH"
     export MCPE_DISPLAY_HEIGHT="$MCPE_ACTIVE_HEIGHT"
   fi
-  if [ "$MCPE_HOST_PROFILE" = h700 ]; then
-    export MCPE_PIN_RENDER_CORE="${MCPE_PIN_RENDER_CORE:-3}"
-    export MCPE_PIN_MAIN_CORE="${MCPE_PIN_MAIN_CORE:-2}"
-    export MCPE_PIN_OTHER_CORES="${MCPE_PIN_OTHER_CORES:-0-1}"
-    export MCPE_FAKE_NPROC="${MCPE_FAKE_NPROC:-2}"
-  fi
+  # Let Bedrock and the kernel schedule across every CPU. The old H700 profile
+  # reported only two CPUs to the game, then confined its chunk/mesh workers to
+  # cores 0-1 while reserving one core each for simulation and rendering. That
+  # was an early workaround for RenderDragon stutter, but on the recommended
+  # non-RenderDragon builds it delays both newly exposed block faces and new
+  # chunks. The client still accepts the MCPE_PIN_* and MCPE_FAKE_NPROC
+  # variables as explicit developer overrides for comparison runs; the port no
+  # longer supplies them automatically.
 }

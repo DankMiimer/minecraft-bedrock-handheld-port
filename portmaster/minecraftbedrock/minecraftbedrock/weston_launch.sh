@@ -220,9 +220,12 @@ restore_performance_mode() {
   PERFORMANCE_ACTIVE=0
 }
 
-# --- Asset prewarm (page cache; removes first-use microSD stutter) -------------
+# --- Optional asset prewarm ----------------------------------------------------
+# This was enabled by default while investigating RenderDragon first-use
+# hitches. Legacy 1.16 does not need it, and reading the entire asset set into
+# page cache before every launch can displace memory useful to world streaming.
 prewarm_gameplay_assets() {
-  [ "${MCPE_PREWARM_GAMEPLAY_ASSETS:-1}" = 1 ] || return
+  [ "${MCPE_PREWARM_GAMEPLAY_ASSETS:-0}" = 1 ] || return
   local assets="$GAMEDIR/versions/$MCVER/assets"
   [ -d "$assets" ] || return
   echo "Prewarming gameplay sounds, particles, and chunk materials..."
@@ -497,8 +500,7 @@ CLIENT_PIDS_BEFORE="$(pidof mcpelauncher-client 2>/dev/null || true)"
     "${SDL3_AUDIO_ENV[@]}" \
     XDG_DATA_HOME="$DATA_ROOT" \
     MCPELAUNCHER_DATA_DIR="$DATA_DIR" \
-    MALLOC_TRIM_THRESHOLD_=-1 MALLOC_MMAP_THRESHOLD_=268435456 \
-    OPENSSL_armcap=0 MALLOC_CHECK_=0 \
+    OPENSSL_armcap=0 \
     "$BIN" -dg "$GAMEDIR/versions/$MCVER" $WINDOW_SIZE_ARGS $APP_EXTRA_ARGS 2>&1 | tee -a "$LOG"
 ) &
 LAUNCH_PIPE_PID=$!
