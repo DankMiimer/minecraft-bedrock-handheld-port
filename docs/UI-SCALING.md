@@ -343,13 +343,32 @@ overlapping rather than at one consistent smaller one. Whether that is a real
 render fault or an artifact of capturing a partially repainted framebuffer was
 not established. Either way the DPI is not a sufficient lever on its own.
 
-So the cohtml route stands, and the symbol it needs is present: a `grep` of this
-build's `libminecraftpe.so` finds
-`_ZN6cohtml10SystemImpl10CreateViewERKNS_12ViewSettingsE`
-(`cohtml::SystemImpl::CreateView(cohtml::ViewSettings const&)`) alongside
-`CreateViewImpl` and `SystemRendererImpl::CreateViewRenderer`. Hooking it means
-knowing where the dimensions sit inside `ViewSettings`, which is an ABI this
-repository has no header for and must not guess at.
+So the cohtml route stands, and it is easier than `CreateView` first suggested.
+`CreateView` takes `const ViewSettings&`, and where the dimensions sit inside
+that struct is an ABI this repository has no header for and must not guess at.
+It does not have to be hooked, because this build also exports
+
+    _ZN6cohtml8ViewImpl6ResizeEjj      cohtml::ViewImpl::Resize(unsigned, unsigned)
+    _ZTVN6cohtml8ViewImplE             vtable for cohtml::ViewImpl
+    _ZTVN6cohtml4ViewE                 vtable for cohtml::View
+
+Two plain unsigned ints and a vtable to put the replacement in. That is the
+shape `PatchUtils::VtableReplaceHelper` already exists for, and the same
+mechanism `CorePatches` uses for the `AppPlatform` hooks this port logs on every
+launch -- no pattern search, no struct layout, no offset arithmetic.
+
+The correction that makes it work is counter-intuitive and worth stating
+explicitly. cohtml renders a view into a texture that is then drawn as a quad in
+surface space. Under a surface scale the quad is surface-sized and the viewport
+stretches it, so the fix is to make the *view* bigger, not smaller: resize it to
+the real panel, leave the quad alone, and the stretch lands it back at one texel
+per pixel. Ore UI would then be native-sized and sharper than it is today,
+because it would be laid out at full panel resolution.
+
+What is still unverified is whether the game calls `Resize` at all on this path,
+or only sizes the view once through `CreateView`. A hook that logs its arguments
+without changing them answers that in one build, and that is the next step --
+the same order phase 1 used, measure the hook point before relying on it.
 
 **Until that is solved, a surface scale is not shippable**, however good it
 looks on the HUD and menus: it trades an unusable world-creation screen for a
