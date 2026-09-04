@@ -278,6 +278,48 @@ where coordinates enter the game's input queue. Nothing on the reference
 handheld depends on it -- it has no touchscreen and navigates menus by
 gamepad focus -- but a touch device does, and that remains phase 3.
 
+#### One thread_local aborted the game before it drew a frame
+
+Worth recording, because the failure looked nothing like its cause. The first
+phase 2 build died at about seven seconds with `stack corruption has been
+detected` and SIGABRT out of `shim::assert_impl`, **with `MCPE_UI_LAYOUT_SCALE`
+unset as well as set**. With the variable unset no override is installed and
+none of the new code runs, so the crash came from the code being present rather
+than from it executing.
+
+The cause was a single `thread_local bool` added to `fake_egl.cpp`. Removing it
+fixed the crash completely. The Android libraries arrive through
+`mcpelauncher-linker` with `libc-shim` emulating bionic's fixed TLS slots, and
+that arrangement does not tolerate this executable's TLS segment growing.
+`fake_egl.cpp` already carries three upstream `thread_local`s, so the fourth
+being fatal is not intuitive -- do not assume there is headroom. A plain global
+was the right thing anyway: the game issues its GL on one thread and a context
+is current on one thread at a time.
+
+#### Result, RG34XX-SP / Knulli, 2026-09-04: rendering follows
+
+Same build, panel 720x480, `MCPE_UI_LAYOUT_SCALE=1.5`.
+
+| | phase 1 | phase 2 |
+|---|---|---|
+| rendered region | 480x321 in a corner | **720x480, the whole panel** |
+| start-screen Play button | 146 px | **218 px** |
+| heart row | 79 x 7 px | **119 x 10 px** |
+
+The Play button is the measurement the table further up this document is built
+on: it is 146 physical pixels at every surface size and every client setting
+tested there, and none of those levers moved it. This one does, by 1.49x.
+
+The heart row moving with it, 79 px to 119 px, is the result that matters most.
+Health, hunger, armour and bubbles cannot be reached from a resource pack on
+this build at all, and this is the only route measured that enlarges them.
+
+With the handheld-ui pack at 2x on top of a 1.5 surface scale, the hotbar
+measured 537 px against 546 predicted -- the same physical size the 3x pack has
+at native resolution, but with hearts, hunger and menus 1.5x larger alongside
+it. Pack factors and the surface scale multiply, so a pack tuned for a native
+surface wants reducing when a scale is in use.
+
 This would enlarge JSON UI and shrink nothing, so Ore UI screens would grow with
 it -- they need the opposite treatment. cohtml is the one library this binary
 still exports symbols for (`cohtml::SystemImpl::CreateView(const ViewSettings&)`

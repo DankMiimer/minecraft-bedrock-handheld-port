@@ -162,6 +162,46 @@ UI behaviour, and anything at a scale other than 1.5. The device was returned to
 a clean state afterwards, with ES-DE running and no port processes left.
 Local-only captures are under `build/diagnostics/handheld-ui-20260904/`.
 
+### UI viewport experiment, phase 2, 2026-09-04
+
+Rendering correction on top of phase 1, tested on RG34XX-SP/Knulli with
+CI-built clients against `1.21.51.01-972105101-arm64` at
+`MCPE_UI_LAYOUT_SCALE=1.5`.
+
+The first phase 2 build did not run. It aborted at about seven seconds with
+`stack corruption has been detected` from `shim::assert_impl`, both with the
+variable set and with it unset -- so with no override installed and none of the
+new code executing. Isolated against the same device state within minutes: the
+stock client reached `first-frame`, the phase 1 client reached `first-frame` at
+scale 1.5 with its UIScale lines, and the phase 2 client aborted either way.
+The cause was one `thread_local bool` added to `fake_egl.cpp`; removing it fixed
+it. See [UI-SCALING.md](docs/UI-SCALING.md).
+
+With that removed, measured:
+
+- Stock UI, pack disabled: the frame filled the whole **720x480** panel instead
+  of a 480x321 corner. The start-screen Play button went from 146 px to
+  **218 px** (1.49x) -- the figure the scaling matrix in `UI-SCALING.md` records
+  as unmoved by every other lever tested.
+- **Heart row 79x7 px to 119x10 px** (1.51x). The native status renderers cannot
+  be reached from a resource pack, so this is the only measured way to enlarge
+  health and hunger.
+- Handheld-ui pack at 2x with the 1.5 surface scale: launched clean, hotbar
+  measured 537 px against 546 predicted, no clipping. That is the same physical
+  hotbar size the 3x pack gives at native resolution, with everything else 1.5x
+  larger beside it.
+
+Not covered, and not safe to treat as shipping-ready: pointer input is still
+unconverted (no effect on this gamepad-driven handheld, wrong on a touch
+device); Ore UI screens are laid out in the same scaled surface and will grow,
+which is the opposite of what those already-tight screens need, and were not
+examined; the longest run was a couple of minutes, with no play session; and
+the rendering half is compiled out on armhf by design.
+
+The device was returned to its stock client and the 3x pack afterwards, both
+verified by checksum. Local-only captures are under
+`build/diagnostics/handheld-ui-20260904/`.
+
 ### Unrestricted scheduler regression test, 2026-08-27
 
 The H700 anti-stutter profile was removed after its original purpose was traced
