@@ -72,7 +72,7 @@ index 09e8146..f90073b 100644
      static void initHybrisHooks(std::unordered_map<std::string, void *> &syms);
  
 diff --git a/src/fake_egl.cpp b/src/fake_egl.cpp
-index f1a02b0..3dd96b3 100644
+index f1a02b0..6a769f5 100644
 --- a/src/fake_egl.cpp
 +++ b/src/fake_egl.cpp
 @@ -3,6 +3,9 @@
@@ -357,7 +357,7 @@ index f1a02b0..3dd96b3 100644
          return EGL_TRUE;
      }
      Log::warn("FakeEGL", "eglQuerySurface %x", attribute);
-@@ -172,20 +401,83 @@ void FakeEGL::installLibrary() {
+@@ -172,20 +401,92 @@ void FakeEGL::installLibrary() {
      linker::load_library("libEGL.so", syms);
  }
  
@@ -373,10 +373,19 @@ index f1a02b0..3dd96b3 100644
 +void (*realGlBindFramebuffer)(unsigned int, unsigned int);
 +void (*realGlGetIntegerv)(unsigned int, int *);
 +
-+// GL state is per-context and the game renders on one thread. Only the default
-+// framebuffer shows the lie: an offscreen target has its own resolution and
-+// must be left alone.
-+thread_local bool drawingToPanel = true;
++// Only the default framebuffer shows the lie: an offscreen target has its own
++// resolution and must be left alone.
++//
++// Deliberately not thread_local. Measured on the reference device: adding one
++// thread_local to this executable aborted the game in shim::assert_impl with
++// "stack corruption has been detected" about seven seconds in, before the first
++// frame, and it did so whether or not the scaling was switched on -- so it was
++// the TLS segment growing at load time, not this code running. The Android
++// libraries come in through mcpelauncher-linker with libc-shim emulating
++// bionic's TLS slots, and that arrangement does not tolerate the executable
++// gaining TLS. A plain global is also what this actually needs: the game issues
++// its GL on one thread and a context is current on one thread at a time.
++bool drawingToPanel = true;
 +
 +void scaledRect(int x, int y, int width, int height, void (*sink)(int, int, int, int)) {
 +    if(!drawingToPanel) {
