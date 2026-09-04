@@ -369,6 +369,26 @@ def test_ui_layout_scale_experiment_is_off_by_default():
     assert '[ -n "${MCPE_UI_LAYOUT_SCALE:-}" ] &&' in launcher
     assert '"${UI_LAYOUT_ENV[@]}"' in launcher
 
+    # Phase 2 scales rasterisation back up to the panel.
+    assert 'hostProcOverrides["glViewport"]' in patch
+    assert 'hostProcOverrides["glScissor"]' in patch
+    # Only the default framebuffer was lied about; an offscreen target has its
+    # own resolution, so the binding has to be tracked rather than assumed.
+    assert 'hostProcOverrides["glBindFramebuffer"]' in patch
+    assert "drawingToPanel = (framebuffer == 0)" in patch
+    assert "if(!drawingToPanel)" in patch
+    # A read-back viewport must come back in the space the caller set it in.
+    assert 'hostProcOverrides["glGetIntegerv"]' in patch
+    # Edge conversion, not size scaling: adjacent rectangles must stay flush.
+    assert "mcpe_ui_layout::toPanel(x + width) - x0" in patch
+    # The armhf wrappers bridge a calling convention; a plain function in that
+    # chain would be an ABI mismatch, so the rendering half stays off there.
+    assert "#ifdef USE_ARMHF_SUPPORT" in patch
+    assert "viewport scaling is not supported on armhf" in patch
+    # The wrapped entry points come from eglGetProcAddress, which keeps any
+    # earlier override in the chain instead of bypassing it.
+    assert 'fake_egl::eglGetProcAddress("glViewport")' in patch
+
 
 def test_renderdragon_era_memory_tuning_is_not_the_arm64_default():
     """Legacy Bedrock gets normal page cache and adaptive glibc allocation."""

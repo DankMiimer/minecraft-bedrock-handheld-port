@@ -72,7 +72,7 @@ index 09e8146..f90073b 100644
      static void initHybrisHooks(std::unordered_map<std::string, void *> &syms);
  
 diff --git a/src/fake_egl.cpp b/src/fake_egl.cpp
-index f1a02b0..be861a0 100644
+index f1a02b0..3dd96b3 100644
 --- a/src/fake_egl.cpp
 +++ b/src/fake_egl.cpp
 @@ -3,6 +3,9 @@
@@ -357,6 +357,100 @@ index f1a02b0..be861a0 100644
          return EGL_TRUE;
      }
      Log::warn("FakeEGL", "eglQuerySurface %x", attribute);
+@@ -172,20 +401,83 @@ void FakeEGL::installLibrary() {
+     linker::load_library("libEGL.so", syms);
+ }
+ 
++
++namespace {
++
++// Phase 2 state. The wrapped entry points are captured through
++// fake_egl::eglGetProcAddress rather than the host resolver, so an override
++// installed earlier (the armhf ABI wrappers) stays in the chain instead of
++// being bypassed.
++void (*realGlViewport)(int, int, int, int);
++void (*realGlScissor)(int, int, int, int);
++void (*realGlBindFramebuffer)(unsigned int, unsigned int);
++void (*realGlGetIntegerv)(unsigned int, int *);
++
++// GL state is per-context and the game renders on one thread. Only the default
++// framebuffer shows the lie: an offscreen target has its own resolution and
++// must be left alone.
++thread_local bool drawingToPanel = true;
++
++void scaledRect(int x, int y, int width, int height, void (*sink)(int, int, int, int)) {
++    if(!drawingToPanel) {
++        sink(x, y, width, height);
++        return;
++    }
++    int x0 = mcpe_ui_layout::toPanel(x);
++    int y0 = mcpe_ui_layout::toPanel(y);
++    sink(x0, y0, mcpe_ui_layout::toPanel(x + width) - x0,
++         mcpe_ui_layout::toPanel(y + height) - y0);
++}
++
++}  // namespace
++
+ void FakeEGL::setupGLOverrides() {
+ #ifdef USE_ARMHF_SUPPORT
+     ArmhfSupport::install(fake_egl::hostProcOverrides);
+ #endif
+-    // fake_egl::hostProcOverrides["glViewport"] = (void *)+[](int x,
+- 	// int y,
+- 	// int width,
+- 	// int height) {
+-    //     ((void (*)(int x,
+- 	// int y,
+- 	// int width,
+- 	// int height))(fake_egl::hostProcAddrFn("glViewport")))(x, y, width, height);
+-
+-    // };
++    if(mcpe_ui_layout::active()) {
++#ifdef USE_ARMHF_SUPPORT
++        // The armhf wrappers exist to bridge a calling convention. Inserting a
++        // plain function into that chain would be an ABI mismatch, so the
++        // rendering half stays off there and only the surface is reported.
++        Log::warn("UIScale", "viewport scaling is not supported on armhf; "
++                             "rendering left uncorrected");
++#else
++        realGlViewport = (void (*)(int, int, int, int))fake_egl::eglGetProcAddress("glViewport");
++        realGlScissor = (void (*)(int, int, int, int))fake_egl::eglGetProcAddress("glScissor");
++        realGlBindFramebuffer = (void (*)(unsigned int, unsigned int))fake_egl::eglGetProcAddress("glBindFramebuffer");
++        realGlGetIntegerv = (void (*)(unsigned int, int *))fake_egl::eglGetProcAddress("glGetIntegerv");
++        if(realGlViewport && realGlScissor && realGlBindFramebuffer) {
++            fake_egl::hostProcOverrides["glViewport"] = (void *)+[](int x, int y, int width, int height) {
++                scaledRect(x, y, width, height, realGlViewport);
++            };
++            fake_egl::hostProcOverrides["glScissor"] = (void *)+[](int x, int y, int width, int height) {
++                scaledRect(x, y, width, height, realGlScissor);
++            };
++            fake_egl::hostProcOverrides["glBindFramebuffer"] = (void *)+[](unsigned int target, unsigned int framebuffer) {
++                // GL_FRAMEBUFFER 0x8D40, GL_DRAW_FRAMEBUFFER 0x8CA9. A read
++                // binding does not affect where rasterisation lands.
++                if(target == 0x8D40 || target == 0x8CA9)
++                    drawingToPanel = (framebuffer == 0);
++                realGlBindFramebuffer(target, framebuffer);
++            };
++            if(realGlGetIntegerv) {
++                fake_egl::hostProcOverrides["glGetIntegerv"] = (void *)+[](unsigned int pname, int *params) {
++                    realGlGetIntegerv(pname, params);
++                    // GL_VIEWPORT 0x0BA2, GL_SCISSOR_BOX 0x0C10. Hand the
++                    // rectangle back in the space the caller set it in, or the
++                    // game reads a panel-sized box it never asked for.
++                    if(params && drawingToPanel && (pname == 0x0BA2 || pname == 0x0C10))
++                        for(int i = 0; i < 4; i++)
++                            params[i] = (int)(params[i] / mcpe_ui_layout::scale() + 0.5);
++                };
++            }
++            Log::info("UIScale", "viewport scaling active at %.3f", mcpe_ui_layout::scale());
++        } else {
++            Log::warn("UIScale", "host GL entry points missing; rendering left uncorrected");
++        }
++#endif
++    }
+     // MESA 23.1 blackscreen Workaround Start for 1.18.30+, bgfy will disable the extension and the game works
+     fake_egl::hostProcOverrides["glDrawElementsInstancedOES"] = nullptr;
+     fake_egl::hostProcOverrides["glDrawArraysInstancedOES"] = nullptr;
 diff --git a/src/fake_looper.cpp b/src/fake_looper.cpp
 index 985e9ed..c9e1581 100644
 --- a/src/fake_looper.cpp
@@ -890,10 +984,10 @@ index d0e1907..844607f 100644
                            linker::dlsym(handle, "stbi_load_from_memory"),
 diff --git a/src/ui_layout_scale.h b/src/ui_layout_scale.h
 new file mode 100644
-index 0000000..0ad136c
+index 0000000..9ff100a
 --- /dev/null
 +++ b/src/ui_layout_scale.h
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,77 @@
 +#pragma once
 +// Phase 1 of the handheld UI viewport experiment; see docs/UI-SCALING.md.
 +//
@@ -944,6 +1038,30 @@ index 0000000..0ad136c
 +        return real;
 +    int scaled = (int)(real / scale());
 +    return scaled < 1 ? 1 : scaled;
++}
++
++// --- Phase 2: scale rendering back up to the panel ---------------------------
++// The game lays out and draws inside the smaller surface it was told about, so
++// the viewport and scissor rectangles it sets are in that space. Scaling them
++// back up makes the result cover the whole panel again. This multiplies
++// geometry before rasterisation instead of upscaling a finished image, so it
++// does not soften the way the launcher's display-scaler UI zoom does.
++//
++// Pointer input is deliberately NOT converted here. The reference handheld is
++// gamepad-driven and its menus navigate by focus, so nothing on it reads
++// pointer coordinates; and the same handlers feed the launcher's own ImGui
++// overlay, which lives in panel space and would break if they were scaled
++// wholesale. A device that delivers real touch or mouse events still needs the
++// inverse factor applied where those reach the game, not where they arrive.
++
++// Convert one surface-space edge to panel space. Edges are converted rather
++// than (origin, size) pairs, so two rectangles that share an edge round it the
++// same way and cannot leave a seam between them.
++inline int toPanel(int surfaceEdge) {
++    if(!active())
++        return surfaceEdge;
++    double scaled = surfaceEdge * scale();
++    return (int)(scaled < 0 ? scaled - 0.5 : scaled + 0.5);
 +}
 +
 +}  // namespace mcpe_ui_layout

@@ -239,12 +239,44 @@ builds the fake `libGLESv2.so` by calling `eglGetProcAddress`, and that consults
 somewhere to live. The glcore path reaches the same map through
 `GLCorePatch::installGL`.
 
-Phase 2 scales `glViewport`/`glScissor` back up so drawing covers the panel
-again, guarded on framebuffer 0 being bound -- the `LD_PRELOAD` trace above
-found no offscreen target is ever allocated, so the guard should always hold
-here, but it is cheap to enforce through a `glBindFramebuffer` override rather
-than assumed. `glGetIntegerv(GL_VIEWPORT)` readback needs checking too. Phase 3
-applies the inverse factor to pointer input.
+### Phase 2: scale rasterisation back up to the panel
+
+Written against the same header. When `MCPE_UI_LAYOUT_SCALE` is active,
+`setupGLOverrides` replaces four entry points:
+
+| Override | Why |
+|---|---|
+| `glViewport`, `glScissor` | the rectangles the game sets are in surface space; scaling them up makes the result cover the panel |
+| `glBindFramebuffer` | tracks the draw binding, because only the default framebuffer was lied about |
+| `glGetIntegerv` | converts a `GL_VIEWPORT`/`GL_SCISSOR_BOX` read-back to the space the caller set it in |
+
+Details that are easy to get wrong, and how this handles them:
+
+- **Ordering.** `FakeEGL::setupGLOverrides()` is the last statement of
+  `FakeLooper::initializeWindow()`, which `main.cpp` calls immediately before
+  `MinecraftUtils::setupGLES2Symbols`. The overrides are therefore in the map
+  before the fake `libGLESv2` table is built from it.
+- **Chaining, not bypassing.** The wrapped functions are captured through
+  `fake_egl::eglGetProcAddress`, so an override installed earlier stays in the
+  chain. Resolving through the raw host resolver would silently drop the armhf
+  ABI wrappers.
+- **Seams.** Rectangle edges are converted, not `(origin, size)` pairs, so two
+  rectangles sharing an edge round it identically. A round-trip check confirms
+  720 -> 480 -> 720 and a zero gap between adjacent rectangles.
+- **Offscreen targets.** The `LD_PRELOAD` trace found none is ever allocated
+  here, so the framebuffer-0 guard should always hold; it is enforced anyway
+  rather than assumed, since a different version may not behave the same.
+- **armhf is excluded.** Its wrappers bridge a calling convention, and dropping
+  a plain function into that chain would be an ABI mismatch. The surface half of
+  the experiment still applies there; the rendering half logs a warning and does
+  nothing.
+
+**Pointer input is still not converted.** The same `WindowCallbacks` handlers
+feed both the game and the launcher's ImGui overlay, and the overlay lives in
+panel space, so scaling them wholesale would break it. The conversion belongs
+where coordinates enter the game's input queue. Nothing on the reference
+handheld depends on it -- it has no touchscreen and navigates menus by
+gamepad focus -- but a touch device does, and that remains phase 3.
 
 This would enlarge JSON UI and shrink nothing, so Ore UI screens would grow with
 it -- they need the opposite treatment. cohtml is the one library this binary
