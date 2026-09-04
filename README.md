@@ -1,7 +1,7 @@
 # Minecraft Bedrock for ARM Linux handhelds
 
 ![An RG34XX SP and an RG DS side by side, both running Minecraft Bedrock in the
-same LAN world. The RG DS lower screen shows the companion: a live minimap with
+same LAN world. The RG DS lower screen shows the companion(prototype): a live minimap with
 waypoints, health and hunger, and tabs for HUD, chat, items, input and
 settings.](docs/rg34xxsp-and-rgds-lan.jpg)
 
@@ -19,25 +19,20 @@ not done, and the physical acceptance matrix for the armhf path remains
 pending.
 
 > **No game files are included.** You must supply your own official Minecraft
-> Bedrock Android APK or complete split-APK set.
+> Bedrock Android APK(s) or sign in with your google account that owns Minecraft
+for direct access to any version you might want to try out.
 >
 > **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH
 > MOJANG OR MICROSOFT.**
 
 ## Download v2.0.1
 
-Download an install archive from the release
-assets, not GitHub's automatically generated **Source code** archives.
-
 | Download | Who needs it |
 |---|---|
-| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.zip) | Normal single-screen PortMaster devices; supports aarch64 and armhf |
-| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway; arm64 only. Adds the second-screen companion, which is in early development |
+| [Standard edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.zip) | Normal single-screen PortMaster devices. Full launcher with login and Bedrock version download and play; supports aarch64 and armhf |
+| [RGDS edition](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.zip) | **Experimental.** Anbernic RG DS on ROCKNIX/Sway. Its not actively being developed anymore; arm64 only. Adds the second-screen companion, which is in early development |
 | [Windows APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/mcbedrock-get-windows-v2.0.1.zip) | Downloads your own Google Play purchase in the correct arm64 format. Source and issues: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get) |
 | [Linux APK helper](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/mcbedrock-get-linux-x86_64-v2.0.1.AppImage) | The same helper for x86_64 Linux. Download, `chmod +x`, run. Newest version: [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get/releases/latest) |
-| [Project source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-source-v2.0.1.zip) | Maintainers and license compliance; not an install archive |
-| [Standard SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.spdx.json) | Machine-readable contents of the standard archive |
-| [RGDS SPDX SBOM](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.spdx.json) | Machine-readable contents of the RGDS archive |
 | [Release notes](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/RELEASE_NOTES.md) | Short packaged release summary |
 | [Checksums](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/SHA256SUMS.txt) | Verifies every published file |
 
@@ -45,6 +40,13 @@ Use the **standard edition** unless you own an RG DS and specifically want to
 help test the dual-screen companion. The standard edition intentionally
 redirects RGDS users to the separate RGDS package instead of silently
 installing experimental code.
+
+Nothing below is needed to play. The release also publishes the
+[source bundle](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-source-v2.0.1.zip),
+which is the GPL-licensed launcher source this build was made from, and a
+software bill of materials for each edition:
+[standard](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-standard-v2.0.1.spdx.json),
+[RGDS](https://github.com/DankMiimer/minecraft-bedrock-handheld-port/releases/download/v2.0.1/minecraftbedrock-rgds-v2.0.1.spdx.json).
 
 ## Supported firmware
 
@@ -106,7 +108,7 @@ then launch **Minecraft Bedrock** once. This creates the shared data folders.
 
 There are two routes. Pick the first one if your device can use it.
 
-#### On the device itself — no PC needed
+#### On the device itself (with WiFi) — no PC needed
 
 Open **Get APK from Google Play** in the launcher menu. It signs you in on
 Google's own page, downloads the build you choose, validates it and installs
@@ -123,7 +125,7 @@ Verified end to end on an RG34XX-SP running muOS 2601.0 JACARANDA on
 2026-08-25: sign-in, download of the 1.16.221.01 split set, install, and a
 clean play session with working controls and sound.
 
-#### On a PC — the helper
+#### On a PC (Huge download and Install of Ubuntu subsystem) — the helper
 
 On a Windows PC, use the helper —
 [mcbedrock-get](https://github.com/DankMiimer/mcbedrock-get):
@@ -162,10 +164,7 @@ The installer validates package identity, version, signing data, dependencies,
 and ABI before publishing anything. Mixed or incomplete sets are rejected, and
 a failed install leaves the original APKs and previous versions intact.
 
-### 4. Play
-
-![The Minecraft world-selection screen as it appears on the handheld](screenshot.png)
-
+### 4. Play!
 
 Open **Versions**, select the installed build, then choose **Play**. The
 launcher remembers the selection. After a successful install you may keep the
@@ -175,7 +174,7 @@ APKs for recovery or delete them from the launcher with **X**.
 
 | Version | Verdict | Why |
 |---|---|---|
-| **1.16.221.01** | **Recommended** | Menus and text are the right size on a small screen, and it runs the most smoothly of anything tested |
+| **1.16.221.01** | **Recommended** | Newest version where the menus and text are the right size on a small screen, and it runs the most smoothly of anything tested |
 | **1.21.51.01** | Usable | The newest version without the slow graphics engine, but its menus are much smaller. Only the original release qualifies — the 1.21.51.02 re-upload switched that engine back on |
 | 1.18.30 and newer | Not worth trying | These use RenderDragon, a graphics engine handhelds are far too slow for. Expect severe stuttering, and small menus |
 | 1.26 and newer | **Will not work** | Google now protects these in a way the launcher cannot open |
@@ -200,38 +199,8 @@ library hash, not from filenames. Exact status and evidence are in
 - **Support bundle** — create a local redacted diagnostic archive.
 - **Controller test** — record the detected pad and inputs locally.
 
-Menu controls are D-pad to move, **A** to select, **B** to go back, **X** to
-delete, and Left/Right to change settings. The launcher detects firmware
-button-label differences; `MCPE_MENU_CONFIRM=a|b` remains available as an
-advanced override.
 
-For H700-class systems, start with a 30–40 FPS cap and 3–4 chunk render
-distance. The port restores performance, display, frontend, and input state
-after normal exit or a supervised failure.
 
-## Updates and backups
-
-Use **Backup** before testing a new game version, firmware, or port prerelease.
-Backups contain launcher settings, profiles, and worlds, but never the supplied
-APK or extracted version; keep the original complete APK set separately for
-recovery. Use **Update port** to install updates for the current standard or
-RGDS edition and selected channel. An update replaces port code only and keeps
-the shared user-data directory intact.
-
-## Standard and RGDS editions
-
-Both editions share only user-owned data under:
-
-```text
-ports/minecraftbedrock-data/
-  apk/       original installers
-  versions/  validated extracted game versions
-  profiles/  worlds and per-version player data
-  backups/   local backup archives
-```
-
-Their code, logs, runtime, caches, update channel, and temporary state remain
-separate. Updating one edition cannot overlay the other.
 
 ### The RGDS second-screen companion is experimental
 
@@ -251,21 +220,7 @@ The game itself runs the same way it does in the standard edition. What is
 experimental is everything on the lower screen. Reports are welcome and are how
 this gets better; if you want a dependable install, use the standard edition.
 
-When you join a world hosted by another device, Bedrock does not store that
-host's LevelDB world database locally. RGDS therefore keeps live status but
-shows `REMOTE WORLD / MAP UNAVAILABLE` and clears old local terrain instead of
-displaying a misleading cached map.
 
-## Updating from 1.x
-
-The first 2.x launch migrates APKs, installed versions, profiles, and backups
-into the shared data directory. It inventories both locations first, refuses
-ambiguous collisions, writes a recovery manifest, and keeps rollback state
-until the first clean game exit.
-
-Do not delete an old installation before this migration. If the launcher
-reports that both old and new locations contain data, move one copy aside and
-launch again; it will not choose one destructively.
 
 ## Troubleshooting
 
@@ -286,6 +241,19 @@ See [SUPPORT.md](SUPPORT.md) for report requirements. Never upload APKs,
 extracted game libraries/assets, worlds, account data, private server details,
 `versions/`, `profiles/`, or `libminecraftpe.so`.
 
+## Related ports
+
+Two smaller-console ports built from the same lineage, both software-rendered on
+hardware with no GPU at all:
+
+- **[minecraft-bedrock-miyoo-mini-plus](https://github.com/DankMiimer/minecraft-bedrock-miyoo-mini-plus)**
+  — Bedrock 1.2.20.2 on the Miyoo Mini Plus, drawn entirely on two 1.2 GHz
+  Cortex-A7 cores by Mesa llvmpipe.
+- **[NanoCraft](https://github.com/DankMiimer/nanocraft)** — Minecraft **Pocket
+  Edition 0.8.1** on the Anbernic RG Nano. On a single-core 55 MB console
+  Bedrock manages 2.2 fps and crashes; Pocket Edition runs at 7.8 fps at the
+  panel's native resolution.
+
 ## Maintainers and source
 
 - [Testing evidence](TESTING.md)
@@ -303,4 +271,11 @@ Release assembly creates deterministic edition archives, SPDX SBOMs, source
 materials, checksums, and an edition-aware updater index. See the checklist
 before promoting any prerelease to stable.
 
-Port by DankMiimer.
+Port by:
+
+MCPE - Open-source Bedrock launcher for Linux this project packages and adapts for handheld hardware. All credit for the core launcher and reverse-engineering work goes to MCPE developers. (https://github.com/minecraft-linux/mcpelauncher-manifest)
+
+ImpressiveStay6355 - (Original r36s port this whole project was built on) (https://github.com/impressivestay6355-cmyk/mcpelauncher-r36s)
+
+DankMiimer - (ARM Launcher + google sign in and ARM64 support).
+
