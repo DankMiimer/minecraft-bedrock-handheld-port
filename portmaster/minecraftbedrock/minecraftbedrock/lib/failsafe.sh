@@ -69,7 +69,7 @@ mcpe_failsafe_apply_minimal() {
   # script's own default, and stop handing the Crusty shim an explicit EGL
   # context. Both are the fallbacks run_bedrock.sh documents for devices whose
   # libmali/DRM behaviour does not match the probe.
-  export SDL_DRIVER_OVERRIDE=x11
+  [ "${MCPE_GRAPHICS_BACKEND:-}" != "kmsdrm" ] && [ "${SDL_DRIVER_OVERRIDE:-}" != "kmsdrm" ] && export SDL_DRIVER_OVERRIDE=x11
   export GAMEWINDOW_EGLUT_CRUSTY_CONTEXT=0
   # Audio off. On muOS the device is held exclusively by PipeWire and on dArkOS
   # the PipeWire client config is missing entirely, so a failing audio open is

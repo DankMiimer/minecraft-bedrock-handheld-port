@@ -93,7 +93,7 @@ mcpe_probe_platform() { # output env file
   mcpe_resolve_cfw
   if [ -n "${MCPE_TEST_COMPOSITOR:-}" ]; then compositor="$MCPE_TEST_COMPOSITOR"
   elif pidof sway >/dev/null 2>&1; then compositor=sway
-  else compositor="${WAYLAND_DISPLAY:+wayland}"
+  elif [ -n "${WAYLAND_DISPLAY:-}" ]; then compositor=wayland
   fi
   [ -n "$compositor" ] || { [ -n "${DISPLAY:-}" ] && compositor=x11 || compositor=none; }
   # A card node on its own is not evidence of DRM. PortMaster's westonwrap
@@ -231,7 +231,7 @@ mcpe_apply_platform_profile() {
   case "$MCPE_GRAPHICS_BACKEND_RESOLVED" in
     wayland) export SDL_DRIVER_OVERRIDE=wayland; export MCPE_SDL_VIDEODRIVER=wayland ;;
     mali) export SDL_DRIVER_OVERRIDE=mali ;;
-    kmsdrm) export MCPE_SDL_VIDEODRIVER=kmsdrm ;;
+    kmsdrm) export SDL_DRIVER_OVERRIDE=kmsdrm; export MCPE_SDL_VIDEODRIVER=kmsdrm ;;
     x11) export SDL_DRIVER_OVERRIDE=x11 ;;
   esac
   if [ "${MCPE_ACTIVE_WIDTH:-0}" -gt 0 ] && [ "${MCPE_ACTIVE_HEIGHT:-0}" -gt 0 ]; then

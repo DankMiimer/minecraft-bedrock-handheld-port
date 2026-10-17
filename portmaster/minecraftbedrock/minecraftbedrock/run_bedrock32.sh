@@ -241,7 +241,7 @@ fi
 # Prefer the firmware's matching-ABI runtime over optional bundled fallbacks.
 # In particular, a Bookworm libgcc/libm placed before Ubuntu 19.10's glibc
 # makes an otherwise compatible R36S client fail with a GLIBC_2.34 error.
-export LD_LIBRARY_PATH="$GAMEDIR/versions/$MCVER/lib/armeabi-v7a:$GAMEDIR/versions/$MCVER/lib/native/armeabi-v7a:$GAMEDIR/bin32/lib/armeabi-v7a:$GAMEDIR/lib32/armeabi-v7a:/usr/local/lib/arm-linux-gnueabihf:/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf:$GAMEDIR/lib32/armhf-system:/usr/lib32:/lib32:/usr/lib:/lib"
+export LD_LIBRARY_PATH="$GAMEDIR/versions/$MCVER/lib/armeabi-v7a:$GAMEDIR/versions/$MCVER/lib/native/armeabi-v7a:$GAMEDIR/bin32/lib/armeabi-v7a:/usr/lib32:/lib32:/usr/local/lib/arm-linux-gnueabihf:/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf:$GAMEDIR/lib32/armeabi-v7a:$GAMEDIR/lib32/armhf-system:/usr/lib:/lib"
 
 # Data layout: same profile scheme as the 64-bit path, so a version's worlds
 # and settings are identical regardless of which client ran it.
@@ -255,16 +255,19 @@ ln -sfn "$DATA_DIR" "${HOME:-/root}/.local/share/mcpelauncher"
 SETTINGS="$DATA_DIR/mcpelauncher-client-settings.txt"
 mkdir -p "$(dirname "$SETTINGS")"
 touch "$SETTINGS"
-grep -q "^audio_backend=" "$SETTINGS" 2>/dev/null ||
-  echo "audio_backend=sdl3" >> "$SETTINGS"
+set_kv() {
+  if grep -q "^$1=" "$SETTINGS" 2>/dev/null; then
+    sed -i "s#^$1=.*#$1=$2#" "$SETTINGS"
+  else
+    echo "$1=$2" >> "$SETTINGS"
+  fi
+}
+set_kv enable_imgui "${IMGUI:-false}"
+set_kv audio_backend sdl3
 # Only pin the UI scale when explicitly chosen (menu/env); the armhf client's
 # own default is left alone otherwise.
 if [ -n "${MCPE_UI_DENSITY_SCALE:-}" ]; then
-  if grep -q "^scale=" "$SETTINGS" 2>/dev/null; then
-    sed -i "s#^scale=.*#scale=$MCPE_UI_DENSITY_SCALE#" "$SETTINGS"
-  else
-    echo "scale=$MCPE_UI_DENSITY_SCALE" >> "$SETTINGS"
-  fi
+  set_kv scale "$MCPE_UI_DENSITY_SCALE"
 fi
 
 # --- Game options ---------------------------------------------------------------
@@ -429,12 +432,12 @@ if [ "$SDL_VIDEODRIVER" = kmsdrm ]; then
 
   # What do the system GL entry points actually resolve to (Mesa vs Mali blob)?
   for so in libEGL.so.1 libGLESv2.so.2 libgbm.so.1; do
-    for d in /usr/lib/arm-linux-gnueabihf /lib/arm-linux-gnueabihf; do
+    for d in /usr/lib32 /lib32 /usr/lib/arm-linux-gnueabihf /lib/arm-linux-gnueabihf; do
       [ -e "$d/$so" ] && { echo "  $so -> $(readlink -f "$d/$so" 2>/dev/null)"; break; }
     done
   done
 
-  # Mali-blob devices (RK3326 / Mali G31) provide their own GBM *inside* the
+  # Mali-blob devices (RK3326 / Mali G31 / RK3566) provide their own GBM *inside* the
   # blob. This port bundles a Mesa libgbm in lib32/armeabi-v7a which sits
   # earlier on LD_LIBRARY_PATH and shadows it. Mesa GBM cannot interoperate
   # with Mali EGL, and SDL then dies with:
@@ -443,15 +446,25 @@ if [ "$SDL_VIDEODRIVER" = kmsdrm ]; then
   # Mesa ones (version/ and bin32/ keep priority) and point SDL at the blob.
   # Force the old behaviour with MCPE_GL_DRIVER=mesa.
   MALI_GBM=""
-  for d in /usr/lib/arm-linux-gnueabihf /lib/arm-linux-gnueabihf; do
-    for f in "$d"/libmali*gbm*.so; do
+  for d in /usr/lib32 /lib32 /usr/lib/arm-linux-gnueabihf /lib/arm-linux-gnueabihf; do
+    for f in "$d"/libmali*gbm*.so "$d"/libmali.so* "$d"/libmali*.so; do
       [ -e "$f" ] && { MALI_GBM="$f"; break 2; }
     done
   done
+  if [ -z "$MALI_GBM" ]; then
+    for d in /usr/lib32 /lib32 /usr/lib/arm-linux-gnueabihf /lib/arm-linux-gnueabihf; do
+      if [ -e "$d/libgbm.so.1" ]; then
+        target="$(readlink -f "$d/libgbm.so.1" 2>/dev/null || true)"
+        case "$target" in
+          *mali*) MALI_GBM="$d/libgbm.so.1"; break ;;
+        esac
+      fi
+    done
+  fi
   if [ -n "$MALI_GBM" ] && [ "${MCPE_GL_DRIVER:-auto}" != mesa ]; then
     echo "  Mali GBM blob found: $MALI_GBM"
     echo "  -> preferring system GL libs over bundled Mesa gbm"
-    export LD_LIBRARY_PATH="$GAMEDIR/versions/$MCVER/lib/armeabi-v7a:$GAMEDIR/versions/$MCVER/lib/native/armeabi-v7a:$GAMEDIR/bin32/lib/armeabi-v7a:/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf:$GAMEDIR/lib32/armeabi-v7a:$GAMEDIR/lib32/armhf-system:/usr/lib32:/lib32:/usr/lib:/lib"
+    export LD_LIBRARY_PATH="$GAMEDIR/versions/$MCVER/lib/armeabi-v7a:$GAMEDIR/versions/$MCVER/lib/native/armeabi-v7a:$GAMEDIR/bin32/lib/armeabi-v7a:/usr/lib32:/lib32:/usr/local/lib/arm-linux-gnueabihf:/usr/lib/arm-linux-gnueabihf:/lib/arm-linux-gnueabihf:$GAMEDIR/lib32/armeabi-v7a:$GAMEDIR/lib32/armhf-system:/usr/lib:/lib"
     export SDL_VIDEO_EGL_DRIVER="$MALI_GBM"
     export SDL_VIDEO_GL_DRIVER="$MALI_GBM"
     echo "  SDL_VIDEO_EGL_DRIVER=$MALI_GBM"
@@ -565,7 +578,7 @@ fi
 # Run in the background so the startup watchdog has something to supervise. A
 # hang before the first frame used to leave the device frozen with no frontend
 # and no log (issue #2, seen on the 64-bit path but equally possible here).
-if [ "${MCPE_32BIT_TEE_LOG:-0}" = 1 ]; then
+if [ "${MCPE_32BIT_TEE_LOG:-1}" = 1 ]; then
   (
     set -o pipefail
     $RUN_PREFIX "$BIN" -dg "$GAMEDIR/versions/$MCVER" ${ARGS:-} 2>&1 | tee -a "$LOG"

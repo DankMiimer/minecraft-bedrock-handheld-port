@@ -225,7 +225,11 @@ mcpe_apply_r36s_defaults() {
   [ "$abi" = armhf ] || return 0
 
   export MCPE_R36S_PERFORMANCE_PRESET=1
-  export MCPE_MAX_FPS="${MCPE_MAX_FPS:-10}"
+  local def_fps=10
+  if [ "${MCPE_MEMORY_TIER:-512m}" != "512m" ] && [ "${MCPE_MEMORY_TIER:-unknown}" != "unknown" ]; then
+    def_fps=50
+  fi
+  export MCPE_MAX_FPS="${MCPE_MAX_FPS:-$def_fps}"
   # Bedrock 1.16 stores this value in blocks. It currently clamps 32 (two
   # chunks) back to its internal 80-block minimum, but retain the low request
   # so versions which accept it do not silently start at four chunks.

@@ -171,16 +171,25 @@ mcpe_report_set weston_runtime "$WESTON_SQUASH"
 #  - Allwinner fbdev+/dev/disp (Knulli H700): the blob's fbdev driver -> mali
 #  - otherwise: x11
 if [ -z "${SDL_DRIVER_OVERRIDE:-}" ]; then
-  if pidof sway >/dev/null 2>&1; then
+  if pidof sway >/dev/null 2>&1 || [ "${MCPE_GRAPHICS_BACKEND_RESOLVED:-}" = "wayland" ]; then
     SDL_DRIVER_OVERRIDE=wayland
   elif [ -e /dev/disp ] ||
        { [ "${MCPE_IS_MUOS:-0}" = 1 ] && { [ -e /dev/mali ] || [ -e /dev/mali0 ]; }; }; then
     SDL_DRIVER_OVERRIDE=mali
+  elif [ -e /dev/dri/card0 ] || [ "${MCPE_HAS_DRM:-0}" = 1 ]; then
+    SDL_DRIVER_OVERRIDE=kmsdrm
   else
     SDL_DRIVER_OVERRIDE=x11
   fi
 fi
 export SDL_DRIVER_OVERRIDE
+
+if [ "$SDL_DRIVER_OVERRIDE" = kmsdrm ]; then
+  DRM_CARD_INDEX=0
+  case "${MCPE_DRM_CONNECTOR:-}" in card[0-9]-*) DRM_CARD_INDEX="${MCPE_DRM_CONNECTOR#card}"; DRM_CARD_INDEX="${DRM_CARD_INDEX%%-*}" ;; esac
+  export SDL_VIDEO_KMSDRM_CARD_INDEX="$DRM_CARD_INDEX"
+  export SDL_VIDEO_KMSDRM_DOUBLE_BUFFER=1
+fi
 
 # The Westonpack Crusty EGL shim requires an explicit context hand-off on
 # libmali/no-DRM devices. A versioned preload module records the SDL handles

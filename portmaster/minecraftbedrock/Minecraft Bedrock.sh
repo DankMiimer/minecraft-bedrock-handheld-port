@@ -1148,6 +1148,46 @@ apply_settings() {
         SETTINGS_VERSION="$v"
         continue
         ;;
+      gfx_backend|gfx)
+        v="${v//[!A-Za-z0-9_]/}"
+        case "$v" in
+          crusty*|llvmpipe)
+            export GFX="$v"
+            ;;
+          kmsdrm)
+            export GFX="crusty_x11egl"
+            export SDL_DRIVER_OVERRIDE=kmsdrm
+            export MCPE_GRAPHICS_BACKEND=kmsdrm
+            export MCPE_SDL_VIDEODRIVER=kmsdrm
+            ;;
+          wayland)
+            export GFX="crusty_x11egl"
+            export SDL_DRIVER_OVERRIDE=wayland
+            export MCPE_GRAPHICS_BACKEND=wayland
+            export MCPE_SDL_VIDEODRIVER=wayland
+            ;;
+          mali)
+            export GFX="crusty_x11egl"
+            export SDL_DRIVER_OVERRIDE=mali
+            export MCPE_GRAPHICS_BACKEND=mali
+            ;;
+          x11)
+            export GFX="crusty_x11egl"
+            export SDL_DRIVER_OVERRIDE=x11
+            export MCPE_GRAPHICS_BACKEND=x11
+            ;;
+        esac
+        continue
+        ;;
+      sdl_driver|sdl_video)
+        v="${v//[!A-Za-z0-9_]/}"
+        case "$v" in kmsdrm|wayland|mali|x11)
+          export SDL_DRIVER_OVERRIDE="$v"
+          export MCPE_SDL_VIDEODRIVER="$v"
+          ;;
+        esac
+        continue
+        ;;
       ui_zoom)
         # Carries a decimal point, so it is validated before the generic
         # alphanumeric strip below would flatten "1.5" into "15".

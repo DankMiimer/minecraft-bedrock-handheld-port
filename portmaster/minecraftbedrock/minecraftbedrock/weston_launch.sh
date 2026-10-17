@@ -297,11 +297,19 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 case "$GFX" in
-  crusty*) WRENDERER="noop";   APP_SDL_DRIVER="x11";     APP_FORCE_EGL="1" ;;
-  *)       WRENDERER="pixman"; APP_SDL_DRIVER="wayland"; APP_FORCE_EGL="0" ;;
+  crusty*)
+    WRENDERER="noop"
+    APP_SDL_DRIVER="${SDL_DRIVER_OVERRIDE:-kmsdrm}"
+    APP_FORCE_EGL="${FORCE_EGL_OVERRIDE:-1}"
+    CONTEXT_BRIDGE="$GAMEDIR/bin/crusty-context-v1.so"
+    ;;
+  *)
+    WRENDERER="pixman"
+    APP_SDL_DRIVER="${SDL_DRIVER_OVERRIDE:-kmsdrm}"
+    APP_FORCE_EGL="${FORCE_EGL_OVERRIDE:-0}"
+    CONTEXT_BRIDGE=""
+    ;;
 esac
-APP_FORCE_EGL="${FORCE_EGL_OVERRIDE:-$APP_FORCE_EGL}"
-APP_SDL_DRIVER="${SDL_DRIVER_OVERRIDE:-$APP_SDL_DRIVER}"
 
 [ -z "$MCVER" ] && { echo "no version"; exit 1; }
 [ -d "$GAMEDIR/versions/$MCVER" ] || { echo "version not found: $MCVER"; exit 1; }
